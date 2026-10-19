@@ -4786,6 +4786,170 @@ body{padding-top:var(--sat);padding-left:var(--sal);padding-right:var(--sar);bac
 .rc-view{padding-top:calc(50px + var(--sat))}
 .rc-view .rc-vb{top:calc(8px + var(--sat))}
 </style>
+<style id="glass-nav">
+/* Liquid glass navigation bar. --nav-op (0 to 1) is the Glass opacity setting. */
+:root { --nav-op: .55; }
+.floating-nav {
+    border: 0;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,calc(.05 + var(--nav-op) * .22)) 0%, rgba(255,255,255,calc(.015 + var(--nav-op) * .05)) 42%, rgba(255,255,255,calc(.03 + var(--nav-op) * .14)) 100%),
+        rgba(var(--panel), calc(var(--nav-op) * .6));
+    -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.06);
+    backdrop-filter: blur(22px) saturate(190%) brightness(1.06);
+    box-shadow:
+        inset 0 1px 0.5px rgba(255,255,255,.65),
+        inset 0 -1px 0.5px rgba(255,255,255,.18),
+        inset 1px 0 0.5px rgba(255,255,255,.22),
+        inset -1px 0 0.5px rgba(255,255,255,.12),
+        inset 0 0 22px rgba(255,255,255,.07),
+        0 14px 34px rgba(0,0,0,.34), 0 3px 8px rgba(0,0,0,.22);
+    isolation: isolate;
+    overflow: hidden;
+}
+.floating-nav::before {                                   /* light catching the top edge */
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+    background: radial-gradient(120% 140% at 18% -35%, rgba(255,255,255,.5) 0%, rgba(255,255,255,.12) 34%, transparent 58%),
+                radial-gradient(90% 120% at 88% 135%, rgba(255,255,255,.16) 0%, transparent 55%);
+    opacity: calc(.55 + (1 - var(--nav-op)) * .35);
+}
+.floating-nav::after {                                    /* thin bright rim, brighter at the top-left and bottom-right like real glass */
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
+    background: linear-gradient(145deg, rgba(255,255,255,.8), rgba(255,255,255,.08) 38%, rgba(255,255,255,.06) 62%, rgba(255,255,255,.5));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.nav-item {
+    background: linear-gradient(160deg, rgba(255,255,255,.2), rgba(255,255,255,.04));
+    border: 0;
+    box-shadow: inset 0 1px 0.5px rgba(255,255,255,.5), inset 0 -1px 1px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.15);
+    color: rgba(255,255,255,.82);
+}
+.nav-item:hover { background: linear-gradient(160deg, rgba(255,255,255,.3), rgba(255,255,255,.08)); border: 0; box-shadow: inset 0 1px 0.5px rgba(255,255,255,.7), 0 10px 22px rgba(0,0,0,.28); }
+.nav-item.active {
+    border: 0; color: #fff;
+    background: linear-gradient(160deg, rgba(255,255,255,.38), rgba(var(--pr4), .55) 55%, rgba(var(--ind2), .6));
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.8), inset 0 -2px 6px rgba(0,0,0,.18), 0 6px 18px rgba(var(--pr4), .45);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .floating-nav { background: rgba(var(--panel), .92); }
+}
+</style>
+<style id="tablet-compact">
+/* iPad / touch tablets: Home, Saved Entries, Data Management and Settings use the compact phone layout */
+@media (min-width: 641px) and (max-width: 1400px) and (pointer: coarse) {
+            #home-page > .text-center, #home-page .home-cards-container { display: none !important; }
+            .mh { display: block; text-align: center; padding: 6px 4px 10px; }
+            .mh-orb-wrap { position: relative; width: 138px; height: 138px; margin: 6px auto 10px; display: flex; align-items: center; justify-content: center; }
+            .mh-ring { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 50%;
+                background: conic-gradient(from 0deg, rgb(var(--pr4)), rgb(var(--ind2)), #22d3ee, rgb(var(--acc2)), rgb(var(--pr4)));
+                -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+                -webkit-animation: mhSpin 9s linear infinite; animation: mhSpin 9s linear infinite; filter: drop-shadow(0 0 10px rgba(var(--pr4), 0.7)); }
+            .mh-ring2 { top: 12px; left: 12px; right: 12px; bottom: 12px; opacity: 0.55; -webkit-animation-duration: 14s; animation-duration: 14s; -webkit-animation-direction: reverse; animation-direction: reverse; }
+            .mh-orb { width: 82px; height: 82px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 34px; color: #fff;
+                background: rgb(var(--pr3)); background: radial-gradient(circle at 30% 25%, #f3e8ff, rgb(var(--pr4)) 45%, #4c1d95);
+                box-shadow: 0 0 44px rgba(var(--pr4), 0.75), inset 0 -8px 16px rgba(0, 0, 0, 0.35);
+                -webkit-animation: mhFloat 4.5s ease-in-out infinite; animation: mhFloat 4.5s ease-in-out infinite; }
+            @-webkit-keyframes mhSpin { to { -webkit-transform: rotate(360deg); } }
+            @keyframes mhSpin { to { transform: rotate(360deg); } }
+            @-webkit-keyframes mhFloat { 0%, 100% { -webkit-transform: translateY(0); } 50% { -webkit-transform: translateY(-6px); } }
+            @keyframes mhFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+            .mh-brand { margin: 0; font-size: 2.5rem; font-weight: 800; letter-spacing: 1px; line-height: 1.3; padding-bottom: 0.08em;
+                background: linear-gradient(90deg, #fff, rgb(var(--lav4)) 55%, #f9a8d4); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+            .mh-tag { margin: 0 0 22px; font-size: 0.9rem; letter-spacing: 0.4px; color: rgba(255, 255, 255, 0.62); }
+            .mh-cta { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; margin: 0 0 16px; padding: 15px 18px; border: 0; border-radius: 22px; color: #fff; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.3px; cursor: pointer; -webkit-appearance: none; appearance: none;
+                background: rgb(var(--pr3)); background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--ind2)) 55%, rgb(var(--acc2))); box-shadow: 0 12px 28px rgba(var(--pr4), 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+                -webkit-animation: mhGlow 3.2s ease-in-out infinite; animation: mhGlow 3.2s ease-in-out infinite; }
+            .mh-cta-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); }
+            .mh-cta:active { -webkit-transform: scale(0.98); transform: scale(0.98); }
+            @-webkit-keyframes mhGlow { 0%, 100% { box-shadow: 0 12px 28px rgba(var(--pr4), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35); } 50% { box-shadow: 0 14px 36px rgba(var(--acc2), 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35); } }
+            @keyframes mhGlow { 0%, 100% { box-shadow: 0 12px 28px rgba(var(--pr4), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35); } 50% { box-shadow: 0 14px 36px rgba(var(--acc2), 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35); } }
+            .mh-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .mh-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px 10px 16px; color: #fff; cursor: pointer; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.14); -webkit-appearance: none; appearance: none;
+                background: rgba(255, 255, 255, 0.06); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+            .mh-tile b { font-size: 0.92rem; font-weight: 600; letter-spacing: 0.3px; }
+            .mh-tile:active { -webkit-transform: scale(0.97); transform: scale(0.97); }
+            .mh-tile-icon { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 18px; font-size: 22px; color: #fff; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35); }
+            .mh-t1 .mh-tile-icon { background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--ind2))); box-shadow: 0 8px 22px rgba(99, 102, 241, 0.5); }
+            .mh-t2 .mh-tile-icon { background: linear-gradient(135deg, #06b6d4, #3b82f6); box-shadow: 0 8px 22px rgba(6, 182, 212, 0.45); }
+            .mh-t3 .mh-tile-icon { background: linear-gradient(135deg, #f59e0b, #ef4444); box-shadow: 0 8px 22px rgba(245, 158, 11, 0.45); }
+            .mh-t4 .mh-tile-icon { background: linear-gradient(135deg, #84cc16, #22c55e); box-shadow: 0 8px 22px rgba(132, 204, 22, 0.45); }
+        }
+@media (min-width: 641px) and (max-width: 1400px) and (pointer: coarse) {
+            #home-page.active > .text-center { display: none !important; }
+            #home-page.active .mh { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: 0 2px 4px; }
+            #home-page.active .mh-orb-wrap { --o: clamp(70px, 15vh, 138px); width: var(--o); height: var(--o); margin: 0 auto clamp(4px, 1vh, 10px); flex: 0 0 auto; }
+            #home-page.active .mh-orb { width: calc(var(--o) * 0.6); height: calc(var(--o) * 0.6); font-size: calc(var(--o) * 0.25); }
+            #home-page.active .mh-brand { font-size: clamp(1.6rem, 4.6vh, 2.5rem); line-height: 1.2; flex: 0 0 auto; }
+            #home-page.active .mh-tag { margin: 0 0 clamp(6px, 1.6vh, 22px); font-size: clamp(0.72rem, 1.7vh, 0.9rem); flex: 0 0 auto; }
+            #home-page.active .mh-cta { margin: 0 0 clamp(8px, 1.4vh, 16px); padding: clamp(10px, 1.8vh, 15px) 18px; flex: 0 0 auto; }
+            #home-page.active .mh-tiles { flex: 1 1 0; min-height: 0; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(8px, 1.4vh, 12px); }
+            #home-page.active .mh-tile { padding: 4px 6px; gap: clamp(4px, 1vh, 10px); min-height: 0; }
+            #home-page.active .mh-tile-icon { width: clamp(34px, 6.2vh, 52px); height: clamp(34px, 6.2vh, 52px); font-size: clamp(16px, 2.8vh, 22px); border-radius: 15px; }
+            @media (max-height: 640px) { #home-page.active .mh-tag { display: none; } }
+        }
+@media (min-width: 641px) and (max-width: 1400px) and (pointer: coarse) { .mh { max-width: 640px; margin-left: auto; margin-right: auto; } #home-page.active { align-items: stretch; } }
+@media (min-width: 641px) and (max-width: 1400px) and (pointer: coarse) {
+    body[data-pg="view"] #main-header, body[data-pg="data"] #main-header, body[data-pg="settings"] #main-header { padding: 14px 0 0 !important; margin-bottom: 6px !important; }
+    body[data-pg="view"] #greeting, body[data-pg="data"] #greeting, body[data-pg="settings"] #greeting { font-size: 1.35rem !important; }
+    body[data-pg="view"] main, body[data-pg="data"] main, body[data-pg="settings"] main { padding-left: 10px !important; padding-right: 10px !important; padding-bottom: 76px; }
+    body[data-pg="view"] .back-btn, body[data-pg="data"] .back-btn, body[data-pg="settings"] .back-btn { padding: 6px 14px; font-size: 13px; margin-bottom: 10px; }
+    body[data-pg="view"] #app, body[data-pg="data"] #app, body[data-pg="settings"] #app { zoom: 0.85; }
+    body[data-pg="view"] #app input:not([type="checkbox"]):not([type="radio"]), body[data-pg="view"] #app select, body[data-pg="view"] #app textarea, body[data-pg="data"] #app input:not([type="checkbox"]):not([type="radio"]), body[data-pg="data"] #app select, body[data-pg="data"] #app textarea, body[data-pg="settings"] #app input:not([type="checkbox"]):not([type="radio"]), body[data-pg="settings"] #app select, body[data-pg="settings"] #app textarea { font-size: 18.8px !important; }
+    html, body { overflow-x: hidden; }
+    #view-page .stunning-form-container, #data-page .stunning-form-container, #settings-page .stunning-form-container { margin: 0 0 14px; border-radius: 18px; }
+    #view-page .magical-header, #data-page .magical-header, #settings-page .magical-header { padding: 14px 16px; }
+    #view-page .magic-icon, #data-page .magic-icon, #settings-page .magic-icon { margin-bottom: 4px; }
+    #view-page .magic-icon i, #data-page .magic-icon i, #settings-page .magic-icon i { font-size: 1.4rem; }
+    #view-page .magic-title, #data-page .magic-title, #settings-page .magic-title { font-size: 1.15rem; margin-bottom: 2px; }
+    #view-page .magic-subtitle, #data-page .magic-subtitle, #settings-page .magic-subtitle { font-size: 0.82rem; }
+    #view-page .form-grid, #data-page .form-grid, #settings-page .form-grid { padding: 14px 14px; }
+    #view-page .form-row, #data-page .form-row, #settings-page .form-row { gap: 10px; }
+    #view-page .magic-input, #data-page .magic-input, #settings-page .magic-input, #view-page .magic-textarea, #data-page .magic-textarea, #settings-page .magic-textarea { padding-top: 10px; padding-bottom: 10px; font-size: 15px; border-radius: 14px; }
+    #view-page .app-btn, #data-page .app-btn, #settings-page .app-btn { padding: 8px 14px; font-size: 0.85rem; border-radius: 10px; }
+    #view-page .magic-btn, #data-page .magic-btn, #settings-page .magic-btn { padding: 10px 14px; }
+    #view-page .live-calculation-card, #data-page .live-calculation-card, #settings-page .live-calculation-card, #view-page .magic-calc-display, #data-page .magic-calc-display, #settings-page .magic-calc-display { padding: 12px; margin: 8px 0; }
+    #view-page .iconic-entry-card, #data-page .iconic-entry-card, #settings-page .iconic-entry-card { height: auto !important; margin-bottom: 10px; border-radius: 16px; border-width: 1px; animation: none; }
+    #view-page .iconic-entry-card:not(.expanded) .entry-card-body, #data-page .iconic-entry-card:not(.expanded) .entry-card-body, #settings-page .iconic-entry-card:not(.expanded) .entry-card-body, #view-page .iconic-entry-card:not(.expanded) .entry-card-footer, #data-page .iconic-entry-card:not(.expanded) .entry-card-footer, #settings-page .iconic-entry-card:not(.expanded) .entry-card-footer, #view-page .iconic-entry-card:not(.expanded) .entry-footer-actions, #data-page .iconic-entry-card:not(.expanded) .entry-footer-actions, #settings-page .iconic-entry-card:not(.expanded) .entry-footer-actions { display: none; }
+    #view-page .entry-card-header, #data-page .entry-card-header, #settings-page .entry-card-header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; height: auto; border-bottom: 0; }
+    #view-page .iconic-entry-card.expanded .entry-card-header, #data-page .iconic-entry-card.expanded .entry-card-header, #settings-page .iconic-entry-card.expanded .entry-card-header { padding: 10px 12px; }
+    #view-page .entry-icon-section, #data-page .entry-icon-section, #settings-page .entry-icon-section { width: auto; margin: 0; gap: 8px; justify-content: flex-start; }
+    #view-page .entry-main-icon, #data-page .entry-main-icon, #settings-page .entry-main-icon { width: 30px; height: 30px; font-size: 13px; border-radius: 9px; }
+    #view-page .entry-header-content, #data-page .entry-header-content, #settings-page .entry-header-content { width: auto; flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+    #view-page .entry-title, #data-page .entry-title, #settings-page .entry-title { order: 1; flex: 1 1 calc(100% - 96px); min-width: 0; margin: 0; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #view-page .entry-compact-total, #data-page .entry-compact-total, #settings-page .entry-compact-total { order: 2; flex: 0 0 auto; margin: 0; font-size: 1rem; }
+    #view-page .entry-date-badge, #data-page .entry-date-badge, #settings-page .entry-date-badge, #view-page .invoiced-badge, #data-page .invoiced-badge, #settings-page .invoiced-badge { order: 3; }
+    #view-page .entry-footer-actions, #data-page .entry-footer-actions, #settings-page .entry-footer-actions { padding: 0 12px 10px; gap: 8px; flex-wrap: wrap; }
+    #view-page .entry-actions, #data-page .entry-actions, #settings-page .entry-actions { align-self: auto; flex: 1 1 100%; justify-content: space-between; gap: 6px; padding-top: 2px; }
+    #view-page .entry-action-btn, #data-page .entry-action-btn, #settings-page .entry-action-btn { width: 34px; height: 34px; min-width: 34px; font-size: 13px; }
+    #view-page .entry-card-body, #data-page .entry-card-body, #settings-page .entry-card-body { padding: 10px 12px; }
+    #view-page .entry-card-footer, #data-page .entry-card-footer, #settings-page .entry-card-footer { padding: 10px 12px; flex-direction: row; flex-wrap: wrap; }
+    #view-page .financial-grid, #data-page .financial-grid, #settings-page .financial-grid { grid-template-columns: 1fr; gap: 8px; margin-bottom: 10px; }
+    #view-page .financial-grid { grid-template-columns: 1fr 1fr; }
+    #view-page .financial-item, #data-page .financial-item, #settings-page .financial-item { padding: 8px 10px; gap: 8px; }
+    #view-page .invoiced-badge, #data-page .invoiced-badge, #settings-page .invoiced-badge { margin: 4px 6px 0 0; padding: 2px 8px; font-size: 0.7rem; }
+    #view-page .entry-summary-line, #data-page .entry-summary-line, #settings-page .entry-summary-line { margin: -4px 0 12px; padding: 8px 10px; font-size: 0.8rem; }
+    #view-page .filter-bar, #data-page .filter-bar, #settings-page .filter-bar { margin-bottom: 10px; gap: 8px; }
+    #view-page .setting-item, #data-page .setting-item, #settings-page .setting-item { padding: 12px; gap: 10px; }
+    #view-page .stats-card-item, #data-page .stats-card-item, #settings-page .stats-card-item { padding: 8px; margin: 0; }
+    #view-page .stats-cards-container, #data-page .stats-cards-container, #settings-page .stats-cards-container { gap: 8px; }
+    #view-page .year-filter-container, #data-page .year-filter-container, #settings-page .year-filter-container { margin-bottom: 12px; }
+    #view-page .year-filter-content, #data-page .year-filter-content, #settings-page .year-filter-content { flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: 8px; }
+    #view-page .year-filter-select, #data-page .year-filter-select, #settings-page .year-filter-select { flex: 1 1 110px; width: auto; min-width: 0; padding: 6px 10px; }
+    #view-page .year-filter-reset, #data-page .year-filter-reset, #settings-page .year-filter-reset { width: auto; padding: 6px 12px; }
+    #view-page .stats-cards-container, #data-page .stats-cards-container, #settings-page .stats-cards-container { gap: 6px; margin: 12px 0 !important; }
+    #view-page .stats-orb, #data-page .stats-orb, #settings-page .stats-orb { padding: 8px; }
+    #data-page .magic-calc-display, #settings-page .magic-calc-display { margin: 12px 0 !important; padding: 12px !important; }
+    #view-page .live-calc-header, #data-page .live-calc-header, #settings-page .live-calc-header { margin-bottom: 10px !important; }
+    #view-page .lbl-long, #data-page .lbl-long, #settings-page .lbl-long { display: none; }
+    #view-page .lbl-short, #data-page .lbl-short, #settings-page .lbl-short { display: inline; }
+    #view-page .ctl-panel, #data-page .ctl-panel, #settings-page .ctl-panel { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 8px !important; padding: 10px !important; margin-bottom: 12px !important; }
+    #view-page .ctl-panel > button, #data-page .ctl-panel > button, #settings-page .ctl-panel > button { flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 54px; padding: 8px 4px !important; font-size: 0.74rem !important; line-height: 1.15; text-align: center; border-radius: 12px; }
+    #view-page .ctl-panel > button i, #data-page .ctl-panel > button i, #settings-page .ctl-panel > button i { margin: 0 !important; font-size: 17px; }
+    #view-page .ctl-panel > #select-all-btn, #data-page .ctl-panel > #select-all-btn, #settings-page .ctl-panel > #select-all-btn { display: flex !important; grid-column: 1 / -1; flex-direction: row; gap: 8px; min-height: 40px; font-size: 0.85rem !important; }
+    #view-page .ctl-panel > #delete-selected-btn, #data-page .ctl-panel > #delete-selected-btn, #settings-page .ctl-panel > #delete-selected-btn { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; }
+    #view-page .ctl-panel > #select-all-btn i, #data-page .ctl-panel > #select-all-btn i, #settings-page .ctl-panel > #select-all-btn i { font-size: 15px; }
+    #view-page #selected-info, #data-page #selected-info, #settings-page #selected-info { padding: 8px 12px !important; margin-bottom: 10px !important; font-size: 0.85rem; }
+}
+</style>
 </head>
 <body>
     <!-- Floating Bubbles Background -->
@@ -11743,7 +11907,55 @@ bootstrap();
         
 
     </script>
-    <script id="incator-fit">
+    <script id="incator-pgattr">
+(function () {
+    function sync() {
+        var a = document.querySelector('.page.active'); if (!a || !document.body) return;
+        var id = (a.id || '').replace(/-page$/, ''); if (document.body.getAttribute('data-pg') !== id) document.body.setAttribute('data-pg', id);
+    }
+    function start() {
+        sync();
+        if (window.MutationObserver) { var mo = new MutationObserver(sync); document.querySelectorAll('.page').forEach(function (pg) { mo.observe(pg, { attributes: true, attributeFilter: ['class'] }); }); }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>
+    <script id="incator-glassnav">
+/* Liquid-glass navigation bar: how see-through it is can be set in Settings > Appearance. */
+(function () {
+'use strict';
+if (window.IncGlassNav) return;
+var KEY = 'navGlass', DEF = 55;
+function clamp(v) { v = Math.round(+v); if (isNaN(v)) v = DEF; return Math.max(0, Math.min(100, v)); }
+function get() { try { var v = appSettings && appSettings[KEY]; return v == null ? DEF : clamp(v); } catch (e) { return DEF; } }
+function paint(v) { try { document.documentElement.style.setProperty('--nav-op', String(v / 100)); } catch (e) { /* ignore */ } }
+function save(v) { try { appSettings[KEY] = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ } }
+function show() { var r = document.getElementById('navglass-range'), o = document.getElementById('navglass-val'), v = get(); if (r) r.value = v; if (o) o.textContent = v + '%'; }
+function set(v, persist) { v = clamp(v); try { appSettings[KEY] = v; } catch (e) { /* ignore */ } paint(v); show(); if (persist) save(v); else { clearTimeout(set.t); set.t = setTimeout(function () { save(v); }, 600); } }
+function inject() {
+    var host = document.getElementById('theme-settings-section');
+    if (!host || document.getElementById('navglass-block')) return !!document.getElementById('navglass-block');
+    var body = host.querySelector(':scope > .acc-body') || host;
+    var sec = document.createElement('div'); sec.id = 'navglass-block'; sec.className = 'bub-block';
+    sec.innerHTML = '<div class="ap-sub">Navigation bar</div><div class="space-y-6"><div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">Glass opacity</h4><p class="setting-description">How solid the glass navigation bar looks. Low is clear glass you can see through, high is a frosted, almost solid bar.</p></div></div>' +
+        '<div class="setting-control"><div class="bub-ctl"><button type="button" class="bub-step" data-ng="-1" aria-label="Make the bar clearer">&minus;</button><input type="range" id="navglass-range" min="0" max="100" step="5" aria-label="Glass opacity"><button type="button" class="bub-step" data-ng="1" aria-label="Make the bar more solid">+</button><output class="bub-val" id="navglass-val"></output></div></div></div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><button type="button" class="app-btn" id="navglass-reset"><i class="fas fa-undo-alt mr-2"></i> Reset navigation bar</button></div></div>';
+    body.appendChild(sec);
+    sec.addEventListener('input', function (ev) { if (ev.target.id === 'navglass-range') set(ev.target.value, false); });
+    sec.addEventListener('change', function (ev) { if (ev.target.id === 'navglass-range') set(ev.target.value, true); });
+    sec.addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-ng]'); if (b) { set(get() + (+b.getAttribute('data-ng')) * 5, true); return; }
+        if (ev.target.closest('#navglass-reset')) { set(DEF, true); if (window.showToast) showToast('Navigation bar reset to the default', 'success'); }
+    });
+    show(); return true;
+}
+window.IncGlassNav = { get: get, set: function (v) { set(v, true); }, refresh: function () { paint(get()); inject(); show(); } };
+function boot() { paint(get()); inject(); var n = 0, tm = setInterval(function () { paint(get()); if (inject() || ++n > 40) clearInterval(tm); }, 250); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
+</script>
+<script id="incator-fit">
 /* ---------- Home: fit to one screen ---------- */
 function fitHome() {
     var hp = document.getElementById('home-page');
@@ -11973,7 +12185,7 @@ function pageShell(id, icon, title, sub, inner) {
         </div></div>`;
 }
 function tabsHtml(active) {
-    return `<div class="bz-tabs"><button type="button" class="bz-tab${active === 'quotes' ? ' on' : ''}" onclick="showPage('quotes')"><i class="fas fa-file-alt mr-2"></i>Quotes</button><button type="button" class="bz-tab${active === 'projects' ? ' on' : ''}" onclick="showPage('projects')"><i class="fas fa-briefcase mr-2"></i>Projects</button><button type="button" class="bz-tab bz-tab-rc${active === 'receipts' ? ' on' : ''}" onclick="showPage('receipts')"><i class="fas fa-receipt mr-2"></i>Receipts</button></div>`;
+    return `<div class="bz-tabs"><button type="button" class="bz-tab${active === 'quotes' ? ' on' : ''}" onclick="showPage('quotes')"><i class="fas fa-file-alt mr-2"></i>Quotes</button><button type="button" class="bz-tab${active === 'projects' ? ' on' : ''}" onclick="showPage('projects')"><i class="fas fa-briefcase mr-2"></i>Projects</button></div>`;
 }
 (function injectDom() {
     const settings = document.getElementById('settings-page');
@@ -13861,7 +14073,54 @@ document.addEventListener('DOMContentLoaded', populateGstPeriods); setTimeout(po
         return a.vendorKey && a.vendorKey === b.vendorKey && a.date && a.date === b.date && Math.abs((+a.total || 0) - (+b.total || 0)) < 0.005 && (+a.total || 0) > 0;
     }
 
-    var API = { CATS: CATS, CAT_IDS: CAT_IDS, STORES: STORES, catInfo: catInfo, readReceipt: readReceipt, moneyTokens: moneyTokens, findDates: findDates, vendorKey: vendorKey, matchVendor: matchVendor,
+
+    /* ---- duplicate detection: receipt / invoice / transaction number + date + store + total ---- */
+    function normNo(x) {
+        var n = String(x == null ? '' : x).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+/, '');
+        return (n.length >= 3 && /\d/.test(n) && !/^(.)\1{4,}$/.test(n)) ? n : '';
+    }
+    function dayDiff(a, b) {
+        var x = Date.parse(String(a || '') + 'T00:00:00Z'), y = Date.parse(String(b || '') + 'T00:00:00Z');
+        return isNaN(x) || isNaN(y) ? 999 : Math.abs(Math.round((x - y) / 864e5));
+    }
+    function itemWords(r) {
+        var o = {}; (r.items || []).forEach(function (i) { String(i.desc || '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').split(/\s+/).forEach(function (w) { if (w.length > 2) o[w] = 1; }); }); return o;
+    }
+    function itemOverlap(a, b) {
+        var x = itemWords(a), y = itemWords(b), kx = Object.keys(x), ky = Object.keys(y);
+        if (kx.length < 2 || ky.length < 2) return 0;
+        var inter = kx.filter(function (k) { return y[k]; }).length;
+        return inter / (kx.length + ky.length - inter);
+    }
+    // Returns null, or { level: 'exact' | 'likely', reasons: [...] }
+    function matchDuplicate(a, b) {
+        if (!a || !b || (a.id != null && a.id === b.id)) return null;
+        if ((a.dupOk || []).indexOf(String(b.id)) >= 0 || (b.dupOk || []).indexOf(String(a.id)) >= 0) return null;
+        var ta = +a.total || 0, tb = +b.total || 0, sameTotal = ta > 0 && Math.abs(ta - tb) < 0.005;
+        var ka = a.vendorKey && a.vendorKey !== 'UNKNOWN' ? a.vendorKey : vendorKey(a.store), kb = b.vendorKey && b.vendorKey !== 'UNKNOWN' ? b.vendorKey : vendorKey(b.store);
+        var vs = ka && kb ? (ka === kb ? 1 : similarity(ka, kb)) : 0, sameVendor = vs >= 0.8, likeVendor = vs >= 0.6;
+        var dd = dayDiff(a.date, b.date), sameDate = dd === 0, nearDate = dd === 1;
+        var na = normNo(a.receiptNo), nb = normNo(b.receiptNo);
+        var numSame = !!(na && nb && na === nb), numNear = !!(na && nb && !numSame && na.length >= 5 && similarity(na, nb) >= 0.85), numDiff = !!(na && nb && !numSame && !numNear);
+        var why = [];
+        function add(c, t) { if (c) why.push(t); }
+        if (numSame || numNear) {
+            var support = (sameVendor ? 1 : 0) + ((sameDate || nearDate) ? 1 : 0) + (sameTotal ? 1 : 0);
+            if (support >= 2 || (numSame && sameTotal)) {
+                add(true, numSame ? 'same receipt/invoice number (' + String(a.receiptNo).trim() + ')' : 'receipt numbers almost the same (' + String(a.receiptNo).trim() + ' and ' + String(b.receiptNo).trim() + ')');
+                add(sameVendor, 'same store'); add(sameDate, 'same date'); add(!sameDate && nearDate, 'dates one day apart'); add(sameTotal, 'same total');
+                return { level: numSame && support >= 2 ? 'exact' : 'likely', reasons: why };
+            }
+            return null;
+        }
+        if (numDiff) return null;                           // two different receipt numbers are two different receipts
+        if (sameTotal && sameVendor && sameDate) return { level: 'exact', reasons: ['same store', 'same date', 'same total'] };
+        if (sameTotal && likeVendor && (sameDate || nearDate)) return { level: 'likely', reasons: [sameVendor ? 'same store' : 'store name looks similar', sameDate ? 'same date' : 'dates one day apart', 'same total'] };
+        if (sameTotal && sameDate && itemOverlap(a, b) >= 0.6) return { level: 'likely', reasons: ['same date', 'same total', 'same items'] };
+        return null;
+    }
+
+    var API = { matchDuplicate: matchDuplicate, normReceiptNo: normNo, CATS: CATS, CAT_IDS: CAT_IDS, STORES: STORES, catInfo: catInfo, readReceipt: readReceipt, moneyTokens: moneyTokens, findDates: findDates, vendorKey: vendorKey, matchVendor: matchVendor,
                 canonicalStore: canonicalStore, knownStore: knownStore, itemCategory: itemCategory, receiptCategory: receiptCategory, learnKey: learnKey, assess: assess, itemClaim: itemClaim,
                 sameReceipt: sameReceipt, similarity: similarity, fixDigits: fixDigits };
     if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.RcptAI = API;
@@ -14195,9 +14454,6 @@ st.textContent = `
 #receipts-page .stunning-form-container { margin-bottom: 10px; border-width: 1px; }
 #receipts-page .form-grid { padding: 12px; }
 #receipts-page .back-btn { margin-bottom: 8px; }
-#receipts-page .bz-tabs { margin: 0 0 8px; padding: 3px; gap: 4px; }
-#receipts-page .bz-tab { padding: 6px 4px; font-size: .76rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; }
-#receipts-page .bz-tab i { margin-right: 4px !important; }
 .rc-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(var(--pr), .2); }
 .rc-top .rc-tic { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex: none; background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))); }
 .rc-top h2 { font-size: 1.05rem; font-weight: 700; margin: 0; line-height: 1.15; }
@@ -14231,16 +14487,6 @@ st.textContent = `
 .rc-stats .bz-stat { padding: 6px 4px; border-radius: 10px; min-width: 0; }
 .rc-stats .bz-stat b { font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-stats .bz-stat span { font-size: .56rem; letter-spacing: .3px; }
-.rc-hubgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.rc-hc { position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px; padding: 8px 9px; min-height: 54px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: #fff; cursor: pointer; text-align: left; font: inherit; -webkit-appearance: none; appearance: none; transition: transform .15s, border-color .15s; }
-.rc-hc:hover { border-color: rgba(var(--pr2), .6); transform: translateY(-2px); }
-.rc-hc:active { transform: scale(.97); }
-.rc-hi { flex: none; width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
-.rc-ht { display: block; min-width: 0; padding-right: 14px; }
-.rc-ht b { display: block; font-size: .8rem; font-weight: 700; line-height: 1.15; }
-.rc-ht small { display: block; font-size: .66rem; color: rgba(255,255,255,.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.rc-badge { position: absolute; top: 5px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: .64rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); z-index: 2; }
-.rc-badge.warn { background: #f97316; }
 .rc-subhead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .rc-subhead h3 { flex: 1; min-width: 0; font-size: 1rem; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-back, .rc-sm { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); color: #fff; font: 600 .78rem var(--font), sans-serif; cursor: pointer; -webkit-appearance: none; appearance: none; white-space: nowrap; }
@@ -14301,12 +14547,62 @@ st.textContent = `
 .rc-mi small { display: block; font-size: .72rem; color: rgba(255,255,255,.62); }
 .rc-mi.danger i, .rc-mi.danger b { color: #fca5a5; }
 .rc-calc .gf-line b { white-space: nowrap; }
+@media (max-width: 700px) {
+  #receipts-page .form-grid { padding: 16px 14px 20px; }
+  #receipts-page .stunning-form-container { margin-bottom: 14px; }
+  .rc-top { padding: 16px 16px; gap: 14px; }
+  .rc-top .rc-tic { width: 48px; height: 48px; font-size: 22px; border-radius: 16px; }
+  .rc-top h2 { font-size: 1.35rem; }
+  .rc-top p { font-size: .84rem; margin-top: 2px; }
+  .rc-modes { padding: 4px; gap: 6px; margin: 0 0 16px; border-radius: 16px; }
+  .rc-mode { padding: 13px 6px; font-size: .92rem; border-radius: 12px; flex-direction: column; gap: 5px; }
+  .rc-mode i { font-size: 18px; }
+  .rc-scan { padding: 18px 16px; margin-bottom: 18px; border-radius: 20px; }
+  .rc-srow { flex-direction: column; align-items: stretch; gap: 14px; }
+  .rc-scan .rc-ic { width: 56px; height: 56px; font-size: 24px; border-radius: 18px; }
+  .rc-stx { flex: none; }
+  .rc-stx h3 { font-size: 1.15rem; }
+  .rc-stx p { font-size: .88rem; margin-top: 4px; }
+  .rc-sact { flex-direction: column; }
+  .rc-big { width: 100%; padding: 15px 16px !important; font-size: 1rem !important; border-radius: 14px !important; justify-content: center; }
+  .rc-sfoot { margin-top: 14px; font-size: .86rem; gap: 10px 14px; }
+  .rc-sfoot .bz-check { font-size: .88rem; }
+  .rc-sfoot .bz-check input { width: 20px; height: 20px; }
+  .rc-link { font-size: .84rem; }
+  .rc-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
+  .rc-stats .bz-stat { padding: 14px 10px; border-radius: 16px; }
+  .rc-stats .bz-stat b { font-size: 1.3rem; }
+  .rc-stats .bz-stat span { font-size: .72rem; letter-spacing: .5px; margin-top: 3px; display: block; }
+  .rc-subhead { gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .rc-subhead h3 { order: 3; flex: 1 1 100%; font-size: 1.25rem; }
+  .rc-back, .rc-sm { padding: 10px 14px; font-size: .88rem; border-radius: 12px; }
+  .rc-subact { margin-left: auto; }
+  .rc-sumline { font-size: .88rem; gap: 4px 14px; margin-bottom: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.05); }
+  .rc-vnote { font-size: .82rem; padding: 10px 12px; margin-bottom: 12px; border-radius: 12px; }
+  .rc-filters { gap: 10px; margin-bottom: 14px; }
+  .rc-filters .inv-input { padding: 13px 12px; font-size: 16px; border-radius: 14px; }
+  .rc-search i { left: 14px; font-size: 14px; }
+  .rc-search input { padding-left: 38px !important; }
+  .rc-grp { margin-bottom: 14px; border-radius: 18px; }
+  .rc-gh { padding: 14px 14px; gap: 10px; }
+  .rc-gh b { font-size: 1rem; }
+  .rc-gh small { font-size: .8rem; }
+  .rc-gh .rc-t { font-size: 1rem; }
+  .rc-row { padding: 14px 14px; gap: 12px; }
+  .rc-ck { width: 26px; height: 26px; font-size: 12px; }
+  .rc-m { font-size: .98rem; }
+  .rc-m small { font-size: .8rem; margin-top: 3px; }
+  .rc-a { font-size: 1.02rem; }
+  .rc-a small { font-size: .76rem; margin-top: 2px; }
+  .rc-q { min-width: 40px; height: 40px; font-size: .78rem; padding: 0 12px; }
+  .rc-q i { font-size: 16px; }
+  #receipts-page .back-btn { margin-bottom: 12px; }
+}
 @media (min-width: 701px) {
   .rc-selbar { bottom: 96px; }
   .rc-sinfo { flex: 1 1 150px; }
   .rc-sbtns { flex: 0 1 auto; }
   .rc-sb { flex: 0 0 auto; min-width: 60px; padding: 6px 8px; }
-  .rc-hubgrid { grid-template-columns: repeat(4, 1fr); }
   .rc-filters { display: flex; flex-wrap: wrap; }
   .rc-filters .inv-input { flex: 0 1 150px; width: auto; padding: 6px 8px; font-size: .78rem; }
   .rc-search { flex: 1 1 220px; }
@@ -14317,18 +14613,10 @@ st.textContent = `
   #receipts-page { width: min(1240px, 94vw); max-width: none; left: 50%; margin-left: calc(min(1240px, 94vw) / -2); }
   #receipts-page .stunning-form-container { margin-bottom: 24px; border-width: 2px; }
   #receipts-page .form-grid { padding: 22px 28px 30px; }
-  #receipts-page .bz-tabs { max-width: 680px; margin: 0 0 22px; padding: 4px; gap: 6px; }
-  #receipts-page .bz-tab { padding: 11px 8px; font-size: .92rem; }
-  .rc-top { padding: 20px 28px; gap: 16px; }
+      .rc-top { padding: 20px 28px; gap: 16px; }
   .rc-top .rc-tic { width: 52px; height: 52px; font-size: 24px; border-radius: 16px; }
   .rc-top h2 { font-size: 1.55rem; }
   .rc-top p { font-size: .92rem; }
-  #rc-hub { display: grid; grid-template-columns: minmax(340px, 400px) 1fr; grid-template-rows: auto auto 1fr; column-gap: 28px; align-items: start; }
-  #rc-hub > .rc-modes { grid-column: 1; grid-row: 1; margin: 0 0 14px; padding: 4px; }
-  #rc-hub > .rc-mode, #rc-hub .rc-mode { padding: 10px 8px; font-size: .9rem; }
-  #rc-hub > #rc-panel { grid-column: 1; grid-row: 2; }
-  #rc-hub > .rc-stats { grid-column: 1; grid-row: 3; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 4px 0 0; }
-  #rc-hub > .rc-hubgrid { grid-column: 2; grid-row: 1 / span 3; grid-template-columns: repeat(2, 1fr); gap: 16px; align-content: start; }
   .rc-scan { padding: 20px 22px; margin-bottom: 14px; border-radius: 20px; }
   .rc-scan .rc-ic { width: 58px; height: 58px; font-size: 26px; border-radius: 18px; }
   .rc-stx h3 { font-size: 1.2rem; }
@@ -14340,12 +14628,6 @@ st.textContent = `
   .rc-stats .bz-stat { padding: 16px 10px; border-radius: 16px; }
   .rc-stats .bz-stat b { font-size: 1.45rem; }
   .rc-stats .bz-stat span { font-size: .72rem; letter-spacing: .5px; margin-top: 2px; display: block; }
-  .rc-hc { min-height: 112px; padding: 18px 22px; gap: 18px; border-radius: 20px; }
-  .rc-hi { width: 62px; height: 62px; font-size: 28px; border-radius: 18px; }
-  .rc-ht { padding-right: 34px; }
-  .rc-ht b { font-size: 1.15rem; }
-  .rc-ht small { font-size: .88rem; margin-top: 5px; }
-  .rc-badge { top: 14px; right: 16px; min-width: 28px; height: 28px; border-radius: 14px; font-size: .84rem; }
   .rc-subhead { margin-bottom: 14px; gap: 14px; }
   .rc-subhead h3 { font-size: 1.5rem; }
   .rc-back, .rc-sm { padding: 10px 16px; font-size: .92rem; border-radius: 12px; }
@@ -14368,6 +14650,58 @@ st.textContent = `
   .rc-q { height: 36px; min-width: 36px; padding: 0 16px; font-size: .84rem; }
   .rc-q i { font-size: 16px; }
 }
+
+/* duplicates */
+.rc-chip.dup { color: #fdba74; border-color: rgba(249,115,22,.6); background: rgba(249,115,22,.14); }
+.rc-hero .rc-hw { color: #fdba74; font-weight: 700; }
+.rc-dh { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 10px 12px; border-bottom: 1px dashed rgba(255,255,255,.14); }
+.rc-dl { font-size: .72rem; font-weight: 800; padding: 2px 10px; border-radius: 999px; background: rgba(239,68,68,.2); color: #fca5a5; border: 1px solid rgba(239,68,68,.5); }
+.rc-dl.likely { background: rgba(249,115,22,.16); color: #fdba74; border-color: rgba(249,115,22,.55); }
+.rc-dh small { flex: 1 1 140px; min-width: 0; color: rgba(255,255,255,.7); font-size: .74rem; }
+.rc-da { display: flex; gap: 6px; flex-wrap: wrap; }
+.rc-dupalert { margin: 0 0 10px; }
+@media (max-width: 700px) { .rc-dh { padding: 12px 14px; } .rc-da { width: 100%; } .rc-da .rc-sm { flex: 1; justify-content: center; } }
+/* Receipts landing: two big home-style cards */
+.rc-hubgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+.rc-hero { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; min-height: 168px; padding: 18px 10px; border-radius: 24px; border: 1px solid rgba(255,255,255,.16); background: linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); color: #fff; cursor: pointer; font: inherit; -webkit-appearance: none; appearance: none; transition: transform .15s, border-color .15s, box-shadow .15s; box-shadow: 0 10px 28px rgba(0,0,0,.22); }
+.rc-hero:hover { border-color: rgba(var(--pr2), .65); transform: translateY(-3px); }
+.rc-hero:active { transform: scale(.97); }
+.rc-hero .rc-hi { width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 8px 22px rgba(0,0,0,.35); }
+.rc-hero b { display: block; font-size: 1.12rem; font-weight: 800; line-height: 1.15; }
+.rc-hero small { display: block; font-size: .8rem; color: rgba(255,255,255,.66); line-height: 1.35; }
+.rc-hero .rc-hn { position: absolute; top: 10px; right: 12px; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; font-size: .78rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); }
+.rc-hero .rc-hn.warn { background: #f97316; }
+.rc-sect { font-size: .74rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: rgba(255,255,255,.55); margin: 4px 2px 8px; }
+.rc-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; margin-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.rc-chips::-webkit-scrollbar { display: none; }
+.rc-cp { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: #fff; font: 600 .82rem var(--font), sans-serif; cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none; }
+.rc-cp i { font-size: 13px; }
+.rc-cp em { font-style: normal; font-size: .72rem; font-weight: 800; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); }
+.rc-cp em.warn { background: #f97316; }
+.rc-cp.on { background: rgba(var(--pr2), .28); border-color: rgba(var(--pr2), .85); }
+@media (min-width: 701px) {
+  .rc-hubgrid { gap: 16px; }
+  .rc-hero { min-height: 190px; border-radius: 26px; }
+  .rc-hero b { font-size: 1.3rem; }
+  .rc-hero small { font-size: .92rem; }
+  .rc-hero .rc-hi { width: 76px; height: 76px; font-size: 34px; border-radius: 24px; }
+}
+@media (min-width: 1024px) {
+  #rc-hub { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; column-gap: 28px; align-items: start; }
+  #rc-hub > .rc-hubgrid { grid-column: 1 / -1; grid-row: 1; gap: 22px; margin-bottom: 26px; }
+  #rc-hub > .rc-modes { grid-column: 1; grid-row: 2; margin: 0 0 14px; padding: 4px; }
+  #rc-hub .rc-mode { padding: 10px 8px; font-size: .9rem; }
+  #rc-hub > #rc-panel { grid-column: 1; grid-row: 3; }
+  #rc-hub > .rc-stats { grid-column: 2; grid-row: 2 / span 2; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 4px 0 0; }
+  .rc-cp { padding: 10px 16px; font-size: .9rem; }
+}
+@media (max-width: 1023px) { #rc-hub > .rc-stats { display: none; } }
+@media (max-width: 380px) {
+  .rc-hero { min-height: 150px; padding: 14px 8px; }
+  .rc-hero .rc-hi { width: 54px; height: 54px; font-size: 24px; border-radius: 17px; }
+  .rc-hero b { font-size: 1rem; }
+  .rc-hero small { font-size: .74rem; }
+}
 `;
 document.head.appendChild(st);
 
@@ -14380,21 +14714,21 @@ let host = null;
 function injectPage() {
     const settings = document.getElementById('settings-page');
     if (!settings || document.getElementById('receipts-page')) return;
-    const tabs = `<div class="bz-tabs"><button type="button" class="bz-tab" onclick="showPage('quotes')"><i class="fas fa-file-alt mr-2"></i>Quotes</button><button type="button" class="bz-tab" onclick="showPage('projects')"><i class="fas fa-briefcase mr-2"></i>Projects</button><button type="button" class="bz-tab bz-tab-rc on" onclick="showPage('receipts')"><i class="fas fa-receipt mr-2"></i>Receipts</button></div>`;
-    const inner = tabs + `
+    const inner = `
         <div id="rc-hub">
+            <div id="rc-grid" class="rc-hubgrid"></div>
             <div class="rc-modes" id="rc-modes">${Object.keys(MODES).map(k => `<button type="button" class="rc-mode${k === UI.mode ? ' on' : ''}" data-rc-mode="${k}"><i class="fas fa-${MODES[k][0]}"></i><span>${MODES[k][1]}</span></button>`).join('')}</div>
             <div id="rc-panel"></div>
             <div id="rc-stats" class="rc-stats"></div>
-            <div id="rc-grid" class="rc-hubgrid"></div>
         </div>
         <div id="rc-subview" style="display:none;">
             <div class="rc-subhead"><button type="button" class="rc-back" data-rc-back><i class="fas fa-arrow-left"></i><span>Receipts</span></button><h3 id="rc-subtitle"></h3>
                 <div class="rc-subact"><button type="button" class="rc-sm" id="rc-selmode-btn"><i class="fas fa-check-square"></i><span>Select</span></button><button type="button" class="rc-sm" id="rc-csv-btn"><i class="fas fa-file-csv"></i><span>CSV</span></button></div></div>
+            <div id="rc-chips" class="rc-chips"></div>
             <div id="rc-sumline" class="rc-sumline"></div>
             <div id="rc-vnote" class="rc-vnote"></div>
             <div class="rc-filters">
-                <div class="rc-search"><i class="fas fa-search"></i><input type="text" id="rc-q" class="inv-input" placeholder="Search store, item, category, receipt #..." autocomplete="off"></div>
+                <div class="rc-search"><i class="fas fa-search"></i><input type="text" id="rc-q" class="inv-input" placeholder="Search receipts..." autocomplete="off"></div>
                 <select id="rc-cat" class="inv-input"><option value="">All categories</option>${AI.CAT_IDS.map(c => `<option value="${h(c)}">${h(c)}</option>`).join('')}</select>
                 <select id="rc-status" class="inv-input"><option value="">All receipts</option><option value="check">Needs review</option><option value="claim">Claimable</option><option value="partial">Partly claimable</option><option value="personal">Personal</option><option value="nophoto">No photo saved</option></select>
                 <select id="rc-year" class="inv-input"><option value="">All years</option></select>
@@ -14412,11 +14746,6 @@ function injectPage() {
         </div></div>`;
     settings.parentNode.insertAdjacentHTML('beforeend', html);
     host = document.getElementById('receipts-page');
-    // tab strip on the other two business pages
-    ['quotes-page', 'projects-page'].forEach(pid => {
-        const t = document.querySelector('#' + pid + ' .bz-tabs');
-        if (t && !t.querySelector('.bz-tab-rc')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bz-tab bz-tab-rc'; b.innerHTML = '<i class="fas fa-receipt mr-2"></i>Receipts'; b.onclick = () => showPage('receipts'); const cu = t.querySelector('.bz-tab-cu'); t.insertBefore(b, cu || null); }
-    });
     ensureBar();
     const nav = document.querySelector('.floating-nav');                       // Receipts also lives in the bottom bar
     if (nav && !nav.querySelector('[data-page="receipts"]')) {
@@ -14616,11 +14945,17 @@ async function commit(d, existing, opts) {
         photos: (existing && existing.photos ? existing.photos.slice() : []).filter(p => !(d.removedPhotos || []).includes(p.id)), source: existing ? existing.source : d.source || 'manual' };
     if (d.claimMode === 'claim' || d.claimMode === 'half' || d.claimMode === 'no') rec.claimMode = d.claimMode;
     if (!existing || !rec.vendorKey) { /* keep resolved key */ }
-    const dupOf = receipts.find(x => AI.sameReceipt({ id: rec.id, vendorKey: rec.vendorKey, date: rec.date, total: rec.total }, x));
-    if (dupOf && !existing) {
-        if (opts.quiet) return 'dup';
-        const ok = await showConfirmation({ title: 'This looks like a duplicate', type: 'warning', confirmText: 'Save anyway', cancelText: 'Cancel', message: `You already saved a receipt from ${dupOf.store} on ${formatDate(dupOf.date)} for ${money(dupOf.total)}. Save this one too?` });
-        if (!ok) return null;
+    if (existing && existing.dupOk) rec.dupOk = existing.dupOk;
+    const dups = existing ? [] : dupFind(rec, receipts);
+    if (dups.length) {
+        const top = dups[0], tr = top.r;
+        if (opts.quiet) { if (top.m.level === 'exact') return 'dup'; }
+        else {
+            const ok = await showConfirmation({ title: top.m.level === 'exact' ? 'This looks like a duplicate' : 'This might be a duplicate', type: 'warning', confirmText: 'Save anyway', cancelText: 'Cancel',
+                message: `You already saved a receipt from ${tr.store} on ${formatDate(tr.date)} for ${money(tr.total)}${tr.receiptNo ? ' (no. ' + tr.receiptNo + ')' : ''}. Why it matches: ${top.m.reasons.join(', ')}. Save this one too?` });
+            if (!ok) return null;
+            rec.dupOk = dups.map(d => String(d.r.id)); dups.forEach(d => { d.r.dupOk = (d.r.dupOk || []).concat(String(rec.id)); });   // you said it is a separate receipt
+        }
     }
     // photos
     const newMeta = [];
@@ -14674,6 +15009,7 @@ function openEditor(d, o) {
     let phCache = {};
     const m = modal({ title: existing ? 'Receipt details' : 'New receipt', wide: true, sticky: true, html: `<div class="bz-form">
         ${S.note ? `<div class="bz-alert" style="margin:0 0 10px;"><i class="fas fa-info-circle" style="margin-right:6px"></i>${h(S.note.trim())} Please check the highlighted fields.</div>` : ''}
+        <div id="rc-dupbar"></div>
         <div class="rc-ph" id="rc-ph"></div>
         <div class="inv-grid"><div class="inv-field"><label>Store <span class="req">*</span></label><input id="rc-store" class="inv-input" list="rc-stores" value="${h(S.store)}" placeholder="e.g. Home Depot" autocomplete="off"><datalist id="rc-stores">${vendorList().map(v => `<option value="${h(v.name)}">`).join('')}</datalist><div class="bz-help" id="rc-vhint"></div></div>
         <div class="inv-field"><label>Date <span class="req">*</span></label><input id="rc-date" type="date" class="inv-input" value="${h(S.date)}"></div></div>
@@ -14686,7 +15022,7 @@ function openEditor(d, o) {
         <div class="inv-field"><label style="display:flex;justify-content:space-between;align-items:center;">Items <button type="button" class="fin-mini" id="rc-additem"><i class="fas fa-plus"></i> Add item</button></label><div id="rc-items"></div></div>
         <div class="rc-tax" id="rc-tax"></div>
         <div class="inv-grid"><div class="inv-field"><label>Paid with</label><select id="rc-pay" class="inv-input"><option value=""></option>${['Visa', 'Mastercard', 'Amex', 'Debit', 'Credit card', 'Cash', 'E-transfer', 'Cheque'].map(p => `<option${S.payment === p ? ' selected' : ''}>${p}</option>`).join('')}</select></div>
-        <div class="inv-field"><label>Receipt number</label><input id="rc-no" class="inv-input" value="${h(S.receiptNo)}"></div></div>
+        <div class="inv-field"><label>Receipt / invoice / transaction no.</label><input id="rc-no" class="inv-input" value="${h(S.receiptNo)}"></div></div>
         <div class="inv-grid"><div class="inv-field"><label>Store's GST/HST number</label><input id="rc-gstno" class="inv-input" value="${h(S.gstNumber)}" placeholder="123456789 RT0001"></div>
         <div class="inv-field"><label>Notes</label><input id="rc-notes" class="inv-input" value="${h(S.notes)}"></div></div>
         <div class="inv-field"><label>Tax claim</label><select id="rc-claimmode" class="inv-input"><option value="">Automatic (suggested by IncAtor)</option><option value="claim">Claim in full (add to claimable)</option><option value="half">Claim 50%</option><option value="no">Not claimable</option></select></div>
@@ -14738,7 +15074,16 @@ function openEditor(d, o) {
         S._prevCat = q('#rc-cat-sel').value;
     }
     S._prevCat = S.category; q('#rc-claimmode').value = S.claimMode || '';
-    paintItems(); paintPhotos(); paintTax();
+    function paintDup() {
+        const bar = q('#rc-dupbar'); if (!bar) return;
+        let found = [];
+        if (S.store && S.store.trim() && N(S.total) > 0) {
+            const v = resolveVendor(S.store);
+            found = dupFind({ id: existing ? existing.id : '__new', store: v.name || S.store, vendorKey: v.key || AI.vendorKey(S.store) || '', date: S.date, total: N(S.total), receiptNo: S.receiptNo, items: S.items || [], dupOk: existing ? existing.dupOk : [] }, receipts).slice(0, 2);
+        }
+        bar.innerHTML = found.map(f => `<div class="bz-alert rc-dupalert"><i class="fas fa-copy" style="margin-right:6px"></i><b>${f.m.level === 'exact' ? 'Looks like a duplicate.' : 'Might be a duplicate.'}</b> ${h(f.r.store)}, ${h(formatDate(f.r.date))}, ${h(money(f.r.total))}${f.r.receiptNo ? ' (no. ' + h(f.r.receiptNo) + ')' : ''} is already saved: ${h(f.m.reasons.join(', '))}.</div>`).join('');
+    }
+    paintItems(); paintPhotos(); paintTax(); paintDup();
     // add the vendor-based category/suggestion when a store is picked
     m.el.addEventListener('input', ev => {
         const t = ev.target;
@@ -14746,7 +15091,7 @@ function openEditor(d, o) {
         else if (t.id === 'rc-gst') autoFill('gst'); else if (t.id === 'rc-pst') autoFill('pst');
         else if (t.id === 'rc-total') S.autoTotal = false;
         else if (t.classList && t.classList.contains('rc-i-amt')) autoFill('items');
-        paintTax();
+        paintTax(); paintDup();
     });
     m.el.addEventListener('change', ev => {
         const t = ev.target;
@@ -14756,7 +15101,7 @@ function openEditor(d, o) {
             if (mv) { t.value = mv.name; const vc = rules().v[mv.key]; if (vc && !S.catTouched) { q('#rc-cat-sel').value = vc; S._prevCat = vc; } }
             else { const ks = AI.knownStore(t.value); if (ks) { t.value = ks.name; if (!S.catTouched && ks.cat !== 'Other' && !S.items.length) q('#rc-cat-sel').value = ks.cat; } }
         } else if (t.classList && (t.classList.contains('rc-i-cat') || t.classList.contains('rc-i-claim'))) { if (t.classList.contains('rc-i-cat')) { readItems(); const ix = +t.closest('.rc-item').getAttribute('data-i'); if (S.items[ix]) S.items[ix].manual = true; } autoFill('items'); }
-        paintTax();
+        paintTax(); paintDup();
     });
     m.el.addEventListener('click', ev => {
         const t = ev.target.closest('button,[data-ph]'); if (!t) return;
@@ -14809,16 +15154,73 @@ function toolHits(r) {
 const isMeal = r => r.category === 'Meals' || (r.items || []).some(i => i.cat === 'Meals') || MEAL_STORE_RE.test(String(r.store || ''));
 const isClaimable = r => claimInfo(r).claimable > 0;
 const needsLook = r => { const a = claimInfo(r); return a.status !== 'ok' || a.verdict === 'review'; };
+/* ---- duplicate detection (receipt/invoice/transaction number + date + store + total) ---- */
+let DUPS = { map: new Map(), clusters: [] };
+function dupFind(rec, pool) {
+    const out = [];
+    (pool || receipts).forEach(x => { const m = AI.matchDuplicate(rec, x); if (m) out.push({ r: x, m: m }); });
+    out.sort((a, b) => (a.m.level === 'exact' ? 0 : 1) - (b.m.level === 'exact' ? 0 : 1));
+    return out;
+}
+function computeDups() {
+    const ids = receipts.map(r => String(r.id)), parent = {}; ids.forEach(i => { parent[i] = i; });
+    const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    const pairs = [];
+    for (let i = 0; i < receipts.length; i++) for (let j = i + 1; j < receipts.length; j++) {
+        const m = AI.matchDuplicate(receipts[i], receipts[j]);
+        if (m) { pairs.push([i, j, m]); parent[find(ids[i])] = find(ids[j]); }
+    }
+    const g = {};
+    pairs.forEach(p => {
+        const k = find(ids[p[0]]), c = g[k] || (g[k] = { ids: new Set(), level: 'likely', reasons: [] });
+        c.ids.add(ids[p[0]]); c.ids.add(ids[p[1]]);
+        if (p[2].level === 'exact' && c.level !== 'exact') { c.level = 'exact'; c.reasons = p[2].reasons; } else if (!c.reasons.length) c.reasons = p[2].reasons;
+    });
+    const clusters = Object.keys(g).map(k => { const c = g[k]; c.ids = Array.from(c.ids).sort(); c.id = c.ids.join('~'); return c; });
+    clusters.sort((a, b) => (a.level === 'exact' ? 0 : 1) - (b.level === 'exact' ? 0 : 1));
+    const map = new Map(); clusters.forEach(c => c.ids.forEach(i => map.set(i, c)));
+    DUPS = { map: map, clusters: clusters };
+}
+const capFirst = t => { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+function dupHtml(list) {
+    return DUPS.clusters.map(c => {
+        const rows = list.filter(r => c.ids.indexOf(String(r.id)) >= 0); if (!rows.length) return '';
+        return `<div class="rc-grp rc-dg" data-dg="${h(c.id)}"><div class="rc-dh"><span class="rc-dl ${c.level}">${c.level === 'exact' ? 'Duplicate' : 'Might be a duplicate'}</span><small>${h(capFirst(c.reasons.join(', ')))}</small>
+            <div class="rc-da"><button type="button" class="rc-sm" data-rc-dupok="${h(c.id)}"><i class="fas fa-check"></i><span>Not a duplicate</span></button><button type="button" class="rc-sm" data-rc-dupdel="${h(c.id)}"><i class="fas fa-trash"></i><span>Delete extra</span></button></div></div>
+            ${rows.map(r => rowHtml(r)).join('')}</div>`;
+    }).join('');
+}
+function dupDismiss(cid) {
+    const c = DUPS.clusters.find(x => x.id === cid); if (!c) return;
+    const mem = receipts.filter(r => c.ids.indexOf(String(r.id)) >= 0);
+    mem.forEach(r => { r.dupOk = Array.from(new Set((r.dupOk || []).concat(c.ids.filter(i => i !== String(r.id))))); });
+    try { saveReceipts(); } catch (e) { showToast('Could not save. Storage may be full.', 'error'); return; }
+    Remote.schedule(); renderAll(); showToast('Marked as separate receipts', 'success');
+}
+async function dupDeleteExtras(cid) {
+    const c = DUPS.clusters.find(x => x.id === cid); if (!c) return;
+    const mem = receipts.filter(r => c.ids.indexOf(String(r.id)) >= 0);
+    if (mem.length < 2) return;
+    const keep = mem.slice().sort((a, b) => ((b.photos || []).length - (a.photos || []).length) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')))[0];
+    const extra = mem.filter(r => r !== keep);
+    const ok = await showConfirmation({ title: `Delete ${plural(extra.length, 'extra copy').replace('copys', 'copies')}?`, type: 'danger', confirmText: 'Delete extra', cancelText: 'Keep all',
+        message: `Keep ${keep.store} (${formatDate(keep.date)}, ${money(keep.total)}${(keep.photos || []).length ? ', with photo' : ''}) and delete ${extra.length === 1 ? 'the other one' : 'the other ' + extra.length}. Their photos and any project expense made from them are removed too.` });
+    if (!ok) return;
+    for (const r of extra) await purge(r);
+    saveReceipts(); Remote.schedule(); renderAll(); showToast('Extra copies deleted', 'success');
+}
+
 const VIEWS = {
-    all:    { t: 'All receipts',       card: 'View all receipts',  ic: 'list',                 c: ['#6366f1', '#8b5cf6'], group: 'none',     f: () => true },
-    cats:   { t: 'By category',        card: 'View by categories', ic: 'layer-group',          c: ['#ec4899', '#f43f5e'], group: 'category', f: () => true },
-    claim:  { t: 'Claimable receipts', card: 'Claimable receipts', ic: 'check-circle',         c: ['#22c55e', '#15803d'], group: 'category', f: isClaimable },
-    tools:  { t: 'Claimable tools',    card: 'Claimable tools',    ic: 'wrench',               c: ['#f59e0b', '#ea580c'], group: 'none',     f: r => toolHits(r).length > 0 },
-    meals:  { t: 'Restaurant orders',  card: 'Restaurant orders',  ic: 'utensils',             c: ['#f43f5e', '#fb923c'], group: 'none',     f: isMeal },
-    store:  { t: 'By store',           card: 'View by store',      ic: 'store',                c: ['#0ea5e9', '#2563eb'], group: 'store',    f: () => true },
-    review: { t: 'Needs review',       card: 'Needs review',       ic: 'exclamation-triangle', c: ['#f97316', '#ef4444'], group: 'none',     f: needsLook }
+    all:    { chip: 'All', t: 'All receipts',       card: 'View all receipts',  ic: 'list',                 c: ['#6366f1', '#8b5cf6'], group: 'none',     f: () => true },
+    cats:   { chip: 'Categories', t: 'By category',        card: 'View by categories', ic: 'layer-group',          c: ['#ec4899', '#f43f5e'], group: 'category', f: () => true },
+    claim:  { chip: 'Claimable', t: 'Claimable receipts', card: 'Claimable receipts', ic: 'check-circle',         c: ['#22c55e', '#15803d'], group: 'category', f: isClaimable },
+    tools:  { chip: 'Tools', t: 'Claimable tools',    card: 'Claimable tools',    ic: 'wrench',               c: ['#f59e0b', '#ea580c'], group: 'none',     f: r => toolHits(r).length > 0 },
+    meals:  { chip: 'Restaurants', t: 'Restaurant orders',  card: 'Restaurant orders',  ic: 'utensils',             c: ['#f43f5e', '#fb923c'], group: 'none',     f: isMeal },
+    store:  { chip: 'By store', t: 'By store',           card: 'View by store',      ic: 'store',                c: ['#0ea5e9', '#2563eb'], group: 'store',    f: () => true },
+    dups:   { chip: 'Duplicates', t: 'Possible duplicates', card: 'Possible duplicates', ic: 'copy', c: ['#f97316', '#ef4444'], group: 'dup', f: r => DUPS.map.has(String(r.id)) },
+    review: { chip: 'Needs review', t: 'Needs review',       card: 'Needs review',       ic: 'exclamation-triangle', c: ['#f97316', '#ef4444'], group: 'none',     f: needsLook }
 };
-const HUB_ORDER = ['all', 'cats', 'claim', 'tools', 'meals', 'store', 'review'];
+const HUB_ORDER = ['all', 'cats', 'claim', 'tools', 'meals', 'store', 'review', 'dups'];
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
 
 /* ---- hub ---- */
@@ -14830,16 +15232,21 @@ function hubSub(k, list) {
     if (k === 'store') return plural(new Set(list.map(r => r.vendorKey || r.store)).size, 'store');
     return `${list.length} · ${money(spend)}`;
 }
+function renderChips() {
+    const el = document.getElementById('rc-chips'); if (!el) return;
+    el.innerHTML = HUB_ORDER.map(k => {
+        const V = VIEWS[k], n = receipts.filter(V.f).length, warn = (k === 'review' || k === 'dups') && n;
+        return `<button type="button" class="rc-cp${UI.view === k ? ' on' : ''}" data-rc-view="${k}"><i class="fas fa-${V.ic}"></i><span>${h(V.chip || V.card)}</span><em${warn ? ' class="warn"' : ''}>${n}</em></button>`;
+    }).join('');
+}
 function renderHub() {
     const grid = document.getElementById('rc-grid'), st = document.getElementById('rc-stats'); if (!grid || !st) return;
     let spend = 0, claim = 0, itc = 0; receipts.forEach(r => { const a = claimInfo(r); spend += N(r.total); claim += a.claimable; itc += a.claimGst; });
     st.innerHTML = `<div class="bz-stat"><b>${receipts.length}</b><span>Receipts</span></div><div class="bz-stat"><b>${h(money(spend))}</b><span>Spent</span></div><div class="bz-stat"><b>${h(money(claim))}</b><span>Claimable</span></div><div class="bz-stat"><b>${h(money(itc))}</b><span>GST back</span></div>`;
-    const cards = HUB_ORDER.map(k => {
-        const V = VIEWS[k], list = receipts.filter(V.f), warn = k === 'review' && list.length;
-        return `<button type="button" class="rc-hc" data-rc-view="${k}"><span class="rc-hi" style="background:linear-gradient(135deg,${V.c[0]},${V.c[1]})"><i class="fas fa-${V.ic}"></i></span><span class="rc-ht"><b>${h(V.card)}</b><small>${h(hubSub(k, list))}</small></span>${k === 'cats' || k === 'store' ? '' : `<span class="rc-badge${warn ? ' warn' : ''}">${list.length}</span>`}</button>`;
-    });
-    cards.push(`<button type="button" class="rc-hc" data-rc-view="tax"><span class="rc-hi" style="background:linear-gradient(135deg,#a855f7,#6366f1)"><i class="fas fa-coins"></i></span><span class="rc-ht"><b>Tax summary</b><small>By year and quarter</small></span></button>`);
-    grid.innerHTML = cards.join('');
+    const hero = (view, ic, grad, title, sub, n) => `<button type="button" class="rc-hero" data-rc-view="${view}"><span class="rc-hi" style="background:linear-gradient(135deg,${grad[0]},${grad[1]})"><i class="fas fa-${ic}"></i></span><b>${h(title)}</b><small>${sub}</small>${n === undefined ? '' : `<span class="rc-hn">${n}</span>`}</button>`;
+    grid.innerHTML = hero('all', 'list', ['#6366f1', '#8b5cf6'], 'View Receipts', `${h(plural(receipts.length, 'receipt'))}<br>${h(money(spend))} spent${DUPS.clusters.length ? `<br><span class="rc-hw">${DUPS.clusters.length} possible duplicate${DUPS.clusters.length === 1 ? '' : 's'}</span>` : ''}`, receipts.length)
+        + hero('tax', 'chart-bar', ['#14b8a6', '#3b82f6'], 'Summary', `Claimable ${h(money(claim))}<br>GST back ${h(money(itc))}`);
+    renderChips();
     if (window.IncBubbles) window.IncBubbles.scan();
 }
 
@@ -14849,6 +15256,7 @@ function applyViewDom() {
     hub.style.display = UI.view === 'hub' ? '' : 'none'; sub.style.display = UI.view === 'hub' ? 'none' : '';
     if (host) host.classList.toggle('rc-selmode', UI.selMode);
     const sb = document.getElementById('rc-selmode-btn'); if (sb) { sb.classList.toggle('on', UI.selMode); sb.querySelector('span').textContent = UI.selMode ? 'Done' : 'Select'; }
+    const gsel = document.getElementById('rc-group'); if (gsel) gsel.style.display = UI.view === 'dups' ? 'none' : '';
     const stt = document.getElementById('rc-status'); if (stt) stt.style.display = UI.view === 'all' ? '' : 'none';
 }
 function setView(v) {
@@ -14883,7 +15291,7 @@ function rowHtml(r, o) {
     const found = !o.plain && UI.view === 'tools' ? toolHits(r) : null;
     const line2 = found && found.length ? 'Found: ' + found.slice(0, 3).join(', ') + (found.length > 3 ? ` +${found.length - 3}` : '') : (items.length ? items.slice(0, 3).join(', ') + (items.length > 3 ? ` +${items.length - 3}` : '') : 'No items listed');
     return `<div class="rc-row${picked ? ' picked' : ''}" data-rc-open="${h(r.id)}"><span class="rc-ck"><i class="fas fa-check"></i></span>
-        <div class="rc-m"><div class="rc-l1"><b class="rc-st">${h(r.store)}</b><span class="rc-chip ${chip[0]}">${a.manual ? 'You: ' : ''}${chip[1]}</span>${a.status !== 'ok' ? '<i class="fas fa-exclamation-triangle" style="color:#fdba74;font-size:.72rem" title="Needs a look"></i>' : ''}${(r.photos || []).length ? '<i class="fas fa-camera" style="font-size:.72rem;opacity:.8" title="Photo saved"></i>' : ''}${proj ? '<i class="fas fa-briefcase" style="font-size:.72rem;opacity:.8" title="' + h(proj.projectId || '') + '"></i>' : ''}</div>
+        <div class="rc-m"><div class="rc-l1"><b class="rc-st">${h(r.store)}</b><span class="rc-chip ${chip[0]}">${a.manual ? 'You: ' : ''}${chip[1]}</span>${UI.view !== 'dups' && DUPS.map.has(String(r.id)) ? '<span class="rc-chip dup" title="Looks like another saved receipt">Duplicate?</span>' : ''}${a.status !== 'ok' ? '<i class="fas fa-exclamation-triangle" style="color:#fdba74;font-size:.72rem" title="Needs a look"></i>' : ''}${(r.photos || []).length ? '<i class="fas fa-camera" style="font-size:.72rem;opacity:.8" title="Photo saved"></i>' : ''}${proj ? '<i class="fas fa-briefcase" style="font-size:.72rem;opacity:.8" title="' + h(proj.projectId || '') + '"></i>' : ''}</div>
         <small>${h(shortDate(r.date))} · ${h(r.category)} · ${h(line2)}</small></div>
         <div class="rc-a">${h(money(r.total))}<small>GST ${h(money(r.gst))}</small></div>
         <button type="button" class="rc-q${a.claimable > 0 ? ' on' : ''}${a.claimable > 0 && a.verdict !== 'claim' ? ' part' : ''}" data-rc-claim="${h(r.id)}" title="${a.claimable > 0 ? (a.verdict === 'claim' ? 'Fully claimable, taxes included. Tap to remove.' : 'Only partly claimable. Tap to claim all of it, taxes included.') : 'Move to claimable receipts (taxes included)'}" aria-label="${a.claimable > 0 ? (a.verdict === 'claim' ? 'Remove from claimable' : 'Claim all of it') : 'Move to claimable'}">${a.claimable > 0 ? (a.verdict === 'claim' ? '<i class="fas fa-check-circle"></i><span>Claimed</span>' : '<i class="fas fa-plus-circle"></i><span>Claim all</span>') : '<i class="fas fa-plus-circle"></i><span>Claim</span>'}</button></div>`;
@@ -14894,10 +15302,11 @@ function renderNote(list) {
     if (k === 'claim') n.innerHTML = `<span>Receipts counted as tax claims, in full with their taxes. Tap Claim on any receipt, in any category or store, to move it here.</span><button type="button" class="rc-sm" data-rc-vact="add"><i class="fas fa-plus-circle"></i><span>Add receipts</span></button>`;
     else if (k === 'tools') n.innerHTML = `<span>IncAtor checks store names, categories and every item for tools such as drills, saws and ladders. Items over $500 may need depreciation (CCA).</span>${list.length ? `<button type="button" class="rc-sm" data-rc-vact="claimall"><i class="fas fa-check-circle"></i><span>Claim all ${list.length}</span></button>` : ''}`;
     else if (k === 'meals') n.innerHTML = `<span>Food and restaurant orders, found by category, items and store name. Meals are generally 50% claimable.</span>${list.length ? `<button type="button" class="rc-sm" data-rc-vact="halfall"><i class="fas fa-percentage"></i><span>Claim all at 50%</span></button>` : ''}`;
+    else if (k === 'dups') n.innerHTML = '<span>Receipts that share a receipt, invoice or transaction number, or the same store, date and total. Delete the extra copy, or tap Not a duplicate to keep both.</span>';
     else if (k === 'review') n.innerHTML = '<span>Missing details or items that need your decision. Tap a receipt to fix it.</span>';
     else n.innerHTML = '';
 }
-const EMPTY = { claim: 'No claimable receipts yet. Tap Add receipts, or Claim on any receipt.', tools: 'No tools found yet. Items like drills, saws and ladders are detected automatically.', meals: 'No restaurant orders found yet.', review: 'Nothing needs review. Nice.' };
+const EMPTY = { claim: 'No claimable receipts yet. Tap Add receipts, or Claim on any receipt.', tools: 'No tools found yet. Items like drills, saws and ladders are detected automatically.', meals: 'No restaurant orders found yet.', review: 'Nothing needs review. Nice.', dups: 'No duplicates found. IncAtor compares receipt numbers, dates, stores and totals.' };
 function renderList() {
     const el = document.getElementById('rc-list'); if (!el || UI.view === 'hub') return;
     const list = receiptsFiltered();
@@ -14909,6 +15318,7 @@ function renderList() {
     if (!receipts.length) { el.innerHTML = `<div class="bz-empty"><i class="fas fa-receipt" style="font-size:30px;opacity:.6;"></i><p style="margin-top:8px;">No receipts yet. Go back and scan your first one.</p></div>`; syncBar(); return; }
     if (!list.length) { el.innerHTML = `<div class="bz-empty">${h((!UI.F.q && !UI.F.cat && !UI.F.status && !UI.F.year && EMPTY[UI.view]) || 'No receipts match these filters.')}</div>`; syncBar(); return; }
     const g = UI.F.group;
+    if (g === 'dup') { el.innerHTML = dupHtml(list); paintSel(); return; }
     if (g === 'none') { el.innerHTML = `<div class="rc-grp">${list.map(r => rowHtml(r)).join('')}</div>`; paintSel(); return; }
     const groups = new Map();
     list.forEach(r => { const key = g === 'store' ? (r.vendorKey || r.store) : g === 'category' ? r.category : String(r.date || '').slice(0, 7); const name = g === 'store' ? r.store : g === 'category' ? r.category : (() => { const d = new Date(String(r.date).slice(0, 7) + '-01T00:00:00'); return isNaN(d) ? 'No date' : d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }); })(); const x = groups.get(key) || { key: key, name: name, rows: [], total: 0 }; x.rows.push(r); x.total += +r.total || 0; groups.set(key, x); });
@@ -14922,7 +15332,7 @@ function renderYears() {
     sel.innerHTML = '<option value="">All years</option>' + ys.map(y => `<option value="${y}">${y}</option>`).join(''); sel.value = ys.indexOf(cur) >= 0 ? cur : '';
     UI.F.year = sel.value;
 }
-function renderAll() { renderYears(); if (UI.view === 'hub') renderHub(); else renderList(); renderSettingsStats(); }
+function renderAll() { computeDups(); renderYears(); if (UI.view === 'hub') renderHub(); else { renderChips(); renderList(); } renderSettingsStats(); }
 
 /* ---- claiming ---- */
 function applyClaim(L, mode) {
@@ -15156,6 +15566,8 @@ function wirePage() {
             else if (L.length) showConfirmation({ title: k === 'halfall' ? `Claim ${plural(L.length, 'receipt')} at 50%?` : `Add ${plural(L.length, 'receipt')} to claimable?`, type: 'warning', confirmText: 'Yes, apply', cancelText: 'Cancel', message: 'You can change any receipt afterwards. These are suggestions, not tax advice.' }).then(ok => { if (ok) applyClaim(L, k === 'halfall' ? 'half' : 'claim'); });
             return;
         }
+        const dok = ev.target.closest('[data-rc-dupok]'); if (dok) { dupDismiss(dok.getAttribute('data-rc-dupok')); return; }
+        const dde = ev.target.closest('[data-rc-dupdel]'); if (dde) { dupDeleteExtras(dde.getAttribute('data-rc-dupdel')); return; }
         const cq = ev.target.closest('[data-rc-claim]'); if (cq) { toggleClaim(cq.getAttribute('data-rc-claim')); return; }
         if (ev.target.closest('#rc-selmode-btn')) { setSelMode(!UI.selMode); return; }
         if (ev.target.closest('#rc-csv-btn')) { exportCsv(UI.selMode && UI.sel.size ? selList() : undefined); return; }
@@ -15235,6 +15647,7 @@ function injectSettings() {
 /* ------------------------------------------------------------------ public API (backup, import, GST) ------------------------------------------------------------------ */
 window.RcptStore = {
     count: () => receipts.length,
+    duplicates: () => { computeDups(); return DUPS.clusters.map(c => ({ ids: c.ids, level: c.level, reasons: c.reasons })); },
     all: () => receipts,
     itcInRange(from, to) {                                 // receipts that are NOT on a project (project ones are counted through their expenses)
         let itc = 0, cost = 0, n = 0;
@@ -15255,6 +15668,7 @@ window.RcptStore = {
     syncPhotos: () => Remote.schedule(1000),
     refresh: renderAll
 };
+window.RcptNav = { summary: function () { showPage('receipts'); setTimeout(openTax, 120); }, view: function (v) { showPage('receipts'); setTimeout(function () { setView(v || 'all'); }, 120); } };
 BIZ.rcpt = { openEditor: openEditor, openTax: openTax, readPages: readPages };
 
 /* ------------------------------------------------------------------ boot ------------------------------------------------------------------ */
