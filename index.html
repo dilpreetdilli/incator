@@ -15150,6 +15150,7 @@ async function geminiCall(key, model, parts, maxTokens) {
     const x = await readJson(r);
     if (!r.ok) throw httpErr(r.status, x.j && x.j.error && x.j.error.message);
     const c = x.j && x.j.candidates && x.j.candidates[0], out = c && c.content && (c.content.parts || []).map(p => p.text || '').join('');
+    if (!out && maxTokens && c) return 'OK';             // key test: newer models spend the small allowance thinking; any answer proves the key and model work
     if (!out) throw aiErr('empty', 'The AI did not return an answer' + (c && c.finishReason ? ' (' + c.finishReason + ')' : '') + '.');
     return out;
 }
@@ -15203,9 +15204,9 @@ async function aiTest() {                                       // a tiny text-o
     const p = aiProvider(), key = aiKey(); if (p === 'off') throw aiErr('off', 'Pick a service first.'); if (!key) throw aiErr('key', 'Paste your key first.');
     if (p === 'gemini') {
         if (!sget('rcAiModel_gemini', '')) { const pick = pickGeminiModel(await geminiModels(key)); if (pick) sset('rcAiModel_gemini', pick); }
-        return (await geminiRun(key, [{ text: 'Reply with the single word OK.' }], 8)).model;
+        return (await geminiRun(key, [{ text: 'Reply with the single word OK.' }], 512)).model;
     }
-    return (await claudeRun(key, [{ type: 'text', text: 'Reply with the single word OK.' }], 8)).model;
+    return (await claudeRun(key, [{ type: 'text', text: 'Reply with the single word OK.' }], 16)).model;
 }
 
 async function readPages(key) {
