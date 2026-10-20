@@ -4337,7 +4337,7 @@
         /* ===== Mobile-friendly layout (phones) ===== */
         @media (max-width: 640px) {
             #app { zoom: 0.85; }
-            html, body { overflow-x: hidden; }
+            html, body { overflow-x: hidden; overflow-x: clip; }
             #main-header { padding: 14px 0 0 !important; margin-bottom: 6px !important; }
             #greeting { font-size: 1.35rem !important; }
             main { padding-left: 10px !important; padding-right: 10px !important; }
@@ -4520,6 +4520,17 @@
         /* Saved Entries: when entries are selected, a floating button appears beside the navigation bar and opens the actions for the selection. Nothing is pushed or covered until you open it. */
         .sel-fab { display: none; position: fixed; z-index: 102; left: 0; top: 0; width: 54px; height: 54px; border-radius: 50%; align-items: center; justify-content: center; padding: 0; color: #fff; cursor: pointer; border: 1px solid rgba(var(--pr2), 0.65); background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--acc2))); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 0 0 rgba(var(--pr), 0.5); -webkit-appearance: none; appearance: none; }
         .sel-fab.on { display: flex; animation: selFabIn .28s cubic-bezier(.2, 1.4, .4, 1); }
+        #sel-fab, #sel-fab.on { display: none !important; }                          /* actions now live in the Saved Entries toolbar */
+        #sel-actions-btn { gap: 0; animation: selFabIn .28s cubic-bezier(.2, 1.4, .4, 1); }
+        #sel-actions-btn .sel-count { margin: -4px 0 -4px 8px; min-width: 18px; height: 18px; line-height: 1; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+            font-size: .72rem; font-weight: 700; color: #fff; background: rgba(var(--pr2), .35); border: 1px solid rgba(var(--pr2), .5); }
+        #sel-actions-btn.on { border-color: rgba(var(--pr2), .7); background: rgba(var(--pr2), .2); }
+        #sel-actions-btn i { transition: transform .25s; } #sel-actions-btn.on i { transform: rotate(90deg); }
+        body.sel-active #view-page .stunning-form-container { overflow: clip; }                  /* lets the toolbar stay at the top while you scroll */
+        body.sel-active #view-page .filter-bar { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 6px); z-index: 60; }
+        body.sel-active #view-page .filter-bar::before { content: ""; position: absolute; inset: -6px; z-index: -1; border-radius: 16px; pointer-events: none;
+            background: rgba(var(--panel), .92); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
+            background: rgba(var(--panel), .92); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
         .sel-fab i { font-size: 21px; transition: transform .25s; }
         .sel-fab.open i { transform: rotate(90deg); }
         .sel-fab .sel-badge { position: absolute; top: -5px; right: -5px; min-width: 21px; height: 21px; padding: 0 5px; border-radius: 11px; background: #fff; color: rgb(var(--pr3)); font: 700 .72rem Poppins, sans-serif; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
@@ -4587,10 +4598,12 @@
         .fa-briefcase { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='2'%20y='7'%20width='20'%20height='14'%20rx='2'%20ry='2'/%3E%3Cpath%20d='M16%2021V5a2%202%200%200%200-2-2h-4a2%202%200%200%200-2%202v16'/%3E%3C/svg%3E"); }
         .fa-pause { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='6'%20y='4'%20width='4'%20height='16'/%3E%3Crect%20x='14'%20y='4'%20width='4'%20height='16'/%3E%3C/svg%3E"); }
         .fa-lock { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='11'%20width='18'%20height='11'%20rx='2'/%3E%3Cpath%20d='M7%2011V7a5%205%200%200%201%2010%200v4'/%3E%3C/svg%3E"); }
+        .fa-font { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%2019L9%205h1.5l6%2014M5.2%2014h9.6'/%3E%3Cpath%20d='M17%2012.5c.6-.6%201.4-1%202.3-1%201.5%200%202.2.9%202.2%202.2V19M21.5%2015.5c-3.2%200-4.8.6-4.8%202%200%201%20.8%201.6%201.9%201.6%201.4%200%202.9-.9%202.9-2.6'/%3E%3C/svg%3E"); }
         .fa-chevron-right { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2018l6-6-6-6'/%3E%3C/svg%3E"); }
         .fa-key { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='7.5'%20cy='15.5'%20r='5.5'/%3E%3Cpath%20d='M21%202l-9.6%209.6M15.5%207.5l3%203L22%207l-3-3'/%3E%3C/svg%3E"); }
         .fa-unlock { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='3'%20y='11'%20width='18'%20height='11'%20rx='2'/%3E%3Cpath%20d='M7%2011V7a5%205%200%200%201%209.9-1'/%3E%3C/svg%3E"); }
         .fa-face-id { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%207V5a2%202%200%200%201%202-2h2M17%203h2a2%202%200%200%201%202%202v2M21%2017v2a2%202%200%200%201-2%202h-2M7%2021H5a2%202%200%200%201-2-2v-2M9%209v1M15%209v1M12%209v4h-1M8.5%2015.5c2%201.5%205%201.5%207%200'/%3E%3C/svg%3E"); }
+        .fa-ellipsis-h { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Ccircle%20cx='5'%20cy='12'%20r='2.2'/%3E%3Ccircle%20cx='12'%20cy='12'%20r='2.2'/%3E%3Ccircle%20cx='19'%20cy='12'%20r='2.2'/%3E%3C/svg%3E"); }
         .fa-piggy-bank { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M19%205c-1.5%200-2.8%201.4-3%202-3.5-1.5-11-.3-11%205%200%201.8%200%203%202%204.5V20h4v-2h3v2h4v-4c1-.5%201.7-1%202-2h2v-4h-2c0-1-.5-1.5-1-2V5z'/%3E%3Cpath%20d='M2%209v1c0%201.1.9%202%202%202h1M16%2011h.01'/%3E%3C/svg%3E"); }
         .fa-file-archive { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14%202H6a2%202%200%200%200-2%202v16a2%202%200%200%200%202%202h12a2%202%200%200%200%202-2V8z'/%3E%3Cpath%20d='M14%202v6h6M10%205h1M10%208h1M10%2011h1M9%2014h3v4H9z'/%3E%3C/svg%3E"); }
         .fa-share { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%2012v8a2%202%200%200%200%202%202h12a2%202%200%200%200%202-2v-8M16%206l-4-4-4%204M12%202v13'/%3E%3C/svg%3E"); }
@@ -4795,49 +4808,102 @@ body{padding-top:var(--sat);padding-left:var(--sal);padding-right:var(--sar);bac
 .rc-view{padding-top:calc(50px + var(--sat))}
 .rc-view .rc-vb{top:auto}
 </style>
+<style id="view-toolbar">
+#view-page .filter-bar #select-all-btn .lbl-short { display: none; }
+#view-page .filter-bar #select-all-btn .lbl-long { display: inline; }
+@media (max-width: 640px) {
+  #view-page .filter-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  #view-page .filter-bar > .app-btn { width: 100%; min-width: 0; justify-content: center; padding: 10px 6px !important; font-size: .8rem !important; white-space: nowrap; }
+  #view-page .filter-bar > .app-btn i { margin-right: 6px !important; }
+  #view-page .filter-bar #select-all-btn .lbl-long { display: none; } #view-page .filter-bar #select-all-btn .lbl-short { display: inline; }
+  #view-page .filter-bar > #view-filter-summary { grid-column: 1 / -1; }
+}
+</style>
 <style id="glass-nav">
 /* Liquid glass navigation bar. --nav-op (0 to 1) is the Glass opacity setting. */
-:root { --nav-op: .55; }
+:root { --nav-op: .55; --lg-scroll: 30%; }
 .floating-nav {
     border: 0;
     background:
-        linear-gradient(135deg, rgba(255,255,255,calc(.05 + var(--nav-op) * .22)) 0%, rgba(255,255,255,calc(.015 + var(--nav-op) * .05)) 42%, rgba(255,255,255,calc(.03 + var(--nav-op) * .14)) 100%),
-        rgba(var(--panel), calc(var(--nav-op) * .6));
-    -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.06);
-    backdrop-filter: blur(22px) saturate(190%) brightness(1.06);
+        linear-gradient(180deg, rgba(255,255,255,calc(.10 + var(--nav-op) * .16)) 0%, rgba(255,255,255,calc(.02 + var(--nav-op) * .05)) 48%, rgba(255,255,255,calc(.05 + var(--nav-op) * .10)) 100%),
+        rgba(var(--panel), calc(var(--nav-op) * .5));
+    -webkit-backdrop-filter: blur(16px) saturate(210%) brightness(1.1) contrast(1.04);
+    backdrop-filter: blur(16px) saturate(210%) brightness(1.1) contrast(1.04);
     box-shadow:
-        inset 0 1px 0.5px rgba(255,255,255,.65),
-        inset 0 -1px 0.5px rgba(255,255,255,.18),
-        inset 1px 0 0.5px rgba(255,255,255,.22),
-        inset -1px 0 0.5px rgba(255,255,255,.12),
-        inset 0 0 22px rgba(255,255,255,.07),
-        0 14px 34px rgba(0,0,0,.34), 0 3px 8px rgba(0,0,0,.22);
+        inset 0 1.5px 0.5px rgba(255,255,255,.75),             /* top rim catching the light */
+        inset 0 -1px 0.5px rgba(255,255,255,.28),              /* bottom rim */
+        inset 1.5px 0 1px rgba(255,120,220,.16),               /* faint colour fringe at the edges, like thick glass */
+        inset -1.5px 0 1px rgba(110,200,255,.18),
+        inset 0 8px 18px -10px rgba(255,255,255,.45),           /* light inside the top of the glass */
+        inset 0 -10px 18px -12px rgba(0,0,0,.35),               /* shade inside the bottom */
+        0 18px 40px rgba(0,0,0,.34), 0 4px 10px rgba(0,0,0,.22);
     isolation: isolate;
     overflow: hidden;
+    transition: transform .5s cubic-bezier(.3,1.4,.4,1), box-shadow .3s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;                                    /* so a finger can slide along the bar */
+    -webkit-user-select: none; user-select: none;
 }
-.floating-nav::before {                                   /* light catching the top edge */
+/* Chrome on computers and Android: the page behind really bends at the rim (a real refraction filter) */
+.floating-nav.lg-refract {
+    -webkit-backdrop-filter: url(#lg-refract) blur(5px) saturate(210%) brightness(1.08);
+    backdrop-filter: url(#lg-refract) blur(5px) saturate(210%) brightness(1.08);
+}
+.floating-nav.lg-press { transform: translateX(-50%) scale(.975, .94); }
+.floating-nav::before {                                   /* a soft reflection that drifts with scrolling */
     content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
-    background: radial-gradient(120% 140% at 18% -35%, rgba(255,255,255,.5) 0%, rgba(255,255,255,.12) 34%, transparent 58%),
-                radial-gradient(90% 120% at 88% 135%, rgba(255,255,255,.16) 0%, transparent 55%);
+    background:
+        radial-gradient(70% 160% at var(--lg-scroll) -60%, rgba(255,255,255,.55) 0%, rgba(255,255,255,.14) 38%, transparent 62%),
+        radial-gradient(60% 120% at calc(100% - var(--lg-scroll)) 160%, rgba(255,255,255,.18) 0%, transparent 60%);
     opacity: calc(.55 + (1 - var(--nav-op)) * .35);
+    transition: background-position .3s;
 }
-.floating-nav::after {                                    /* thin bright rim, brighter at the top-left and bottom-right like real glass */
-    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px;
-    background: linear-gradient(145deg, rgba(255,255,255,.8), rgba(255,255,255,.08) 38%, rgba(255,255,255,.06) 62%, rgba(255,255,255,.5));
+.floating-nav::after {                                    /* thin bright rim, brighter where the light hits */
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px; z-index: 3;
+    background: conic-gradient(from 210deg at 50% 50%, rgba(255,255,255,.95), rgba(255,255,255,.12) 18%, rgba(255,255,255,.06) 32%, rgba(255,255,255,.55) 50%, rgba(255,255,255,.1) 68%, rgba(255,255,255,.06) 82%, rgba(255,255,255,.95));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
 }
-.nav-item {
-    background: linear-gradient(160deg, rgba(255,255,255,.2), rgba(255,255,255,.04));
-    border: 0;
-    box-shadow: inset 0 1px 0.5px rgba(255,255,255,.5), inset 0 -1px 1px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.15);
+.lg-spec {                                                 /* light under your finger or mouse */
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2; opacity: 0; transition: opacity .35s;
+    background: radial-gradient(42px 42px at var(--lg-mx, 50%) var(--lg-my, 30%), rgba(255,255,255,.45), rgba(255,255,255,.08) 60%, transparent 75%);
+    mix-blend-mode: screen;
+}
+.floating-nav:hover .lg-spec { opacity: .55; }
+.floating-nav.lg-press .lg-spec { opacity: 1; transition: opacity .1s; }
+/* buttons sit right on the glass; pressing one brings up a liquid lens that follows your finger */
+.floating-nav .nav-item {
+    position: relative; z-index: 1;
+    background: transparent; border: 0; box-shadow: none;
     color: rgba(255,255,255,.82);
+    transition: transform .45s cubic-bezier(.3,1.5,.4,1), color .25s, opacity .25s;
 }
-.nav-item:hover { background: linear-gradient(160deg, rgba(255,255,255,.3), rgba(255,255,255,.08)); border: 0; box-shadow: inset 0 1px 0.5px rgba(255,255,255,.7), 0 10px 22px rgba(0,0,0,.28); }
-.nav-item.active {
-    border: 0; color: #fff;
-    background: linear-gradient(160deg, rgba(255,255,255,.38), rgba(var(--pr4), .55) 55%, rgba(var(--ind2), .6));
-    box-shadow: inset 0 1px 1px rgba(255,255,255,.8), inset 0 -2px 6px rgba(0,0,0,.18), 0 6px 18px rgba(var(--pr4), .45);
-}
+.floating-nav .nav-item i { transition: transform .45s cubic-bezier(.3,1.5,.4,1), filter .3s; }
+.floating-nav .nav-item:hover { background: rgba(255,255,255,.08); border: 0; box-shadow: none; transform: translateY(-2px); color: #fff; }
+.floating-nav .nav-item:active { transform: scale(.84); transition-duration: .12s; }
+.floating-nav .nav-item.active { background: transparent; border: 0; box-shadow: none; }
+.floating-nav .nav-item.lg-lens { color: #fff; }
+.floating-nav .nav-item.lg-lens i { transform: scale(1.32); filter: drop-shadow(0 0 8px rgba(255,255,255,.6)); }
+.lg-drop { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; border-radius: 999px; opacity: 0;
+    transition: transform .5s cubic-bezier(.3,1.32,.4,1), width .5s cubic-bezier(.3,1.32,.4,1), opacity .2s; will-change: transform; }
+.lg-drop.lg-now { transition: opacity .2s; }
+.lg-drop.lg-on { opacity: 1; }
+.lg-drop.lg-on .lg-drop-in { animation: lgGrow .45s cubic-bezier(.3,1.5,.4,1) both; }
+.lg-drop.lg-pop .lg-drop-in { animation: lgPop .38s cubic-bezier(.3,.8,.4,1) both; }
+@keyframes lgGrow { from { transform: scale(.55); } to { transform: scale(1.18); } }
+@keyframes lgPop { from { transform: scale(1.18); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+.lg-drop-in { position: absolute; inset: 0; border-radius: inherit; display: block;             /* a clear glass lens */
+    background:
+        radial-gradient(70% 55% at 32% 20%, rgba(255,255,255,.7), rgba(255,255,255,0) 62%),
+        radial-gradient(60% 50% at 70% 88%, rgba(255,255,255,.22), rgba(255,255,255,0) 70%),
+        rgba(255,255,255,.1);
+    box-shadow: inset 0 1.5px 1px rgba(255,255,255,.95), inset 0 -2px 4px rgba(255,255,255,.3), inset 1.5px 0 1px rgba(255,120,220,.25), inset -1.5px 0 1px rgba(110,200,255,.3),
+        inset 0 -6px 12px rgba(0,0,0,.18), 0 10px 22px rgba(0,0,0,.3);
+    -webkit-backdrop-filter: blur(1.5px) saturate(190%) brightness(1.2); backdrop-filter: blur(1.5px) saturate(190%) brightness(1.2); }
+.lg-drop.lg-on .lg-drop-in.lg-stretch { animation: lgStretch .5s cubic-bezier(.3,1.2,.4,1) both; }
+@keyframes lgStretch { 0% { transform: scale(1.18); } 30% { transform: scale(1.5, .92); } 60% { transform: scale(1.08, 1.24); } 100% { transform: scale(1.18); } }
+/* the Home button is hidden while you are on Home */
+body[data-pg="home"] .floating-nav .nav-item[data-page="home"] { display: none; }
+@media (prefers-reduced-motion: reduce) { .lg-drop, .floating-nav, .floating-nav .nav-item, .floating-nav .nav-item i { transition: none; } .lg-drop .lg-drop-in { animation: none !important; } }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .floating-nav { background: rgba(var(--panel), .92); }
 }
@@ -4903,7 +4969,7 @@ body{padding-top:var(--sat);padding-left:var(--sal);padding-right:var(--sar);bac
     body[data-pg="view"] .back-btn, body[data-pg="data"] .back-btn, body[data-pg="settings"] .back-btn { padding: 6px 14px; font-size: 13px; margin-bottom: 10px; }
     body[data-pg="view"] #app, body[data-pg="data"] #app, body[data-pg="settings"] #app { zoom: 0.85; }
     body[data-pg="view"] #app input:not([type="checkbox"]):not([type="radio"]), body[data-pg="view"] #app select, body[data-pg="view"] #app textarea, body[data-pg="data"] #app input:not([type="checkbox"]):not([type="radio"]), body[data-pg="data"] #app select, body[data-pg="data"] #app textarea, body[data-pg="settings"] #app input:not([type="checkbox"]):not([type="radio"]), body[data-pg="settings"] #app select, body[data-pg="settings"] #app textarea { font-size: 18.8px !important; }
-    html, body { overflow-x: hidden; }
+    html, body { overflow-x: hidden; overflow-x: clip; }
     #view-page .stunning-form-container, #data-page .stunning-form-container, #settings-page .stunning-form-container { margin: 0 0 14px; border-radius: 18px; }
     #view-page .magical-header, #data-page .magical-header, #settings-page .magical-header { padding: 14px 16px; }
     #view-page .magic-icon, #data-page .magic-icon, #settings-page .magic-icon { margin-bottom: 4px; }
@@ -4963,18 +5029,18 @@ body{padding-top:var(--sat);padding-left:var(--sal);padding-right:var(--sar);bac
 <style id="incator-enter-css">
 html.inc-pre body > *:not(.ic-overlay):not(#inc-lock) { opacity: 0 !important; }
 html.inc-enter #home-page .home-card, html.inc-enter #home-page .mh-tile { animation: incRise .7s cubic-bezier(.2,.9,.25,1.15) both; }
-html.inc-enter #home-page .home-card:nth-child(1), html.inc-enter #home-page .mh-tile:nth-child(1) { animation-delay: .35s; }
-html.inc-enter #home-page .home-card:nth-child(2), html.inc-enter #home-page .mh-tile:nth-child(2) { animation-delay: .42s; }
-html.inc-enter #home-page .home-card:nth-child(3), html.inc-enter #home-page .mh-tile:nth-child(3) { animation-delay: .49s; }
-html.inc-enter #home-page .home-card:nth-child(4), html.inc-enter #home-page .mh-tile:nth-child(4) { animation-delay: .56s; }
-html.inc-enter #home-page .home-card:nth-child(5), html.inc-enter #home-page .mh-tile:nth-child(5) { animation-delay: .63s; }
-html.inc-enter #home-page .home-card:nth-child(6), html.inc-enter #home-page .mh-tile:nth-child(6) { animation-delay: .70s; }
+html.inc-enter #home-page .home-card:nth-child(1), html.inc-enter #home-page .mh-tile:nth-child(1) { animation-delay: calc(var(--bd, 0s) + .35s); }
+html.inc-enter #home-page .home-card:nth-child(2), html.inc-enter #home-page .mh-tile:nth-child(2) { animation-delay: calc(var(--bd, 0s) + .42s); }
+html.inc-enter #home-page .home-card:nth-child(3), html.inc-enter #home-page .mh-tile:nth-child(3) { animation-delay: calc(var(--bd, 0s) + .49s); }
+html.inc-enter #home-page .home-card:nth-child(4), html.inc-enter #home-page .mh-tile:nth-child(4) { animation-delay: calc(var(--bd, 0s) + .56s); }
+html.inc-enter #home-page .home-card:nth-child(5), html.inc-enter #home-page .mh-tile:nth-child(5) { animation-delay: calc(var(--bd, 0s) + .63s); }
+html.inc-enter #home-page .home-card:nth-child(6), html.inc-enter #home-page .mh-tile:nth-child(6) { animation-delay: calc(var(--bd, 0s) + .70s); }
 @keyframes incRise { from { opacity: 0; transform: translateY(26px) scale(.92); } to { opacity: 1; transform: none; } }
-.inc-burst { position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: center; justify-content: center; pointer-events: none; animation: incVeil 1.05s cubic-bezier(.3,.7,.2,1) both; }
+.inc-burst { position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: center; justify-content: center; pointer-events: none; animation: incVeil 1.05s cubic-bezier(.3,.7,.2,1) var(--bd, 0s) both; }
 @keyframes incVeil { 0% { background-color: rgba(10,8,28,1); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); } 35% { background-color: rgba(10,8,28,.75); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); } 100% { background-color: rgba(10,8,28,0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); } }
 .inc-burst-logo { width: 96px; height: 96px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font: 800 2.1rem var(--font, -apple-system, sans-serif); color: #fff; letter-spacing: -.5px;
-  background: linear-gradient(135deg, #a855f7, #6366f1 55%, #ec4899); box-shadow: 0 0 60px rgba(168,85,247,.7); animation: incBurst 1s cubic-bezier(.2,.8,.2,1) both; }
-.inc-burst-ring { position: absolute; width: 96px; height: 96px; border-radius: 50%; border: 2px solid rgba(196,181,253,.8); animation: incRing 1s cubic-bezier(.2,.8,.2,1) .1s both; }
+  background: linear-gradient(135deg, #a855f7, #6366f1 55%, #ec4899); box-shadow: 0 0 60px rgba(168,85,247,.7); animation: incBurst 1s cubic-bezier(.2,.8,.2,1) var(--bd, 0s) both; }
+.inc-burst-ring { position: absolute; width: 96px; height: 96px; border-radius: 50%; border: 2px solid rgba(196,181,253,.8); animation: incRing 1s cubic-bezier(.2,.8,.2,1) calc(var(--bd, 0s) + .1s) both; }
 @keyframes incBurst { 0% { opacity: 0; transform: scale(.55) rotate(-8deg); } 30% { opacity: 1; transform: scale(1) rotate(0); } 70% { opacity: 1; transform: scale(1.05); filter: blur(0); } 100% { opacity: 0; transform: scale(2.4); filter: blur(8px); } }
 @keyframes incRing { 0% { opacity: 0; transform: scale(.6); } 30% { opacity: .9; } 100% { opacity: 0; transform: scale(9); } }
 .ic-pill { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 12px); z-index: 2147481000; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 9px 16px 9px 10px; border-radius: 999px;
@@ -4988,8 +5054,198 @@ html.inc-enter #home-page .home-card:nth-child(6), html.inc-enter #home-page .mh
 .ic-pill-t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ic-pill-b { flex: none; border: 0; border-radius: 999px; padding: 6px 12px; background: #fff; color: #1e1b4b; font: 700 .82rem var(--font, sans-serif); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .ic-pill { transition: opacity .2s; } }
+/* phone Home: the tile icons say hello with a little wave, then keep breathing slowly */
+#home-page.active #mobile-home .mh-tile-icon { --bi: 0s; animation: mhHello .9s cubic-bezier(.3,1.4,.4,1) calc(var(--bd, 0s) * var(--bdon, 0) + .55s + var(--bi)) both, mhBreathe 3.6s ease-in-out calc(var(--bd, 0s) * var(--bdon, 0) + 1.45s + var(--bi)) infinite; will-change: transform, filter; }
+#home-page.active #mobile-home .mh-tile:nth-child(2) .mh-tile-icon { --bi: 0.15s; } #home-page.active #mobile-home .mh-tile:nth-child(3) .mh-tile-icon { --bi: 0.3s; } #home-page.active #mobile-home .mh-tile:nth-child(4) .mh-tile-icon { --bi: 0.45s; } #home-page.active #mobile-home .mh-tile:nth-child(5) .mh-tile-icon { --bi: 0.6s; } #home-page.active #mobile-home .mh-tile:nth-child(6) .mh-tile-icon { --bi: 0.75s; }
+html.inc-greet { --bdon: 1; }
+@keyframes mhHello { 0% { transform: scale(1); } 35% { transform: scale(1.2) rotate(-7deg); filter: brightness(1.25); } 60% { transform: scale(.94) rotate(5deg); } 80% { transform: scale(1.05) rotate(-2deg); } 100% { transform: scale(1); filter: none; } }
+@keyframes mhBreathe { 0%, 100% { transform: scale(1); filter: brightness(1) saturate(1); } 45% { transform: scale(1.09); filter: brightness(1.16) saturate(1.12); } }
+@media (prefers-reduced-motion: reduce) { #home-page.active #mobile-home .mh-tile-icon { animation: none; } }
 </style>
 <script id="incator-lockhead">try{var c=JSON.parse(localStorage.getItem('incator:lock')||'{}');if(c&&(c.pin||c.cred)){var a=+localStorage.getItem('incator:lastActive')||0,m=(c.after==null?0:+c.after)*60000;if(!(m>0&&Date.now()-a<m))document.documentElement.classList.add('inc-locked');}}catch(e){}</script>
+<script id="incator-ux">
+/* IncAtor UX: a slim top bar when you scroll, the "more" menu on Saved Entries cards, friendly empty screens,
+   and easier-to-read small text (for sunlight on a job site). */
+(function () {
+if (window.IncUX) return;
+var reduce = false; try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* ignore */ }
+
+var css = [
+/* ---- slim top bar ---- */
+'.inc-mini { position: fixed; left: 0; right: 0; top: 0; z-index: 900; padding: env(safe-area-inset-top, 0px) 10px 0; pointer-events: none; transform: translateY(-110%); opacity: 0; transition: transform .32s cubic-bezier(.2,.9,.25,1), opacity .2s; }',
+'.inc-mini.on { transform: none; opacity: 1; pointer-events: auto; }',
+'.inc-mini-in { max-width: 980px; margin: 6px auto 0; height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 6px; border-radius: 16px; color: #fff;',
+'  background: rgba(var(--panel, 24, 20, 48), .9); -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 10px 28px rgba(0,0,0,.4); }',
+'.inc-mini button { -webkit-appearance: none; appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }',
+'.im-back { flex: none; width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.08); }',
+'.im-back:active, .im-acct:active { transform: scale(.94); }',
+'body[data-pg="home"] .im-back { display: none; }',
+'.im-title { flex: 1; min-width: 0; text-align: left; padding-left: 6px !important; font-weight: 700 !important; font-size: 1rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+'.im-title small { font-weight: 500; font-size: .74rem; color: rgba(255,255,255,.75); margin-left: 6px; }',
+'.im-acct { position: relative; flex: none; width: 36px; height: 36px; }',
+'.im-av { width: 32px; height: 32px; margin: 2px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .9rem; background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))); }',
+'.im-av img { width: 100%; height: 100%; object-fit: cover; }',
+'.im-acct .ic-dot { position: absolute; right: 0; bottom: 1px; margin: 0; border: 2px solid rgb(var(--panel, 24, 20, 48)); }',
+'body.mini-on.sel-active #view-page .filter-bar { top: calc(env(safe-area-inset-top, 0px) + 60px); }',
+'@media (prefers-reduced-motion: reduce) { .inc-mini { transition: opacity .2s; transform: none; } }',
+/* ---- Saved Entries cards: Paid + Edit + more menu ---- */
+'.iconic-entry-card .entry-more { display: none !important; }',
+'.entry-header-content .entry-actions, #view-page .entry-header-content .entry-actions { order: 4; flex: 0 0 auto !important; width: auto !important; margin: 0 0 0 auto !important; padding: 0 !important; gap: 8px; justify-content: flex-end; align-self: center; }',
+'.entry-more-btn { font-size: 15px !important; }',
+'.entry-more-btn[aria-expanded="true"] { background: rgba(var(--pr2), .3) !important; border-color: rgba(var(--pr2), .6) !important; color: #fff !important; }',
+'#view-page .entry-title { font-size: 1.06rem !important; line-height: 1.25; white-space: normal !important; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }',
+'#view-page .entry-compact-total { font-size: 1.08rem; }',
+'#view-page .iconic-entry-card:not(.expanded) { min-height: 0 !important; }',
+'.entry-menu { position: fixed; z-index: 2147480000; min-width: 210px; padding: 6px; border-radius: 16px; color: #fff; background: rgba(var(--panel, 24, 20, 48), .94);',
+'  -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%); border: 1px solid rgba(255,255,255,.16); box-shadow: 0 18px 44px rgba(0,0,0,.5);',
+'  transform-origin: top right; animation: emIn .18s cubic-bezier(.2,.9,.25,1.2) both; }',
+'.entry-menu.up { transform-origin: bottom right; }',
+'@keyframes emIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }',
+'.entry-menu button { display: flex !important; align-items: center; justify-content: flex-start !important; gap: 12px; width: 100% !important; height: 44px !important; min-width: 0 !important; padding: 0 12px !important; border-radius: 11px !important; border: 0 !important; background: none !important; box-shadow: none !important; color: #fff !important; font: 600 .92rem var(--font, inherit) !important; text-align: left; cursor: pointer; transform: none !important; }',
+'.entry-menu button::after { display: none !important; }',
+'.entry-menu button i { width: 20px; text-align: center; color: rgb(var(--lav, 196, 181, 253)); font-size: 15px; }',
+'.entry-menu button:hover, .entry-menu button:focus-visible { background: rgba(255,255,255,.08) !important; outline: none; }',
+'.entry-menu button.active i { color: #22c55e; }',
+'.entry-menu .delete-btn { color: #fca5a5 !important; } .entry-menu .delete-btn i { color: #f87171; }',
+'.entry-menu hr { border: 0; border-top: 1px solid rgba(255,255,255,.1); margin: 4px 6px; }',
+/* ---- summary line as chips ---- */
+'.entry-summary-line.es-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; background: none; border: 0; }',
+'.es-chip { display: inline-flex; align-items: baseline; gap: 5px; padding: 5px 11px; border-radius: 999px; font-size: .8rem; color: rgba(255,255,255,.85); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); white-space: nowrap; }',
+'.es-chip b { color: #fff; font-weight: 700; }',
+'.es-chip.total { background: rgba(var(--pr2), .18); border-color: rgba(var(--pr2), .4); }',
+'.es-chip.owing { background: rgba(245, 158, 11, .14); border-color: rgba(245, 158, 11, .45); } .es-chip.owing b { color: #fcd34d; }',
+/* ---- friendly empty screens ---- */
+'.inc-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 28px 16px 24px; }',
+'.ie-art { position: relative; width: 128px; height: 128px; margin-bottom: 14px; }',
+'.ie-glow { position: absolute; inset: 8px; border-radius: 50%; background: radial-gradient(circle, var(--c1) 0%, transparent 70%); opacity: .45; filter: blur(6px); }',
+'.ie-ring { position: absolute; inset: 14px; border-radius: 50%; border: 1.5px dashed rgba(255,255,255,.22); }',
+'.ie-ic { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff;',
+'  background: linear-gradient(135deg, var(--c1), var(--c2)); box-shadow: 0 12px 28px rgba(0,0,0,.35), 0 0 30px var(--c1); animation: ieFloat 4.5s ease-in-out infinite; }',
+'.ie-sp { position: absolute; border-radius: 50%; background: #fff; opacity: .7; animation: ieTw 3s ease-in-out infinite; }',
+'.ie-sp.s1 { width: 7px; height: 7px; left: 14px; top: 26px; } .ie-sp.s2 { width: 5px; height: 5px; right: 16px; top: 16px; animation-delay: .9s; } .ie-sp.s3 { width: 6px; height: 6px; right: 22px; bottom: 18px; animation-delay: 1.7s; }',
+'@keyframes ieFloat { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-7px) rotate(3deg); } }',
+'@keyframes ieTw { 0%, 100% { opacity: .15; transform: scale(.6); } 50% { opacity: .85; transform: scale(1); } }',
+'.ie-t { font-size: 1.15rem; font-weight: 700; color: #fff; margin: 0 0 6px; }',
+'.ie-p { max-width: 330px; font-size: .92rem; line-height: 1.45; color: rgba(255,255,255,.84); margin: 0 0 16px; }',
+'.ie-btn { padding: 11px 20px !important; font-size: .95rem !important; border-radius: 14px !important; background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))) !important; border: 0 !important; box-shadow: 0 10px 24px rgba(var(--pr4), .35); }',
+'@media (prefers-reduced-motion: reduce) { .ie-ic, .ie-sp { animation: none; } }',
+/* ---- easier-to-read small text ---- */
+'.text-gray-300 { color: #e4e2f0 !important; } .text-gray-400 { color: #cdcae0 !important; } .text-gray-500 { color: #b7b3cf !important; }',
+'.entry-timestamp, .entry-timestamp span, .edit-timestamp, .edit-timestamp span, .financial-label, .setting-description, .card-subtitle, .magic-subtitle, .mh-tag, .bz-help, .bz-sub, .ap-sum, .chart-y-label, .chart-bar-label,',
+'.monthly-tile-year, .monthly-tile-entries span, .monthly-detail-label, .year-filter-label, .rc-stx p, .rc-hero small, .rc-rect small, .rc-mode span, .ins-card p, .gf-line small, .entry-date-badge, .notes-content, .rc-sumline, .acc-sub, .live-calc-subtitle,',
+'.bz-row, .bz-empty, .field-hint, .form-hint, .rc-top p { color: rgba(255,255,255,.86) !important; }',
+'[style^="color: rgba(255, 255, 255, 0.5)"], [style*="; color: rgba(255, 255, 255, 0.5)"], [style^="color: rgba(255, 255, 255, 0.55)"], [style*="; color: rgba(255, 255, 255, 0.55)"],',
+'[style^="color: rgba(255, 255, 255, 0.6)"], [style*="; color: rgba(255, 255, 255, 0.6)"], [style^="color: rgba(255, 255, 255, 0.65)"], [style*="; color: rgba(255, 255, 255, 0.65)"],',
+'[style*="color:rgba(255,255,255,.5)"], [style*="color:rgba(255,255,255,.55)"], [style*="color:rgba(255,255,255,.6)"], [style*="color:rgba(255,255,255,.65)"] { color: rgba(255,255,255,.84) !important; }'
+].join('\n');
+var st = document.createElement('style'); st.id = 'incator-ux-css'; st.textContent = css; document.head.appendChild(st);
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+/* ------------------------------------------------ slim top bar ------------------------------------------------ */
+var TITLES = { home: '', add: 'Add Entry', view: 'Saved Entries', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', receipts: 'Receipts', quotes: 'Quotes', projects: 'Projects', 'quote-edit': 'Quote' };
+var mini = null, miniOn = false, raf = 0;
+function pageId() { return document.body.getAttribute('data-pg') || 'home'; }
+function titleOf(pg) {
+    if (pg === 'home') { var g = document.getElementById('greeting'); return g ? g.textContent : 'IncAtor'; }
+    if (TITLES[pg]) return TITLES[pg];
+    var n = document.querySelector('.floating-nav .nav-item[data-page="' + pg + '"]'); return (n && n.getAttribute('data-tooltip')) || pg.charAt(0).toUpperCase() + pg.slice(1);
+}
+function buildMini() {
+    if (mini) return;
+    mini = document.createElement('div'); mini.id = 'inc-mini'; mini.className = 'inc-mini'; mini.setAttribute('aria-hidden', 'true');
+    mini.innerHTML = '<div class="inc-mini-in"><button type="button" class="im-back" aria-label="Back to Home" tabindex="-1"><i class="fas fa-arrow-left"></i></button>' +
+        '<button type="button" class="im-title" aria-label="Scroll to top" tabindex="-1"></button>' +
+        '<button type="button" class="im-acct" aria-label="Account and backup" tabindex="-1"><span class="im-av"></span><span class="ic-dot"></span></button></div>';
+    document.body.appendChild(mini);
+    mini.querySelector('.im-back').addEventListener('click', function () { if (typeof navigateToPage === 'function') navigateToPage('home'); else showPage('home'); });
+    mini.querySelector('.im-title').addEventListener('click', function () { window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); });
+    mini.querySelector('.im-acct').addEventListener('click', function (e) {
+        e.stopPropagation(); window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+        setTimeout(function () { var b = document.getElementById('ic-acct-btn'); if (b) b.click(); }, reduce ? 30 : 420);
+    });
+}
+function paintMini() {
+    if (!mini) return;
+    var pg = pageId(), t = mini.querySelector('.im-title');
+    t.textContent = titleOf(pg);
+    var av = document.getElementById('ic-avatar'), d = document.getElementById('ic-dot'), a = mini.querySelector('.im-acct');
+    a.style.display = av ? '' : 'none';
+    if (av) { var mav = mini.querySelector('.im-av'); if (mav.innerHTML !== av.innerHTML) mav.innerHTML = av.innerHTML; mini.querySelector('.ic-dot').className = d ? d.className : 'ic-dot'; }
+}
+function anchor() {                                            // the bar shows once this has scrolled off the top
+    var p = document.querySelector('.page.active'), b = p && p.querySelector(':scope > .back-btn');
+    if (b && b.offsetParent) return b;
+    return document.getElementById('main-header');
+}
+function check() {
+    raf = 0; if (!mini) buildMini();
+    var a = anchor(), on = false;
+    if (a) { var r = a.getBoundingClientRect(); on = r.bottom < (miniOn ? 8 : -4) && window.scrollY > 40; }
+    if (document.querySelector('.ic-overlay[style*="flex"], #inc-lock')) on = false;
+    if (on !== miniOn) { miniOn = on; mini.classList.toggle('on', on); mini.setAttribute('aria-hidden', on ? 'false' : 'true'); document.body.classList.toggle('mini-on', on); Array.prototype.forEach.call(mini.querySelectorAll('button'), function (b) { b.tabIndex = on ? 0 : -1; }); }
+    if (on) paintMini();
+}
+function soon() { if (!raf) raf = requestAnimationFrame(check); }
+window.addEventListener('scroll', soon, { passive: true });
+window.addEventListener('resize', soon);
+function startMini() {
+    buildMini(); check();
+    try { new MutationObserver(function () { closeMenu(); setTimeout(check, 60); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+    setInterval(function () { if (miniOn) paintMini(); }, 3000);
+}
+
+/* ------------------------------------------ Saved Entries: "more" menu ------------------------------------------ */
+var menu = null, menuBtn = null;
+function closeMenu() {
+    if (menu && menu.parentNode) menu.parentNode.removeChild(menu);
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+    menu = null; menuBtn = null;
+}
+function more(btn) {
+    if (menu && menuBtn === btn) { closeMenu(); return; }
+    closeMenu();
+    var src = btn.parentNode.querySelector('.entry-more'); if (!src) return;
+    menu = document.createElement('div'); menu.className = 'entry-menu'; menu.setAttribute('role', 'menu');
+    menu.innerHTML = src.innerHTML;
+    document.body.appendChild(menu);
+    menuBtn = btn; btn.setAttribute('aria-expanded', 'true');
+    var r = btn.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, mw = menu.offsetWidth, mh = menu.offsetHeight;
+    var left = Math.max(8, Math.min(vw - mw - 8, r.right - mw)), top = r.bottom + 6;
+    var navTop = (function () { var n = document.querySelector('.floating-nav'); if (!n) return vh; var nr = n.getBoundingClientRect(); return nr.height ? nr.top : vh; })();
+    if (top + mh > Math.min(vh, navTop) - 8) { top = Math.max(8, r.top - mh - 6); menu.classList.add('up'); }
+    menu.style.left = left + 'px'; menu.style.top = top + 'px';
+    menu.addEventListener('click', function (e) { if (e.target.closest('button')) setTimeout(closeMenu, 0); });
+    var first = menu.querySelector('button'); if (first) try { first.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+}
+document.addEventListener('click', function (e) { if (menu && !menu.contains(e.target) && e.target.closest('.entry-more-btn') !== menuBtn) closeMenu(); }, true);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu) { var b = menuBtn; closeMenu(); if (b) b.focus(); } });
+window.addEventListener('scroll', function () { if (menu) closeMenu(); }, { passive: true });
+window.addEventListener('resize', function () { if (menu) closeMenu(); });
+
+/* ------------------------------------------------ empty screens ------------------------------------------------ */
+var TONES = { purple: ['rgb(var(--pr4))', 'rgb(var(--acc2))'], blue: ['#06b6d4', '#3b82f6'], pink: ['#ec4899', '#f43f5e'], teal: ['#14b8a6', '#0ea5e9'], amber: ['#f59e0b', '#ef4444'], green: ['#22c55e', '#84cc16'] };
+function empty(o) {
+    var t = TONES[o.tone] || TONES.purple;
+    return '<div class="inc-empty" data-empty="' + esc(o.id || '') + '"><div class="ie-art" style="--c1:' + t[0] + ';--c2:' + t[1] + '" aria-hidden="true"><span class="ie-glow"></span><span class="ie-ring"></span><span class="ie-ic"><i class="fas fa-' + esc(o.icon) + '"></i></span><span class="ie-sp s1"></span><span class="ie-sp s2"></span><span class="ie-sp s3"></span></div>' +
+        '<h3 class="ie-t">' + esc(o.title) + '</h3><p class="ie-p">' + esc(o.text) + '</p>' +
+        (o.btn ? '<button type="button" class="app-btn ie-btn" onclick="' + esc(o.run) + '"><i class="fas fa-' + esc(o.btnIcon || 'plus') + ' mr-2"></i>' + esc(o.btn) + '</button>' : '') + '</div>';
+}
+var EMPTIES = {
+    entries: { id: 'entries', icon: 'home', tone: 'purple', title: 'No jobs yet', text: 'Add your first job and IncAtor works out the GST and the total for you.', btn: 'Add your first job', run: "showPage('add')" },
+    quotes: { id: 'quotes', icon: 'file-alt', tone: 'pink', title: 'No quotes yet', text: 'Write a quote for a job, send it to the customer, and turn it into a project when they say yes.', btn: 'New Quote', run: 'BIZ.newQuote()' },
+    projects: { id: 'projects', icon: 'briefcase', tone: 'teal', title: 'No projects yet', text: 'Projects come from accepted quotes. Open a quote and tap Convert to Project.', btn: 'Go to Quotes', btnIcon: 'file-alt', run: "showPage('quotes')" },
+    customers: { id: 'customers', icon: 'users', tone: 'blue', title: 'No customers yet', text: 'Customers show up here as soon as you create a quote.' },
+    receipts: { id: 'receipts', icon: 'receipt', tone: 'amber', title: 'No receipts yet', text: 'Snap a photo of a receipt and IncAtor reads the store, the date and the total for you.', btn: 'Scan a receipt', btnIcon: 'camera', run: "RcptNav.view('hub')" },
+    recurring: { id: 'recurring', icon: 'calendar-plus', tone: 'green', title: 'No recurring expenses yet', text: 'Add bills that repeat, like your phone, insurance or software, and IncAtor adds them for you each time.' }
+};
+window.incEmpty = function (k) { return empty(EMPTIES[k] || k); };
+
+window.IncUX = { more: more, closeMenu: closeMenu, mini: function () { return miniOn; }, check: check, empty: window.incEmpty };
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startMini); else startMini();
+})();
+
+</script>
 <style id="incator-lockhead-css">html.inc-locked body>*:not(#inc-lock){visibility:hidden!important}html.inc-locked body{background:#0a0a19}</style>
 </head>
 <body>
@@ -5564,21 +5820,21 @@ html.inc-enter #home-page .home-card:nth-child(6), html.inc-enter #home-page .mh
                             Filter &amp; Sort
                             <span id="view-filter-count" class="filter-count" style="display: none;"></span>
                         </button>
-                        <button type="button" class="app-btn" onclick="openInvoicePicker()">
+                        <button type="button" class="app-btn" id="new-invoice-btn" onclick="openInvoicePicker()">
                             <i class="fas fa-print mr-2"></i>
                             New Invoice
+                        </button>
+                        <button type="button" onclick="toggleSelectAll()" id="select-all-btn" class="app-btn">
+                            <i class="fas fa-check-square mr-2"></i>
+                            <span class="lbl-long">Select All</span><span class="lbl-short">Select all</span>
+                        </button>
+                        <button type="button" id="sel-actions-btn" class="app-btn" onclick="event.stopPropagation(); toggleSelPanel()" aria-expanded="false" aria-label="Actions for selected entries" style="display: none;">
+                            <i class="fas fa-sliders-h mr-2"></i><span>Actions</span><span class="sel-count" id="sel-actions-count">0</span>
                         </button>
                         <span id="view-filter-summary" class="text-gray-400 text-sm"></span>
                     </div>
                     <div id="view-summary-line" class="entry-summary-line" style="display: none;"></div>
                     
-                    <!-- Control Panel -->
-                    <div class="ctl-panel flex flex-wrap gap-3 mb-6 p-4 bg-purple-500 bg-opacity-10 rounded-lg border border-purple-500 border-opacity-20 animate-item">
-                        <button onclick="toggleSelectAll()" id="select-all-btn" class="app-btn">
-                            <i class="fas fa-check-square mr-2"></i>
-                            <span class="lbl-long">Select All</span><span class="lbl-short">Select all</span>
-                        </button>
-</div>
 <!-- Floating action dock: appears over the page when entries are selected, never pushes content down -->
 <div id="sel-dock" class="sel-dock" role="toolbar" aria-label="Actions for selected entries"><div id="selected-info" class="sel-dock-head"><span id="selected-count">0 entries selected</span><span class="sel-dock-tools"><button type="button" class="sel-mini" onclick="clearEntrySelection()" title="Clear selection">Clear</button><button type="button" class="sel-mini" id="sel-dock-toggle" onclick="toggleSelDock()" title="Show / hide actions"><i class="fas fa-chevron-down"></i></button></span></div><div class="sel-dock-grid"><button onclick="calculateSelectedEntries()" id="calculate-btn" class="app-btn" style="display: none;">
                             <i class="fas fa-calculator mr-2"></i>
@@ -6284,6 +6540,24 @@ html.inc-enter #home-page .home-card:nth-child(6), html.inc-enter #home-page .mh
                                     <div class="setting-control">
                                         <div class="magic-toggle" id="sync-screen-toggle" onclick="IncAtorCloud.toggleSyncScreen()">
                                             <div class="toggle-orb"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="setting-item" id="burst-delay-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon"><i class="fas fa-magic"></i></div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Opening Animation Delay</h4>
+                                            <p class="setting-description">How long IncAtor waits before the logo bursts open when you sign in or open the app. 0 starts it straight away.</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <div class="bub-ctl" style="flex-wrap: wrap;">
+                                            <button type="button" class="bub-step" aria-label="Shorter delay" onclick="IncAtorCloud.setBurstDelay(IncAtorCloud.burstDelay() - 0.1)">&minus;</button>
+                                            <input type="range" id="burst-delay" min="0" max="3" step="0.1" value="0.5" aria-label="Opening animation delay in seconds" oninput="IncAtorCloud.setBurstDelay(this.value)">
+                                            <button type="button" class="bub-step" aria-label="Longer delay" onclick="IncAtorCloud.setBurstDelay(IncAtorCloud.burstDelay() + 0.1)">+</button>
+                                            <output class="bub-val" id="burst-delay-val">0.5s</output>
+                                            <button type="button" class="app-btn" id="burst-preview" onclick="IncAtorCloud.previewBurst()"><i class="fas fa-play mr-2"></i>Preview</button>
                                         </div>
                                     </div>
                                 </div>
@@ -7621,18 +7895,43 @@ async function bootstrap() {
 function syncScreenOn() { try { var a = JSON.parse(LS.getItem(pfx() + 'appSettings') || '{}') || {}; return a.showSyncScreen === true; } catch (e) { return false; } }
 var enterAt = 0;
 function reducedMotion() { try { return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+function burstDelay() { try { var a = JSON.parse(LS.getItem(pfx() + 'appSettings') || '{}') || {}, v = a.burstDelay; v = (v == null || v === '') ? 0.5 : +v; return isFinite(v) ? Math.max(0, Math.min(3, v)) : 0.5; } catch (e) { return 0.5; } }
+function burstEl() { var b = document.createElement('div'); b.className = 'inc-burst'; b.setAttribute('aria-hidden', 'true'); b.innerHTML = '<div class="inc-burst-logo">Inc</div><div class="inc-burst-ring"></div>'; return b; }
 function enterApp() {
-    var de = document.documentElement, quiet = false;
+    var de = document.documentElement, quiet = false, bd = burstDelay();
     try { quiet = !!sessionStorage.getItem('incator:quietBoot'); sessionStorage.removeItem('incator:quietBoot'); } catch (e) { /* ignore */ }
     de.classList.remove('inc-pre');
     if (quiet || reducedMotion()) return;
-    enterAt = Date.now();
-    de.classList.add('inc-enter');
-    var b = document.createElement('div'); b.className = 'inc-burst'; b.setAttribute('aria-hidden', 'true'); b.innerHTML = '<div class="inc-burst-logo">Inc</div><div class="inc-burst-ring"></div>';
+    enterAt = Date.now(); enterBd = bd;
+    de.style.setProperty('--bd', bd + 's');                           // the logo burst waits this long (Settings > Opening animation delay)
+    de.classList.add('inc-enter', 'inc-greet');
+    try {                                                              // the Home icons wait for the burst only this first time; leaving Home ends that
+        var hp = document.getElementById('home-page');
+        if (hp) { var mo = new MutationObserver(function () { if (!hp.classList.contains('active')) { de.classList.remove('inc-greet'); mo.disconnect(); } }); mo.observe(hp, { attributes: true, attributeFilter: ['class'] }); }
+    } catch (e) { /* ignore */ }
+    var b = burstEl();
     document.body.appendChild(b);
-    setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); de.classList.remove('inc-enter'); }, 1400);
+    setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); de.classList.remove('inc-enter'); }, 1400 + bd * 1000);
 }
-function enterDone() { return enterAt ? Math.max(0, 1000 - (Date.now() - enterAt)) : 0; }   // let the opening animation finish before the message
+var enterBd = 0;
+function enterDone() { return enterAt ? Math.max(0, 1000 + enterBd * 1000 - (Date.now() - enterAt)) : 0; }   // let the opening animation finish before the message
+function previewBurst() {                                            // Settings: play the opening animation with the chosen delay
+    if (document.querySelector('.inc-burst')) return;
+    var de = document.documentElement, bd = burstDelay(), b = burstEl();
+    de.style.setProperty('--bd', bd + 's'); b.style.pointerEvents = 'auto';
+    document.body.appendChild(b);
+    setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, 1150 + bd * 1000);
+}
+function setBurstDelay(v) {
+    v = Math.max(0, Math.min(3, Math.round((+v || 0) * 10) / 10));
+    try { appSettings.burstDelay = v; saveSettings(); } catch (e) { try { var a = JSON.parse(LS.getItem(pfx() + 'appSettings') || '{}') || {}; a.burstDelay = v; LS.setItem(pfx() + 'appSettings', JSON.stringify(a)); } catch (e2) { /* ignore */ } }
+    paintBurst();
+}
+function paintBurst() {
+    var v = burstDelay(), r = document.getElementById('burst-delay'), o = document.getElementById('burst-delay-val');
+    if (r && document.activeElement !== r) r.value = v;
+    if (o) o.textContent = v === 0 ? 'None' : v.toFixed(1) + 's';
+}   // let the opening animation finish before the message
 function quietReload() { try { sessionStorage.setItem('incator:quietBoot', '1'); } catch (e) { /* ignore */ } setTimeout(function () { window.location.reload(); }, 150); }
 function connectQuiet() { var s = readSession(); if (!s) return; recover(s).then(function (o) { if (o.reload) quietReload(); else { Cloud.ready = true; setStatus('ok', ''); syncPill('Back online · synced with Google Drive', 'ok'); } }).catch(function () { /* stays offline */ }); }
 var pillEl = null, pillTimer = null;
@@ -7856,7 +8155,8 @@ window.IncAtorCloud = {
     allowEmptyBackup: allowEmptyBackup,
     lastBackupAt: function () { try { return (!setupMode && pfx()) ? (readMeta().lastBackupAt || null) : null; } catch (e) { return null; } },
     refresh: refreshUi,
-    booted: function () { return !!Cloud.booted; }, toggleSyncScreen: toggleSyncScreen, paintSyncToggle: function () { var it = document.getElementById('sync-screen-item'); if (it) it.style.display = setupMode ? 'none' : ''; if (!setupMode) paintSyncToggle(); }, pill: syncPill
+    booted: function () { return !!Cloud.booted; }, toggleSyncScreen: toggleSyncScreen, paintSyncToggle: function () { ['sync-screen-item', 'burst-delay-item'].forEach(function (id) { var it = document.getElementById(id); if (it) it.style.display = setupMode ? 'none' : ''; }); var ap = document.querySelector('#ap-menu .ap-item[data-ap="opening"]'); if (ap) ap.style.display = setupMode ? 'none' : ''; if (!setupMode) { paintSyncToggle(); paintBurst(); } try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* optional */ } }, pill: syncPill,
+    burstDelay: burstDelay, setBurstDelay: setBurstDelay, previewBurst: previewBurst
 };
 
 /* Start immediately: lock the screen before the app can show anything */
@@ -8983,7 +9283,7 @@ bootstrap();
             updateViewSummaryLine();
             
             if (entries.length === 0) {
-                const emptyHTML = `
+                const emptyHTML = window.incEmpty ? incEmpty('entries') : `
                     <div class="text-center py-8">
                         <i class="fas fa-inbox text-4xl text-gray-500 mb-4"></i>
                         <p class="text-gray-400">No entries found. Add your first entry to get started!</p>
@@ -9043,27 +9343,24 @@ bootstrap();
                             </div>
                             ${entry.projectId ? `<div class="invoiced-badge" style="color:rgb(var(--lav));border-color:rgba(196,181,253,.5);background:rgba(var(--pr), .15);cursor:pointer;" onclick="event.stopPropagation(); BIZ.openProjectByUid(${entry.projectUid || entry.paymentOf})"><i class="fas fa-briefcase"></i><span>${escapeHtml(entry.projectId)}</span></div>` : ''}${entry.invoiced ? '<div class="invoiced-badge"><i class="fas fa-flag"></i><span>Invoiced</span></div>' : ''}${entry.paid ? '<div class="invoiced-badge paid-badge"><i class="fas fa-check-circle"></i><span>Paid</span></div>' : ''}
                             <div class="entry-compact-total">${formatCurrency(entry.total)}</div>
-                        </div>
-                        
-                        <div class="entry-actions">
-                            <button onclick="toggleInvoiced(${entry.id})" class="entry-action-btn invoice-btn${entry.invoiced ? ' active' : ''}" data-tip="${entry.invoiced ? 'Invoiced - click to unmark' : 'Mark as invoiced'}" aria-label="${entry.invoiced ? 'Invoiced - click to unmark' : 'Mark as invoiced'}">
-                                <i class="fas fa-flag"></i>
-                            </button>
-                            <button onclick="togglePaid(${entry.id})" class="entry-action-btn paid-btn${entry.paid ? ' active' : ''}" data-tip="${entry.paid ? 'Paid - click to mark unpaid' : 'Mark as paid'}" aria-label="${entry.paid ? 'Paid - click to mark unpaid' : 'Mark as paid'}">
-                                <i class="fas fa-dollar-sign"></i>
-                            </button>
-                            <button onclick="openInvoice(${entry.id})" class="entry-action-btn print-btn" data-tip="${entry.invoiceNo ? 'Open invoice ' + entry.invoiceNo : 'Create invoice'}" aria-label="${entry.invoiceNo ? 'Open invoice ' + entry.invoiceNo : 'Create invoice'}">
-                                <i class="fas fa-print"></i>
-                            </button>
-                            <button onclick="viewEntryDetails(${entry.id})" class="entry-action-btn view-btn" data-tip="View Details" aria-label="View Details">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            <button onclick="editEntry(${entry.id})" class="entry-action-btn edit-btn" data-tip="Edit Entry" aria-label="Edit Entry">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button onclick="deleteEntry(${entry.id})" class="entry-action-btn delete-btn" data-tip="Delete Entry" aria-label="Delete Entry">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <div class="entry-actions">
+                                <button onclick="togglePaid(${entry.id})" class="entry-action-btn paid-btn${entry.paid ? ' active' : ''}" data-tip="${entry.paid ? 'Paid - click to mark unpaid' : 'Mark as paid'}" aria-label="${entry.paid ? 'Paid - click to mark unpaid' : 'Mark as paid'}">
+                                    <i class="fas fa-${entry.paid ? 'check-circle' : 'dollar-sign'}"></i>
+                                </button>
+                                <button onclick="editEntry(${entry.id})" class="entry-action-btn edit-btn" data-tip="Edit Entry" aria-label="Edit Entry">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="entry-action-btn entry-more-btn" aria-label="More actions" aria-haspopup="menu" aria-expanded="false" onclick="event.stopPropagation(); IncUX.more(this)">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                                <div class="entry-more">
+                                    <button role="menuitem" onclick="openInvoice(${entry.id})" class="entry-action-btn print-btn" aria-label="${entry.invoiceNo ? 'Open invoice ' + entry.invoiceNo : 'Create invoice'}"><i class="fas fa-print"></i><span>${entry.invoiceNo ? 'Open invoice ' + escapeHtml(entry.invoiceNo) : 'Create invoice'}</span></button>
+                                    <button role="menuitem" onclick="toggleInvoiced(${entry.id})" class="entry-action-btn invoice-btn${entry.invoiced ? ' active' : ''}" aria-label="${entry.invoiced ? 'Invoiced - click to unmark' : 'Mark as invoiced'}"><i class="fas fa-flag"></i><span>${entry.invoiced ? 'Invoiced (tap to unmark)' : 'Mark as invoiced'}</span></button>
+                                    <button role="menuitem" onclick="viewEntryDetails(${entry.id})" class="entry-action-btn view-btn" aria-label="View Details"><i class="fas fa-eye"></i><span>View details</span></button>
+                                    <hr>
+                                    <button role="menuitem" onclick="deleteEntry(${entry.id})" class="entry-action-btn delete-btn" aria-label="Delete Entry"><i class="fas fa-trash"></i><span>Delete</span></button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -9346,8 +9643,9 @@ bootstrap();
             const sum = (arr, k) => r2(arr.reduce((a, e) => a + (e[k] || 0), 0));
             const n = displayedEntries.length;
             const outstanding = sum(displayedEntries.filter(e => e.invoiced && !e.paid), 'total');
-            el.textContent = `Showing ${n} ${n === 1 ? 'entry' : 'entries'}  |  Subtotal ${formatCurrency(sum(displayedEntries, 'baseAmount'))}  |  GST ${formatCurrency(sum(displayedEntries, 'gst'))}  |  Total ${formatCurrency(sum(displayedEntries, 'total'))}` + (outstanding > 0 ? `  |  Outstanding ${formatCurrency(outstanding)}` : '');
-            el.style.display = 'block';
+            el.classList.add('es-chips');
+            el.innerHTML = `<span class="es-chip"><b>${n}</b> ${n === 1 ? 'entry' : 'entries'}</span><span class="es-chip">Subtotal <b>${formatCurrency(sum(displayedEntries, 'baseAmount'))}</b></span><span class="es-chip">GST <b>${formatCurrency(sum(displayedEntries, 'gst'))}</b></span><span class="es-chip total">Total <b>${formatCurrency(sum(displayedEntries, 'total'))}</b></span>` + (outstanding > 0 ? `<span class="es-chip owing">Owing <b>${formatCurrency(outstanding)}</b></span>` : '');
+            el.style.display = 'flex';
         }
 
         // ----- Filter & sort popup -----
@@ -11132,11 +11430,20 @@ bootstrap();
                     closeSelPanel();
                 });
                 window.addEventListener('resize', placeSel);
+                window.addEventListener('scroll', function () { const d = document.getElementById('sel-dock'); if (!d || !d.classList.contains('open')) return; const ab = document.getElementById('sel-actions-btn'), r = ab && ab.getBoundingClientRect(); if (r && (r.bottom < 0 || r.top > window.innerHeight)) closeSelPanel(); else placeSel(); }, { passive: true });
             }
             return f;
         }
         function placeSel() {
             const fab = document.getElementById('sel-fab'), dock = document.getElementById('sel-dock'), nav = document.querySelector('.floating-nav');
+            const ab = document.getElementById('sel-actions-btn');
+            if (dock && ab && ab.offsetParent) {                                                          // the Actions button in the toolbar: open just below it (or above, near the bottom)
+                const b = ab.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, dw = Math.min(372, vw - 16);
+                dock.style.left = Math.round(Math.min(Math.max(8, b.right - dw), vw - dw - 8)) + 'px';
+                dock.style.top = Math.round(b.bottom + 8) + 'px'; dock.style.bottom = 'auto';                   // always just below the button; scrolls inside if the screen is short
+                dock.style.maxHeight = Math.max(160, Math.round(vh - b.bottom - 20)) + 'px'; dock.style.overflowY = 'auto';
+                return;
+            }
             if (!fab || !dock || !nav) return;
             const r = nav.getBoundingClientRect(), vw = window.innerWidth, S = 54;
             let left, top;
@@ -11151,11 +11458,13 @@ bootstrap();
             const d = document.getElementById('sel-dock'), f = document.getElementById('sel-fab');
             if (d) d.classList.remove('open');
             if (f) { f.classList.remove('open'); f.setAttribute('aria-expanded', 'false'); }
+            const ab = document.getElementById('sel-actions-btn'); if (ab) { ab.classList.remove('on'); ab.setAttribute('aria-expanded', 'false'); }
         }
         function toggleSelPanel() {
             const d = document.getElementById('sel-dock'), f = selFab();
             const open = !d.classList.contains('open');
             d.classList.toggle('open', open); f.classList.toggle('open', open); f.setAttribute('aria-expanded', open ? 'true' : 'false');
+            const ab = document.getElementById('sel-actions-btn'); if (ab) { ab.classList.toggle('on', open); ab.setAttribute('aria-expanded', open ? 'true' : 'false'); }
             placeSel();
         }
         function syncSelDock() {
@@ -11169,6 +11478,10 @@ bootstrap();
             fab.classList.toggle('on', on);
             dock.classList.toggle('on', on);
             document.getElementById('sel-badge').textContent = n;
+            const ab = document.getElementById('sel-actions-btn'), ni = document.getElementById('new-invoice-btn');
+            if (ab) { ab.style.display = on ? '' : 'none'; const c = document.getElementById('sel-actions-count'); if (c) c.textContent = n; }
+            if (ni) ni.style.display = on ? 'none' : '';                                             // while picking entries, Actions takes New Invoice's place
+            document.body.classList.toggle('sel-active', on);
             if (!on) closeSelPanel();
             placeSel();
         }
@@ -12078,6 +12391,171 @@ function boot() { paint(get()); inject(); var n = 0, tm = setInterval(function (
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 
+/* ======================= Liquid glass: a lens droplet that follows your finger, light that follows you, real refraction where the browser allows ======================= */
+(function () {
+'use strict';
+if (window.IncLiquid) return;
+var nav = null, drop = null, dropIn = null, spec = null, lastW = 0, lastPg = '', cur = null, pressed = false, hideT = 0, downItem = null;
+var isChromium = /Chrome\/|Chromium\//.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS|iPhone|iPad/.test(navigator.userAgent);   // Chromium engines can bend the backdrop with an SVG filter; Safari cannot yet
+function reduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+function itemAt(x) {                                          // the visible button nearest to a point
+    var best = null, bd = 1e9; Array.prototype.forEach.call(nav.querySelectorAll('.nav-item'), function (it) { if (!it.offsetWidth) return; var r = it.getBoundingClientRect(), c = r.left + r.width / 2, d = Math.abs(c - x); if (d < bd) { bd = d; best = it; } });
+    return best;
+}
+function moveTo(it, jump) {
+    if (!it) return;
+    var x = it.offsetLeft, y = it.offsetTop, w = it.offsetWidth, h = it.offsetHeight;
+    if (jump) drop.classList.add('lg-now');
+    drop.style.width = w + 'px'; drop.style.height = h + 'px'; drop.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    if (jump) { void drop.offsetWidth; drop.classList.remove('lg-now'); }
+    else if (cur && cur !== it && !reduced()) { dropIn.classList.remove('lg-stretch'); void dropIn.offsetWidth; dropIn.classList.add('lg-stretch'); }
+    if (cur && cur !== it) cur.classList.remove('lg-lens');
+    it.classList.add('lg-lens'); cur = it;
+}
+function grab(ev) {
+    var it = itemAt(ev.clientX); if (!it) return;
+    clearTimeout(hideT); pressed = true; downItem = it;
+    var first = !drop.classList.contains('lg-on');
+    moveTo(it, first);
+    drop.classList.remove('lg-pop'); drop.classList.add('lg-on');
+}
+function release(open) {
+    if (!pressed) return; pressed = false;
+    if (open && cur && downItem && cur !== downItem) { var target = cur; setTimeout(function () { target.click(); }, 0); }   // slid to another button: open that one
+    drop.classList.add('lg-pop');
+    hideT = setTimeout(function () { drop.classList.remove('lg-on', 'lg-pop'); if (cur) cur.classList.remove('lg-lens'); cur = null; }, 380);
+}
+// a capsule-shaped displacement map: pixels near the rim are pushed, so the page behind bends like a thick glass edge
+function buildMap(w, h) {
+    w = Math.max(40, Math.round(w)); h = Math.max(20, Math.round(h));
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var x = c.getContext('2d'), img = x.createImageData(w, h), d = img.data, r = h / 2, cy = h / 2, band = Math.min(16, r * 0.75);
+    for (var j = 0; j < h; j++) for (var i = 0; i < w; i++) {
+        var px = i + 0.5, py = j + 0.5, sx = px < r ? px - r : px > w - r ? px - (w - r) : 0, sy = py - cy, len = Math.sqrt(sx * sx + sy * sy) || 1e-6;
+        var edge = r - len, k = (j * w + i) * 4, nx = sx / len, ny = sy / len, m = 0;
+        if (edge < band) { var t = 1 - Math.max(0, edge) / band; m = t * t * (3 - 2 * t); }
+        d[k] = 128 + nx * 127 * m; d[k + 1] = 128 + ny * 127 * m; d[k + 2] = 128; d[k + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    return c.toDataURL('image/png');
+}
+function refract() {
+    if (!isChromium || !nav || reduced()) return;
+    var ok = false; try { ok = CSS.supports('backdrop-filter', 'url(#lg-refract) blur(4px)'); } catch (e) { ok = false; }
+    if (!ok) return;
+    var svg = document.getElementById('lg-svg');
+    if (!svg) {
+        svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.id = 'lg-svg'; svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
+        svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+        svg.innerHTML = '<filter id="lg-refract" x="0" y="0" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">' +
+            '<feImage id="lg-map" x="0" y="0" preserveAspectRatio="none" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="-32" xChannelSelector="R" yChannelSelector="G"/></filter>';
+        document.body.appendChild(svg);
+    }
+    var w = nav.offsetWidth, h = nav.offsetHeight, f = svg.querySelector('filter'), im = svg.querySelector('#lg-map');
+    if (!w || !h) return;
+    if (Math.abs(w - lastW) < 1 && nav.classList.contains('lg-refract')) return;
+    lastW = w;
+    f.setAttribute('width', w); f.setAttribute('height', h);
+    im.setAttribute('width', w); im.setAttribute('height', h);
+    im.setAttribute('href', buildMap(w, h));
+    nav.classList.add('lg-refract');
+}
+function setup() {
+    nav = document.querySelector('.floating-nav'); if (!nav || nav.querySelector('.lg-drop')) return !!nav;
+    drop = document.createElement('span'); drop.className = 'lg-drop'; drop.setAttribute('aria-hidden', 'true');
+    dropIn = document.createElement('i'); dropIn.className = 'lg-drop-in'; drop.appendChild(dropIn);
+    spec = document.createElement('span'); spec.className = 'lg-spec'; spec.setAttribute('aria-hidden', 'true');
+    nav.insertBefore(drop, nav.firstChild); nav.appendChild(spec);
+    nav.classList.add('lg-ready');
+    // the bar changes width smoothly when the button for the page you are on hides
+    var lastWidth = nav.offsetWidth;                            // layout width (not affected by the press squish)
+    function resized() {
+        var now = nav.offsetWidth;
+        if (Math.abs(now - lastWidth) > 2 && nav.animate && !reduced()) nav.animate([{ width: lastWidth + 'px' }, { width: now + 'px' }], { duration: 480, easing: 'cubic-bezier(.3,1.25,.4,1)' });
+        if (Math.abs(now - lastWidth) > 2) setTimeout(refract, 500);
+        lastWidth = now;
+    }
+    new MutationObserver(function (ms) { if (ms.some(function (m) { return m.target !== nav && m.target.classList && m.target.classList.contains('nav-item') && m.attributeName === 'style'; })) resized(); })
+        .observe(nav, { subtree: true, attributes: true, attributeFilter: ['style'] });
+    new MutationObserver(function () { setTimeout(resized, 0); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] });
+    // light + a glass lens under your finger; slide along the bar and the lens flows from button to button
+    function light(ev) { var r = nav.getBoundingClientRect(); nav.style.setProperty('--lg-mx', ((ev.clientX - r.left) / r.width * 100).toFixed(1) + '%'); nav.style.setProperty('--lg-my', ((ev.clientY - r.top) / r.height * 100).toFixed(1) + '%'); }
+    nav.addEventListener('pointerdown', function (ev) { light(ev); nav.classList.add('lg-press'); grab(ev); }, { passive: true });
+    nav.addEventListener('pointermove', function (ev) { light(ev); if (pressed) { var it = itemAt(ev.clientX); if (it && it !== cur) moveTo(it, false); } }, { passive: true });
+    nav.addEventListener('pointerup', function () { nav.classList.remove('lg-press'); release(true); }, { passive: true });
+    ['pointercancel', 'pointerleave'].forEach(function (t) { nav.addEventListener(t, function () { nav.classList.remove('lg-press'); release(false); }, { passive: true }); });
+    nav.addEventListener('pointerleave', function () { nav.style.removeProperty('--lg-mx'); nav.style.removeProperty('--lg-my'); });
+    // the reflection drifts as the page scrolls, like light sliding over real glass
+    var st = 0; window.addEventListener('scroll', function () { if (st) return; st = requestAnimationFrame(function () { st = 0; var y = window.scrollY || 0; document.documentElement.style.setProperty('--lg-scroll', (20 + (y / 9) % 60).toFixed(1) + '%'); }); }, { passive: true });
+    window.addEventListener('resize', function () { refract(); }, { passive: true });
+    setTimeout(refract, 300);
+    return true;
+}
+window.IncLiquid = { refract: refract, map: buildMap, chromium: isChromium };
+function boot() { var n = 0, tm = setInterval(function () { if (setup() || ++n > 40) { clearInterval(tm); setTimeout(refract, 600); } }, 150); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
+/* ======================= Settings > Appearance: four options (Themes, Fonts, Navigation bar, Bubbles), one open at a time ======================= */
+(function () {
+'use strict';
+if (window.IncApMenu) return;
+var ITEMS = [
+    ['themes', 'Themes', 'palette', function (s) { var b = s.querySelector('.theme-card[aria-pressed="true"] .theme-name'); return b ? b.textContent : ''; }],
+    ['fonts', 'Fonts', 'font', function (s) { var b = s.querySelector('.font-card[aria-pressed="true"] .font-name'); if (!b) return ''; var t = ''; b.childNodes.forEach(function (n) { if (n.nodeType === 3) t += n.textContent; }); return t.trim(); }],
+    ['nav', 'Navigation bar', 'sliders-h', function () { var v = document.getElementById('navglass-val'); return v ? 'Glass opacity ' + v.textContent : ''; }],
+    ['bubbles', 'Bubbles', 'bubbles', function () { var a = document.getElementById('bub-bg-val'), c = document.getElementById('bub-card-val'); return a && c ? a.textContent + ' background · ' + c.textContent + ' per card' : ''; }],
+    ['opening', 'Opening & sync', 'magic', function () { var v = document.getElementById('burst-delay-val'), t = document.getElementById('sync-screen-toggle'); if (!v || !t) return ''; return 'Logo delay ' + (v.textContent === 'None' ? 'none' : v.textContent) + ' · sync screen ' + (t.classList.contains('active') ? 'on' : 'off'); }]
+];
+function build() {
+    var sec = document.getElementById('theme-settings-section'); if (!sec) return false;
+    if (document.getElementById('ap-menu')) return true;
+    var tg = sec.querySelector('.theme-grid'), fg = sec.querySelector('.font-grid'), nb = document.getElementById('navglass-block'), bb = document.getElementById('bubble-settings-block');
+    if (!tg || !fg || !nb || !bb) return false;
+    var si = document.getElementById('sync-screen-item'), bi = document.getElementById('burst-delay-item'), ob = document.createElement('div');   // opening animation + sync screen (moved from Backup Reminders)
+    ob.id = 'opening-block'; ob.className = 'space-y-6'; if (si) ob.appendChild(si); if (bi) ob.appendChild(bi);
+    var body = sec.querySelector(':scope > .acc-body') || sec;
+    var menu = document.createElement('div'); menu.id = 'ap-menu'; menu.className = 'ap-menu';
+    var parts = { themes: tg, fonts: fg, nav: nb, bubbles: bb, opening: ob };
+    ITEMS.forEach(function (it) {
+        var box = document.createElement('div'); box.className = 'ap-item'; box.setAttribute('data-ap', it[0]);
+        box.innerHTML = '<button type="button" class="ap-head" aria-expanded="false"><span class="ap-ic"><i class="fas fa-' + it[2] + '"></i></span><span class="ap-t"><b>' + it[1] + '</b><small class="ap-sum"></small></span><i class="fas fa-chevron-down ap-chev"></i></button><div class="ap-body"><div class="ap-in"></div></div>';
+        box.querySelector('.ap-in').appendChild(parts[it[0]]);
+        menu.appendChild(box);
+    });
+    Array.prototype.forEach.call(sec.querySelectorAll('.ap-sub'), function (x) { if (!menu.contains(x) || x.closest('.bub-block')) x.style.display = 'none'; });
+    body.insertBefore(menu, body.firstChild);
+    try { if (window.IncAtorCloud && IncAtorCloud.paintSyncToggle) IncAtorCloud.paintSyncToggle(); } catch (e) { /* optional */ }
+    menu.addEventListener('click', function (ev) {
+        var h = ev.target.closest('.ap-head'); if (!h) { setTimeout(sums, 50); return; }
+        var item = h.parentNode, open = !item.classList.contains('ap-open');
+        Array.prototype.forEach.call(menu.querySelectorAll('.ap-item'), function (o) { o.classList.remove('ap-open'); o.querySelector('.ap-head').setAttribute('aria-expanded', 'false'); });
+        if (open) { item.classList.add('ap-open'); h.setAttribute('aria-expanded', 'true'); setTimeout(function () { try { h.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ } }, 280); }
+        sums();
+    });
+    menu.addEventListener('input', function () { setTimeout(sums, 30); });
+    menu.addEventListener('change', function () { setTimeout(sums, 30); });
+    sums();
+    return true;
+}
+function sums() { var sec = document.getElementById('theme-settings-section'); if (!sec) return; ITEMS.forEach(function (it) { var s = sec.querySelector('.ap-item[data-ap="' + it[0] + '"] .ap-sum'); if (s) s.textContent = it[3](sec) || ''; }); }
+function open(k) { var h = document.querySelector('#ap-menu .ap-item[data-ap="' + k + '"]:not(.ap-open) .ap-head'); if (h) h.click(); }
+var st = document.createElement('style'); st.id = 'ap-menu-css';
+st.textContent = '.ap-menu{display:flex;flex-direction:column;gap:10px}' +
+    '.ap-item{border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);overflow:hidden;transition:border-color .25s,background .25s}' +
+    '.ap-item.ap-open{background:rgba(255,255,255,.06);border-color:rgba(var(--pr2),.45)}' +
+    '.ap-head{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:none;border:0;color:#fff;cursor:pointer;text-align:left;font:inherit;-webkit-appearance:none;appearance:none}' +
+    '.ap-ic{flex:none;width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;color:rgb(var(--pr2));background:rgba(var(--pr2),.16)}' +
+    '.ap-t{flex:1;min-width:0}.ap-t b{display:block;font-size:.98rem}.ap-sum{display:block;font-size:.76rem;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.ap-chev{opacity:.6;transition:transform .3s}.ap-item.ap-open .ap-chev{transform:rotate(180deg)}' +
+    '.ap-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .32s ease}.ap-item.ap-open .ap-body{grid-template-rows:1fr}' +
+    '.ap-in{min-height:0;overflow:hidden;padding:0 14px}.ap-item.ap-open .ap-in{padding:2px 14px 14px}' +
+    '.ap-in .bub-block{margin:0;padding:0;border:0}.ap-in .theme-grid,.ap-in .font-grid{margin-top:2px}';
+document.head.appendChild(st);
+window.IncApMenu = { open: open, refresh: sums };
+var n = 0, tm = setInterval(function () { if (build() || ++n > 120) clearInterval(tm); }, 250);
+})();
+
 </script>
 <script id="incator-fit">
 /* ---------- Home: fit to one screen ---------- */
@@ -12732,7 +13210,7 @@ BIZ.renderQuotes = function () {
               <button type="button" class="app-btn" onclick="BIZ.convertQuote(${q.id})"><i class="fas fa-briefcase mr-2"></i> ${ps.length ? 'Open Project' : 'Convert to Project'}</button>
               <button type="button" class="app-btn" onclick="BIZ.duplicateQuote(${q.id})"><i class="fas fa-copy mr-2"></i> Duplicate</button>
               <button type="button" class="app-btn" onclick="BIZ.deleteQuote(${q.id})"><i class="fas fa-trash mr-2"></i> Delete</button></div></div>`;
-    }).join('') : `<div class="bz-empty"><i class="fas fa-file-alt" style="font-size:2rem;margin-bottom:8px;"></i><p>${quotes.length ? 'No quotes match your search.' : 'No quotes yet. Tap "New Quote" to create your first contract proposal.'}</p></div>`;
+    }).join('') : (!quotes.length && window.incEmpty) ? incEmpty('quotes') : `<div class="bz-empty"><i class="fas fa-file-alt" style="font-size:2rem;margin-bottom:8px;"></i><p>${quotes.length ? 'No quotes match your search.' : 'No quotes yet. Tap "New Quote" to create your first contract proposal.'}</p></div>`;
 };
 BIZ.daysAgo = iso => iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : 0;
 BIZ.needsFollowUp = q => q.status === 'sent' && !!q.sentAt && BIZ.daysAgo(q.sentAt) >= (parseInt(S('followUpDays'), 10) || 7) && !projectsOfQuote(q.id).length;
@@ -12955,7 +13433,7 @@ BIZ.renderProjects = function () {
     if (fc) { fc.textContent = nAct; fc.style.display = nAct ? '' : 'none'; }
     const sl = document.getElementById('pj-summary-line');
     if (sl) { sl.style.display = projects.length ? '' : 'none'; sl.textContent = `Showing ${list.length} project${list.length === 1 ? '' : 's'}${list.length !== projects.length ? ' of ' + projects.length : ''} | Value ${money(list.reduce((a, p) => a + num(p.finalAmount), 0))} before GST`; }
-    box.innerHTML = list.length ? list.map(projectCard).join('') : `<div class="bz-empty"><i class="fas fa-briefcase" style="font-size:2rem;margin-bottom:8px;"></i><p>${projects.length ? 'No projects match these filters.' : 'No projects yet. Open a quote and tap "Convert to Project".'}</p></div>`;
+    box.innerHTML = list.length ? list.map(projectCard).join('') : (!projects.length && window.incEmpty) ? incEmpty('projects') : `<div class="bz-empty"><i class="fas fa-briefcase" style="font-size:2rem;margin-bottom:8px;"></i><p>${projects.length ? 'No projects match these filters.' : 'No projects yet. Open a quote and tap "Convert to Project".'}</p></div>`;
 };
 function projectCard(p) {
     const ls = linkState(p), le = linkedEntry(p), q = quoteById(p.quoteUid);
@@ -13597,7 +14075,7 @@ BIZ.openCustomers = function (filter) {
         const rows = list.filter(c => !s || [c.name, c.phone, c.email, c.address].join(' ').toLowerCase().includes(s));
         m.$('#cu-list').innerHTML = rows.length ? rows.map(c => `<div class="bz-card cu-row" data-cu="${h(c.key)}"><div class="bz-top"><div><div class="bz-name">${h(c.name)}</div><div class="bz-sub">${h([c.phone, c.email].filter(Boolean).join(' · ') || 'No contact details')}</div></div><div class="bz-amt">${h(money(c.income))}<small>earned</small></div></div>
             <div class="bz-row"><span><i class="fas fa-file-alt"></i>${c.quotes.length} quote${c.quotes.length === 1 ? '' : 's'} (${h(money(c.quoted))})</span><span><i class="fas fa-briefcase"></i>${c.projects.length} project${c.projects.length === 1 ? '' : 's'}</span></div></div>`).join('')
-            : `<div class="bz-empty"><i class="fas fa-users" style="font-size:2rem;margin-bottom:8px;"></i><p>${list.length ? 'No customers match your search.' : 'No customers yet. They appear here as soon as you create a quote.'}</p></div>`;
+            : (!list.length && window.incEmpty) ? incEmpty('customers') : `<div class="bz-empty"><i class="fas fa-users" style="font-size:2rem;margin-bottom:8px;"></i><p>${list.length ? 'No customers match your search.' : 'No customers yet. They appear here as soon as you create a quote.'}</p></div>`;
     };
     m.el.addEventListener('input', ev => { if (ev.target.id === 'cu-search') draw(); });
     m.el.addEventListener('click', ev => { const r = ev.target.closest && ev.target.closest('[data-cu]'); if (r) { m.close(); BIZ.customerDetail(r.getAttribute('data-cu')); } });
@@ -15806,7 +16284,7 @@ function renderList() {
     const tt = document.getElementById('rc-subtitle'); if (tt) tt.textContent = VIEWS[UI.view].t;
     const sl = document.getElementById('rc-sumline'); if (sl) sl.innerHTML = `<span><b>${plural(list.length, 'receipt')}</b></span><span>Spent <b>${h(money(spend))}</b></span><span>Claimable <b>${h(money(claim))}</b></span><span>GST back <b>${h(money(itc))}</b></span>${UI.view === 'claim' ? `<span>Total claim incl. taxes <b>${h(money(claim + itc))}</b></span>` : ''}`;
     renderNote(list);
-    if (!receipts.length) { el.innerHTML = `<div class="bz-empty"><i class="fas fa-receipt" style="font-size:30px;opacity:.6;"></i><p style="margin-top:8px;">No receipts yet. Go back and scan your first one.</p></div>`; syncBar(); return; }
+    if (!receipts.length) { el.innerHTML = window.incEmpty ? incEmpty('receipts') : `<div class="bz-empty"><i class="fas fa-receipt" style="font-size:30px;opacity:.6;"></i><p style="margin-top:8px;">No receipts yet. Go back and scan your first one.</p></div>`; syncBar(); return; }
     if (!list.length) { el.innerHTML = `<div class="bz-empty">${h((!UI.F.q && !UI.F.cat && !UI.F.status && !UI.F.year && EMPTY[UI.view]) || 'No receipts match these filters.')}</div>`; syncBar(); return; }
     const g = UI.F.group;
     if (g === 'dup') { el.innerHTML = dupHtml(list); paintSel(); return; }
@@ -16243,7 +16721,7 @@ function openRecurring() {
         actions: [{ label: 'Close', run: a => a.close() }, { label: 'Add recurring expense', icon: 'plus', run: () => editRecurring(null, paint) }] });
     function paint() {
         const list = recList(), el = m.$('#rr-list');
-        if (!list.length) { el.innerHTML = '<div class="bz-empty">No recurring expenses yet. Tap Add recurring expense.</div>'; return; }
+        if (!list.length) { el.innerHTML = window.incEmpty ? incEmpty('recurring') : '<div class="bz-empty">No recurring expenses yet. Tap Add recurring expense.</div>'; return; }
         el.innerHTML = list.map(t => { const nx = recNext(t), made = receipts.filter(r => r.recurringId === t.id).length;
             return `<div class="rr-row${t.paused ? ' paused' : ''}"><div class="rr-m"><b>${h(t.store)}</b><small>${h(money(N(t.total)))} ${h((EVERY[t.every] || EVERY.month)[1])} • ${h(t.category || 'Other')}${t.paused ? ' • paused' : nx ? ' • next ' + h(formatDate(nx)) : ' • ended'}${made ? ' • ' + plural(made, 'receipt') + ' added' : ''}</small></div>
             <div class="rr-a"><button type="button" class="rc-sm" data-rr-edit="${h(t.id)}"><i class="fas fa-edit"></i><span>Edit</span></button><button type="button" class="rc-sm" data-rr-pause="${h(t.id)}"><i class="fas fa-${t.paused ? 'play' : 'pause'}"></i><span>${t.paused ? 'Resume' : 'Pause'}</span></button><button type="button" class="rc-sm" data-rr-del="${h(t.id)}"><i class="fas fa-trash"></i><span>Delete</span></button></div></div>`; }).join('');
@@ -16976,83 +17454,129 @@ style.textContent = [
 '.bub-ctl input[type=range] { width: 170px; max-width: 42vw; accent-color: rgb(var(--pr4)); }',
 '.bub-step { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; padding: 0; -webkit-appearance: none; appearance: none; }',
 '.bub-val { min-width: 44px; text-align: center; font-weight: 700; }',
-'.bub-block { margin-top: 6px; }'
+'.bub-block { margin-top: 6px; }',
+'.bub-ring { position: absolute; border-radius: 50%; pointer-events: none; border: 1px solid rgba(255,255,255,.6); box-shadow: 0 0 6px rgba(255,255,255,.25); animation: bubRing .62s cubic-bezier(.2,.7,.3,1) forwards; }',
+'.floating-bubbles .bub-ring { z-index: 0; }',
+'@keyframes bubRing { from { transform: scale(.25); } to { transform: scale(1.5); opacity: 0; } }'
 ].join('\n');
 document.head.appendChild(style);
 
 /* ---------------- motion ---------------- */
 function paint(el, tint) { el.style.background = 'radial-gradient(circle at 30% 30%, rgba(var(' + tint + '), .85), rgba(var(' + tint + '), .45) 55%, rgba(var(' + tint + '), .15))'; }
+/* Soft-body impacts. A bubble does not bounce off instantly: when it touches a wall or another bubble its body keeps
+   moving in and presses flat against it (a springy contact), slows down, then pushes itself off again. While pressed it
+   flattens on the touching side and bulges sideways (keeping its volume); after it leaves it overshoots into a stretch
+   and wobbles until it settles. Faster hits press in deeper and last longer, and a faint ring spreads from the hit. */
 function put(it) {
-    var t = 'translate3d(' + it.x.toFixed(1) + 'px,' + it.y.toFixed(1) + 'px,0)';
-    if (it.sq > 0.004 || it.sq < -0.004) t += ' rotate(' + it.sa.toFixed(3) + 'rad) scale(' + (1 - it.sq).toFixed(3) + ',' + (1 + it.sq * 0.7).toFixed(3) + ')';
-    it.el.style.transform = t;
+    var t = 'translate3d(' + it.x.toFixed(1) + 'px,' + it.y.toFixed(1) + 'px,0)', el = it.el;
+    var c = it.c, w = it.w;
+    if (Math.abs(c) > 0.003 || Math.abs(w) > 0.003) {
+        var a = it.sa, ca = Math.cos(a), sa = Math.sin(a);
+        var along = clamp(1 - c + 0.18 * w, 0.5, 1.4), across = clamp(Math.pow(Math.max(0.5, 1 - c), -0.7) - 0.18 * w, 0.72, 1.4);
+        // pressed in: the far side stays put and the touching side flattens back to the wall / the other bubble;
+        // stretched out (after the rebound): it stretches evenly from its middle
+        var o = c > 0 ? clamp(c / 0.04, 0, 1) : 0;
+        el.style.transformOrigin = (50 - 50 * ca * o).toFixed(1) + '% ' + (50 - 50 * sa * o).toFixed(1) + '%';
+        t += ' rotate(' + a.toFixed(3) + 'rad) scale(' + along.toFixed(3) + ',' + across.toFixed(3) + ') rotate(' + (-a).toFixed(3) + 'rad)';
+        var f = clamp(c * 2.6, 0, 0.66), fx = f * Math.abs(ca), fy = f * Math.abs(sa), k = function (v) { return (50 - 40 * v).toFixed(1) + '%'; };
+        var R = ca > 0 ? fx : 0, L = ca < 0 ? fx : 0, B = sa > 0 ? fy : 0, T = sa < 0 ? fy : 0;
+        el.style.borderRadius = k(T) + ' ' + k(T) + ' ' + k(B) + ' ' + k(B) + ' / ' + k(L) + ' ' + k(R) + ' ' + k(R) + ' ' + k(L);
+        it.shaped = true;
+    } else if (it.shaped) { el.style.borderRadius = ''; el.style.transformOrigin = ''; it.shaped = false; }
+    el.style.transform = t;
 }
 function make(el, w, h, sMin, sMax, vmax) {
-    var s = rnd(sMin, sMax), a = Math.random() * 6.2832, v = rnd(vmax * 0.4, vmax);
-    var it = { el: el, s: s, r: s / 2, m: s * s, x: rnd(0, Math.max(1, w - s)), y: rnd(0, Math.max(1, h - s)), vx: Math.cos(a) * v, vy: Math.sin(a) * v, vmax: vmax, vmin: vmax * 0.25, sq: 0, sqv: 0, sa: 0 };
+    var s = rnd(sMin, sMax), a = Math.random() * 6.2832, v = rnd(vmax * 0.4, vmax), r = s / 2;
+    var it = { el: el, s: s, r: r, m: s * s, x: rnd(0, Math.max(1, w - s)), y: rnd(0, Math.max(1, h - s)), vx: Math.cos(a) * v, vy: Math.sin(a) * v, vmax: vmax, vmin: vmax * 0.25,
+               om: clamp(vmax / (0.26 * r), 0.12, 0.6),                 // how stiff the bubble is: a full-speed hit presses in about a quarter of its radius
+               c: 0, cv: 0, w: 0, wv: 0, sa: 0, shaped: false, pen: 0, pa: 0, inC: false, wasC: false, cmax: 0 };
     el.style.width = el.style.height = s.toFixed(1) + 'px'; put(it); return it;
 }
-/* a hit squeezes the bubble along the direction of the hit, then it springs back (a little wobble) */
+var rings = 0;
+function ring(it, ang, strength) {                              // a faint ring spreading from where it was hit
+    if (rings > 6 || strength < 0.35 || !it.el.parentNode || reduce) return;
+    var cx = it.x + it.r + Math.cos(ang) * it.r, cy = it.y + it.r + Math.sin(ang) * it.r, d = it.s * (0.5 + strength * 0.4);
+    var g = document.createElement(it.el.tagName === 'I' ? 'i' : 'div'); g.className = 'bub-ring';
+    g.style.cssText = 'left:' + (cx - d / 2).toFixed(1) + 'px;top:' + (cy - d / 2).toFixed(1) + 'px;width:' + d.toFixed(1) + 'px;height:' + d.toFixed(1) + 'px;opacity:' + (0.15 + strength * 0.25).toFixed(2);
+    it.el.parentNode.appendChild(g); rings++;
+    setTimeout(function () { if (g.parentNode) g.parentNode.removeChild(g); rings--; }, 650);
+}
+/* kept for older callers: give a bubble a dent and a wobble as if it was hit */
 function squash(it, ang, speed) {
-    var amt = clamp(speed * 0.75 * Math.min(1.6, Math.max(0.5, spd())), 0.07, 0.34);
-    if (Math.abs(it.sq) < 0.05) it.sa = ang;
-    if (amt > it.sq) it.sq = amt; it.sqv = 0;
+    var amt = clamp(speed * 0.5, 0.04, 0.3);
+    it.sa = ang; it.c = Math.max(it.c, amt * 0.4); it.cv = Math.max(it.cv, amt * 0.3); it.wv -= amt * 0.3;
 }
-function step(it, dt, w, h) {                               // dt is already scaled by the speed setting
-    it.vx += (Math.random() - 0.5) * 0.07 * dt; it.vy += (Math.random() - 0.5) * 0.07 * dt;
-    var sp = Math.sqrt(it.vx * it.vx + it.vy * it.vy);
-    if (sp > it.vmax) { it.vx *= it.vmax / sp; it.vy *= it.vmax / sp; }
-    else if (sp < it.vmin) { if (sp < 1e-4) { it.vx = it.vmin; } else { it.vx *= it.vmin / sp; it.vy *= it.vmin / sp; } }
-    it.x += it.vx * dt; it.y += it.vy * dt;
-    var mx = Math.max(0, w - it.s), my = Math.max(0, h - it.s);
-    if (it.x < 0) { it.x = 0; if (it.vx < 0) { squash(it, 0, -it.vx); it.vx = -it.vx; } }
-    else if (it.x > mx) { it.x = mx; if (it.vx > 0) { squash(it, 0, it.vx); it.vx = -it.vx; } }
-    if (it.y < 0) { it.y = 0; if (it.vy < 0) { squash(it, 1.5708, -it.vy); it.vy = -it.vy; } }
-    else if (it.y > my) { it.y = my; if (it.vy > 0) { squash(it, 1.5708, it.vy); it.vy = -it.vy; } }
+function contact(it, p, nx, ny) {                               // p = how far it is pressed in; (nx, ny) points from its centre to the contact
+    if (p > it.pen) { it.pen = p; it.pa = Math.atan2(ny, nx); }
 }
-/* bubbles bounce off each other: elastic hit, heavier (bigger) bubbles move less */
-function collide(items) {
-    var n = items.length, i, j, a, b, dx, dy, d, minD, nx, ny, ov, vn, J, ia, ib;
+function forces(items, w, h) {                                  // springy contacts with the walls and between bubbles
+    var i, j, a, b, n = items.length;
+    for (i = 0; i < n; i++) {
+        a = items[i]; a.ax = 0; a.ay = 0; a.pen = 0;
+        var cx = a.x + a.r, cy = a.y + a.r, k = a.om * a.om, z = 2 * 0.06 * a.om, p;
+        if ((p = a.r - cx) > 0) { a.ax += k * p - (a.vx < 0 ? z * a.vx : 0); contact(a, p, -1, 0); }
+        if ((p = cx + a.r - w) > 0) { a.ax -= k * p + (a.vx > 0 ? z * a.vx : 0); contact(a, p, 1, 0); }
+        if ((p = a.r - cy) > 0) { a.ay += k * p - (a.vy < 0 ? z * a.vy : 0); contact(a, p, 0, -1); }
+        if ((p = cy + a.r - h) > 0) { a.ay -= k * p + (a.vy > 0 ? z * a.vy : 0); contact(a, p, 0, 1); }
+    }
     for (i = 0; i < n - 1; i++) {
         a = items[i];
         for (j = i + 1; j < n; j++) {
             b = items[j];
-            dx = (b.x + b.r) - (a.x + a.r); dy = (b.y + b.r) - (a.y + a.r); minD = a.r + b.r;
+            var dx = (b.x + b.r) - (a.x + a.r), dy = (b.y + b.r) - (a.y + a.r), minD = a.r + b.r;
             if (dx > minD || dx < -minD || dy > minD || dy < -minD) continue;
-            d = Math.sqrt(dx * dx + dy * dy); if (d >= minD) continue;
+            var d = Math.sqrt(dx * dx + dy * dy); if (d >= minD) continue;
             if (d < 1e-4) { dx = 1; dy = 0; d = 1; }
-            nx = dx / d; ny = dy / d; ov = minD - d; ia = 1 / a.m; ib = 1 / b.m;
-            a.x -= nx * ov * ia / (ia + ib); a.y -= ny * ov * ia / (ia + ib);
-            b.x += nx * ov * ib / (ia + ib); b.y += ny * ov * ib / (ia + ib);
-            vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
-            if (vn < 0) {
-                J = -(1 + 0.96) * vn / (ia + ib);
-                a.vx -= J * ia * nx; a.vy -= J * ia * ny; b.vx += J * ib * nx; b.vy += J * ib * ny;
-                var ang = Math.atan2(ny, nx);
-                squash(a, ang, -vn); squash(b, ang, -vn);
-            }
+            var nx = dx / d, ny = dy / d, ov = minD - d, om = Math.min(a.om, b.om), kk = om * om, zz = 2 * 0.06 * om;
+            var vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny, F = kk * ov - (vn < 0 ? zz * vn : 0);   // push apart, and lose a little energy while closing
+            var ma = a.m, mb = b.m, fa = F * mb / (ma + mb) * 2, fb = F * ma / (ma + mb) * 2;           // the lighter (smaller) bubble gets pushed more
+            a.ax -= nx * fa; a.ay -= ny * fa; b.ax += nx * fb; b.ay += ny * fb;
+            var pa = ov * b.r / minD, pb = ov * a.r / minD;              // each one is pressed in in proportion to the other's size
+            contact(a, pa, nx, ny); contact(b, pb, -nx, -ny);
         }
     }
-}
-function settle(it, dt) {                                   // springs the squeeze back to round, with a small wobble
-    if (it.sq === 0 && it.sqv === 0) return;
-    var n = Math.max(1, Math.ceil(dt)), h = dt / n;           // small sub-steps keep the spring stable even on a slow frame
-    for (var k = 0; k < n; k++) { it.sqv += (-it.sq * 0.22 - it.sqv * 0.16) * h; it.sq += it.sqv * h; }
-    it.sq = clamp(it.sq, -0.4, 0.4);
-    if (Math.abs(it.sq) < 0.004 && Math.abs(it.sqv) < 0.004) { it.sq = 0; it.sqv = 0; }
 }
 function run(items, dt, w, h) {
-    var i, sdt = dt * spd();
+    var i, it, sdt = dt * spd();
     if (sdt > 0) {
-        for (i = 0; i < items.length; i++) step(items[i], sdt, w, h);
-        if (items.length > 1) collide(items);
-        for (i = 0; i < items.length; i++) {                // collisions can push a bubble past a wall
-            var it = items[i], mx = Math.max(0, w - it.s), my = Math.max(0, h - it.s);
-            if (it.x < 0) it.x = 0; else if (it.x > mx) it.x = mx; if (it.y < 0) it.y = 0; else if (it.y > my) it.y = my;
+        var steps = Math.max(1, Math.ceil(sdt * 3)), hh = sdt / steps;
+        for (var s = 0; s < steps; s++) {
+            forces(items, w, h);
+            for (i = 0; i < items.length; i++) {
+                it = items[i];
+                it.inC = it.pen > 0.01;
+                if (!it.inC) {                                      // drifting freely: a gentle random wander at a steady speed
+                    it.vx += (Math.random() - 0.5) * 0.07 * hh; it.vy += (Math.random() - 0.5) * 0.07 * hh;
+                    var sp = Math.sqrt(it.vx * it.vx + it.vy * it.vy);
+                    if (sp > it.vmax) { it.vx *= it.vmax / sp; it.vy *= it.vmax / sp; }
+                    else if (sp < it.vmin) { if (sp < 1e-4) it.vx = it.vmin; else { it.vx *= it.vmin / sp; it.vy *= it.vmin / sp; } }
+                }
+                it.vx += it.ax * hh; it.vy += it.ay * hh;
+                it.x += it.vx * hh; it.y += it.vy * hh;
+                // never sink in more than about half way (very fast hits)
+                var lim = it.r * 0.55, mx = w - it.s + lim, my = h - it.s + lim;
+                if (it.x < -lim) { it.x = -lim; if (it.vx < 0) it.vx = 0; } else if (it.x > mx) { it.x = mx; if (it.vx > 0) it.vx = 0; }
+                if (it.y < -lim) { it.y = -lim; if (it.vy < 0) it.vy = 0; } else if (it.y > my) { it.y = my; if (it.vy > 0) it.vy = 0; }
+                // the look follows the contact while touching, then springs back on its own (overshooting into a stretch)
+                if (it.inC) {
+                    var target = clamp(it.pen / it.s, 0, 0.42);
+                    if (!it.wasC) { ring(it, it.pa, Math.sqrt(it.vx * it.vx + it.vy * it.vy) / it.vmax); it.cmax = 0; }
+                    it.cv = (target - it.c) / hh; it.c = target; it.sa = it.pa; it.cmax = Math.max(it.cmax, target);
+                } else {
+                    if (it.wasC) { it.wv -= it.cmax * 0.9; it.cv = Math.min(it.cv, -it.cmax * it.om * 1.1); }   // let go: the wobble starts
+                    var om = it.om * 1.6;
+                    it.cv += (-it.c * om * om - it.cv * 0.16 * om) * hh; it.c += it.cv * hh;
+                    it.wv += (-it.w * om * om * 2.6 - it.wv * 0.14 * om) * hh; it.w += it.wv * hh;
+                }
+                it.wasC = it.inC;
+            }
+        }
+        for (i = 0; i < items.length; i++) {
+            it = items[i]; it.c = clamp(it.c, -0.3, 0.45); it.w = clamp(it.w, -0.3, 0.3);
+            if (!it.inC && Math.abs(it.c) < 0.002 && Math.abs(it.cv) < 0.002 && Math.abs(it.w) < 0.002 && Math.abs(it.wv) < 0.002) { it.c = it.cv = it.w = it.wv = 0; }
         }
     }
-    var sd = sdt > 0 ? dt * clamp(spd(), 0.4, 2) : 0;
-    for (i = 0; i < items.length; i++) { settle(items[i], sd); put(items[i]); }
+    for (i = 0; i < items.length; i++) put(items[i]);
 }
 
 /* ---------------- page background ---------------- */
@@ -17134,7 +17658,7 @@ function injectSettings() {
         row('bg', 'bubbles', 'Background bubbles', 'Bubbles that drift behind every page. Set 0 to turn them off.') +
         row('card', 'bubbles', 'Bubbles inside cards', 'Small bubbles that roam inside each Home and Receipts card, per card. Set 0 to turn them off.') +
         row('speed', 'bolt', 'Bubble speed', 'How fast the bubbles move. 100% is the normal speed, 0% freezes them.') +
-        '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><button type="button" class="app-btn" id="bub-reset"><i class="fas fa-undo-alt mr-2"></i> Reset bubbles</button><span class="setting-description" style="margin:0;">Bubbles bounce off each other and squeeze a little when they hit. Some themes (Graphite, Terminal, Business) hide the bubbles. If your device is set to reduce motion, bubbles stay still.</span></div></div>';
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><button type="button" class="app-btn" id="bub-reset"><i class="fas fa-undo-alt mr-2"></i> Reset bubbles</button><span class="setting-description" style="margin:0;">When bubbles hit a wall or each other they press in, flatten against it, push off and wobble like jelly. Some themes (Graphite, Terminal, Business) hide the bubbles. If your device is set to reduce motion, bubbles stay still.</span></div></div>';
     body.appendChild(sec);
     var timers = {};
     function show() {
@@ -17157,7 +17681,7 @@ function injectSettings() {
     return true;
 }
 
-window.IncBubbles = { scan: scan, refresh: function () { scan(); injectSettings(); Object.keys(CTL).forEach(function (k) { var c = CTL[k], r = document.getElementById('bub-' + k), o = document.getElementById('bub-' + k + '-val'); if (r) r.value = c.get(); if (o) o.textContent = c.get() + c.suf; }); },
+window.IncBubbles = { _phys: { make: make, run: run, squash: squash }, scan: scan, refresh: function () { scan(); injectSettings(); Object.keys(CTL).forEach(function (k) { var c = CTL[k], r = document.getElementById('bub-' + k), o = document.getElementById('bub-' + k + '-val'); if (r) r.value = c.get(); if (o) o.textContent = c.get() + c.suf; }); },
     counts: function () { return { bg: bg.items.length, card: layers.map(function (L) { return L.items.length; }) }; },
     items: function () { return bg.items; }, cardItems: function () { return layers.map(function (L) { return L.items; }); }, speed: speedPct };
 
