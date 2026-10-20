@@ -15083,7 +15083,7 @@ function httpErr(status, msg) {
     if (status === 404 || (status === 400 && /model|not found|not supported/i.test(msg))) return aiErr('model', 'That AI model is not available.' + (msg ? ' (' + msg.slice(0, 120) + ')' : ''));
     if (status === 429 && /limit:\s*0\b/i.test(msg)) return aiErr('nofree', 'This AI model is not included in the free tier.', msg);
     if (status === 429) return aiErr('quota', 'The AI limit is used up for now (too many receipts in a short time, or the daily free limit). Try again later.');
-    if (status >= 500) return aiErr('busy', 'The AI service is busy right now.');
+    if (status >= 500) return aiErr('busy', 'The AI service is busy right now (' + status + (msg ? ': ' + msg.slice(0, 120) : '') + '). Try again in a minute.', msg);
     return aiErr('http', 'The AI service returned an error (' + status + ')' + (msg ? ': ' + msg.slice(0, 160) : '') + '.');
 }
 async function fetchT(url, opt, ms) {
@@ -15156,14 +15156,16 @@ async function geminiCall(key, model, parts, maxTokens) {
 }
 async function geminiRun(key, parts, maxTokens) {                  // uses the saved model; if Google retired it, finds the newest Flash model and remembers it
     // If Google retired the model, or it is not part of the free tier for this key, try the next newest Flash model and remember the one that works.
-    const first = aiModel('gemini');
-    try { return { text: await geminiCall(key, first, parts, maxTokens), model: first }; }
+    // A busy (overloaded) model is tried once more after a short wait, then the next Flash model is used instead.
+    const first = aiModel('gemini'), skip = c => c === 'model' || c === 'nofree' || c === 'busy';
+    const callR = async m => { try { return await geminiCall(key, m, parts, maxTokens); } catch (e) { if (e.code !== 'busy') throw e; await new Promise(r => setTimeout(r, 2000)); return await geminiCall(key, m, parts, maxTokens); } };
+    try { return { text: await callR(first), model: first }; }
     catch (e) {
-        if (e.code !== 'model' && e.code !== 'nofree') throw e;
+        if (!skip(e.code)) throw e;
         let last = e;
         for (const m of pickGeminiModels(await geminiModels(key)).filter(x => x !== first).slice(0, 5)) {
             try { const t = await geminiCall(key, m, parts, maxTokens); sset('rcAiModel_gemini', m); return { text: t, model: m }; }
-            catch (e2) { last = e2; if (e2.code !== 'model' && e2.code !== 'nofree') throw e2; }
+            catch (e2) { last = e2; if (!skip(e2.code)) throw e2; }
         }
         throw last.code === 'nofree' ? aiErr('nofree', 'None of the Gemini models available to this key are in the free tier. Turn on billing for the key\'s project in Google AI Studio, or use Claude.') : last;
     }
