@@ -19334,6 +19334,15 @@ function city(n, minH, k) {
     return 'polygon(' + pts.join(', ') + ')';
 }
 var PINE1 = pines(26, 2, 40, 40), PINE2 = pines(20, 6, 46, 50), PINE3 = pines(15, 10, 52, 60), CITY1 = city(14, 70, 70), CITY2 = city(18, 75, 80);
+// soft out-of-focus lights in the given colours (like City lights)
+function lights(n, cols, k0, minS, maxS) {
+    return rep(n, function (i) { var c = cols[i % cols.length], sz = (minS + rnd(i, k0) * (maxS - minS)).toFixed(1);
+        return '<i class="k" style="--c:' + c + ';left:' + (rnd(i, k0 + 1) * 96 - 6).toFixed(1) + '%;top:' + (rnd(i, k0 + 2) * 94 - 6).toFixed(1) + '%;width:' + sz + '%;animation-duration:' + (9 + rnd(i, k0 + 3) * 11).toFixed(1) + 's;animation-delay:-' + (rnd(i, k0 + 4) * 14).toFixed(1) + 's"></i>'; });
+}
+// big soft colour clouds that drift and melt into each other (like Liquid colours and the sign-in sky)
+function blobs(list) {
+    return list.map(function (b) { return '<i class="bl" style="--c:' + b[0] + ';' + b[1] + ';animation:' + b[2] + '"></i>'; }).join('');
+}
 var LIST = [
     { k: 'theme', name: 'Current', desc: 'Your theme\'s own background' },
     { k: 'sky', glow: '167,139,250|34,211,238', name: 'Sign-in sky', desc: 'The aurora and stars from the sign-in screen', base: '#0b0420',
@@ -19378,7 +19387,23 @@ var LIST = [
     { k: 'skyline', glow: '192,132,252|236,72,153', name: 'City skyline', desc: 'A glowing city at night, windows twinkling', base: '#0a0a23',
       html: STARS + '<i class="glow"></i><i class="bd b1"></i><i class="bd b2"></i><i class="win"></i><i class="win w2"></i><i class="pl"></i>' },
     { k: 'hills', glow: '110,231,183|253,224,71', name: 'Misty hills', desc: 'Soft green hills fading into the morning mist', base: '#0c1a24',
-      html: '<i class="sun"></i><i class="hl h1"></i><i class="mist"></i><i class="hl h2"></i><i class="mist lo"></i><i class="hl h3"></i><i class="hl h4"></i>' }
+      html: '<i class="sun"></i><i class="hl h1"></i><i class="mist"></i><i class="hl h2"></i><i class="mist lo"></i><i class="hl h3"></i><i class="hl h4"></i>' },
+    { k: 'lava', glow: '244,63,94|251,146,60', name: 'Lava lamp', desc: 'Warm glowing blobs rising and melting slowly', base: '#12030f',
+      html: blobs([['244,63,94', 'left:-20%;top:45%;width:75%', 'bxLava 19s ease-in-out infinite alternate'], ['251,146,60', 'right:-25%;top:55%;width:80%', 'bxLava 23s ease-in-out -8s infinite alternate'], ['192,38,211', 'left:15%;top:-10%;width:70%', 'bxM2 27s ease-in-out infinite alternate'], ['245,158,11', 'left:30%;bottom:-25%;width:60%', 'bxLava 31s ease-in-out -14s infinite alternate']]) + '<i class="vg"></i>' },
+    { k: 'neon', glow: '236,72,153|34,211,238', name: 'Neon city', desc: 'Pink and blue neon lights glowing in the rain', base: '#07071a',
+      html: lights(16, ['236,72,153', '34,211,238', '139,92,246', '59,130,246'], 40, 7, 22) + '<i class="rn"></i><i class="hz"></i>' },
+    { k: 'golden', glow: '245,158,11|251,113,133', name: 'Golden lights', desc: 'Warm golden lights floating like a festival night', base: '#140b05',
+      html: lights(14, ['251,191,36', '245,158,11', '251,146,60', '254,240,138', '251,113,133'], 60, 9, 26) },
+    { k: 'cosmic', glow: '139,92,246|45,212,191', name: 'Cosmic dust', desc: 'Violet and teal clouds drifting among the stars', base: '#070313',
+      html: STARS + blobs([['139,92,246', 'left:-30%;top:-20%;width:95%', 'bxM1 26s ease-in-out infinite alternate'], ['45,212,191', 'right:-35%;top:20%;width:90%', 'bxM2 30s ease-in-out infinite alternate'], ['236,72,153', 'left:0;bottom:-30%;width:80%', 'bxM3 34s ease-in-out infinite alternate']]) },
+    { k: 'midnight', glow: '16,185,129|59,130,246', name: 'Midnight aurora', desc: 'Emerald and blue light glowing over a starry night', base: '#020617',
+      html: STARS + blobs([['16,185,129', 'left:-25%;top:-25%;width:90%', 'bxM1 24s ease-in-out infinite alternate'], ['59,130,246', 'right:-30%;top:10%;width:85%', 'bxM2 28s ease-in-out infinite alternate'], ['99,102,241', 'left:10%;bottom:-35%;width:85%', 'bxM3 32s ease-in-out infinite alternate']]) },
+    { k: 'lagoon', glow: '20,184,166|59,130,246', name: 'Lagoon', desc: 'Teal and aqua colours flowing like warm water', base: '#031a1f',
+      html: blobs([['20,184,166', 'left:-25%;top:-15%;width:85%', 'bxM1 21s ease-in-out infinite alternate'], ['34,211,238', 'right:-25%;top:15%;width:85%', 'bxM2 25s ease-in-out infinite alternate'], ['59,130,246', 'left:-10%;bottom:-20%;width:85%', 'bxM3 29s ease-in-out infinite alternate'], ['52,211,153', 'right:-15%;bottom:-10%;width:70%', 'bxM1 33s ease-in-out infinite alternate-reverse']]) + '<i class="gg"></i>' },
+    { k: 'candy', glow: '244,114,182|96,165,250', name: 'Cotton candy', desc: 'Pink, lilac and sky blue melting softly together', base: '#140a1f',
+      html: blobs([['244,114,182', 'left:-25%;top:-15%;width:85%', 'bxM1 22s ease-in-out infinite alternate'], ['96,165,250', 'right:-25%;top:15%;width:85%', 'bxM2 26s ease-in-out infinite alternate'], ['192,132,252', 'left:-10%;bottom:-20%;width:85%', 'bxM3 30s ease-in-out infinite alternate'], ['253,164,175', 'right:-15%;bottom:-10%;width:70%', 'bxM1 34s ease-in-out infinite alternate-reverse']]) + '<i class="gg"></i>' },
+    { k: 'prism', glow: '168,85,247|34,211,238', name: 'Prism', desc: 'A soft rainbow of light turning slowly', base: '#08060f',
+      html: '<i class="pz"></i><i class="pz p2"></i><i class="vg"></i>' }
 ];
 var CSS = [
     '.bgx { overflow: hidden; } .bgx > i { position: absolute; display: block; pointer-events: none; }',
@@ -19553,6 +19578,28 @@ var CSS = [
     '.bgx-hills .h4 { right: -20%; width: 85%; height: 15%; bottom: -5%; background: #0a1d17; }',
     '.bgx-hills .mist { left: -20%; width: 140%; height: 11%; bottom: 24%; border-radius: 50%; background: linear-gradient(90deg, transparent, rgba(236,253,245,.18), transparent); animation: bxSlide 23s ease-in-out infinite alternate; }',
     '.bgx-hills .mist.lo { bottom: 11%; opacity: .8; animation-duration: 30s; animation-delay: -12s; }',
+    /* soft colour clouds and lights shared by the newer backgrounds */
+    '.bgx .bl { height: 62%; border-radius: 50%; mix-blend-mode: screen; opacity: .72; background: radial-gradient(closest-side, rgba(var(--c), .95), rgba(var(--c), .4) 55%, transparent); will-change: transform; }',
+    '.bgx .vg { inset: 0; background: radial-gradient(120% 90% at 50% 40%, transparent 50%, rgba(0,0,0,.45)); }',
+    '.bgx .gg { inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 40%, rgba(0,0,0,.35)); }',
+    '.bgx-neon .k, .bgx-golden .k { aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(var(--c), .6) 0%, rgba(var(--c), .3) 40%, rgba(var(--c), .08) 62%, transparent 70%); animation: bxFloat 14s ease-in-out infinite alternate; will-change: transform, opacity; }',
+    '@keyframes bxLava { 0% { transform: translate(0, 0) scale(1, 1); } 50% { transform: translate(6%, -35%) scale(.85, 1.15); } 100% { transform: translate(-4%, -70%) scale(1.1, .9); } }',
+    '.bgx-lava { background: radial-gradient(120% 90% at 50% 100%, #3a0a1c 0%, #12030f 70%); }',
+    '.bgx-neon { background: linear-gradient(180deg, #05051a 0%, #0f0a2e 55%, #2a0a35 100%); }',
+    '.bgx-neon .rn { inset: -10% 0 0 0; opacity: .35; background-image: repeating-linear-gradient(100deg, transparent 0 18px, rgba(165,243,252,.16) 18px 19px, transparent 19px 41px); background-size: 100% 220px; animation: bxRain 1.6s linear infinite; }',
+    '@keyframes bxRain { from { transform: translateY(-220px); } to { transform: translateY(0); } }',
+    '.bgx-neon .hz { left: -10%; width: 120%; bottom: -15%; height: 40%; border-radius: 50%; background: radial-gradient(closest-side, rgba(236,72,153,.35), transparent); }',
+    '.bgx-golden { background: linear-gradient(180deg, #0e0804 0%, #1f1208 55%, #2e1a0a 100%); }',
+    '.bgx-cosmic { background: radial-gradient(120% 90% at 50% 30%, #140a2e 0%, #070313 70%); }',
+    '.bgx-cosmic .bl { opacity: .6; }',
+    '.bgx-midnight { background: linear-gradient(180deg, #01030d 0%, #031027 60%, #04203a 100%); }',
+    '.bgx-midnight .bl { opacity: .58; }',
+    '.bgx-lagoon { background: #031a1f; }',
+    '.bgx-candy { background: #140a1f; }',
+    '.bgx-candy .bl { opacity: .6; }',
+    '.bgx-prism { background: #08060f; }',
+    '.bgx-prism .pz { left: -50%; top: 50%; width: 200%; aspect-ratio: 1; margin-top: -100%; border-radius: 50%; opacity: .55; background: conic-gradient(from 0deg, rgba(244,114,182,.8), rgba(251,146,60,.7), rgba(250,204,21,.6), rgba(52,211,153,.7), rgba(34,211,238,.8), rgba(99,102,241,.8), rgba(168,85,247,.8), rgba(244,114,182,.8)); -webkit-mask: radial-gradient(circle, #000 0%, rgba(0,0,0,.55) 28%, transparent 62%); mask: radial-gradient(circle, #000 0%, rgba(0,0,0,.55) 28%, transparent 62%); animation: bxSpin 70s linear infinite; will-change: transform; }',
+    '.bgx-prism .p2 { left: -10%; width: 120%; margin-top: -60%; opacity: .3; animation-duration: 45s; animation-direction: reverse; }',
     /* phones: a little lighter */
     '@media (hover: none), (pointer: coarse) { .bgx .bx-st.s2 { display: none; } }'
 ].join('\n');
@@ -19697,7 +19744,25 @@ function rnd(a, b) { return a + Math.random() * (b - a); }
 
 /* ---------- background ---------- */
 var BG = window.IncBgs || { list: [{ k: 'theme', name: 'Current', desc: '' }], has: function (k) { return k === 'theme'; }, get: function () { return null; }, html: function () { return ''; } };
-function bgMode() { var v = S('appBg', 'theme'); return BG.has(v) ? v : 'theme'; }
+/* A different background each time you open the app: tick a few, and each opening shows one of them (never the same one twice in a row).
+   The pick is kept for this visit (a restart keeps it), so it only changes when you open IncAtor again. */
+function rotList() { var l = S('bgRotateList', []); return Array.isArray(l) ? l.filter(function (k, i) { return BG.has(k) && l.indexOf(k) === i; }) : []; }
+function rotOn() { return S('bgRotate', false) === true && rotList().length >= 2; }
+var rotPick = null;
+function pickRot() {
+    var l = rotList(), k = null, lastK = null;
+    try { k = sessionStorage.getItem('incator:bgNow'); } catch (e) { k = null; }
+    if (k && l.indexOf(k) >= 0) return k;
+    try { lastK = localStorage.getItem('incator:bgLast'); } catch (e) { lastK = null; }
+    var c = l.filter(function (x) { return x !== lastK; }); k = c.length ? c[Math.floor(Math.random() * c.length)] : l[0];
+    try { sessionStorage.setItem('incator:bgNow', k); localStorage.setItem('incator:bgLast', k); } catch (e) { /* ignore */ }
+    return k;
+}
+function bgMode() {
+    if (rotOn()) { if (!rotPick || rotList().indexOf(rotPick) < 0) rotPick = pickRot(); return rotPick; }
+    var v = S('appBg', 'theme'); return BG.has(v) ? v : 'theme';
+}
+function setNow(k) { rotPick = k; try { sessionStorage.setItem('incator:bgNow', k); localStorage.setItem('incator:bgLast', k); } catch (e) { /* ignore */ } }
 function bgName(k) { var b = BG.get(k); return b ? b.name : 'Current'; }
 var sky = null, skyKind = '';
 function applyBg() {
@@ -19729,16 +19794,24 @@ function rgbOf(h, s2, l) {
 }
 function tone(c, l, sMul) { var x = hsl(c); return rgbOf(x[0], Math.max(0, Math.min(1, x[1] * (sMul || 1))), Math.max(0, Math.min(1, l))); }
 function hex(c) { return '#' + c.map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join(''); }
+// Buttons are filled with these colours and carry white text, so the fill colours are kept rich and mid-dark
+// (a pale background colour such as moonlight blue or sand becomes a deeper, more saturated shade of itself).
+function deep(c, l, sMin) {
+    var x = hsl(c), h = x[0], s2 = Math.max(sMin || 0.62, x[1]), deg = h * 360;
+    if (deg > 40 && deg < 75) { h = (deg - 8) / 360; l = Math.min(l, 0.47); }          // yellows: towards amber, a little darker
+    return rgbOf(h, Math.min(1, s2), Math.max(0.2, Math.min(0.6, l)));
+}
 function palette(k) {
     var b = BG.get(k); if (!b || !b.glow) return null;
-    var p = b.glow.split('|').map(function (x) { return x.split(',').map(Number); }), c1 = p[0], c2 = p[1] || p[0], L = hsl(c1)[2];
-    var t = function (c) { return c.join(', '); }, v = {};
-    v['--pr'] = t(c1); v['--pr2'] = t(tone(c1, Math.min(0.86, L + 0.12))); v['--pr3'] = t(tone(c1, L - 0.08)); v['--pr4'] = t(tone(c1, L + 0.02, 1.05)); v['--pr5'] = t(tone(c1, L - 0.16));
+    var p = b.glow.split('|').map(function (x) { return x.split(',').map(Number); }), c1 = p[0], c2 = p[1] || p[0];
+    var L = Math.max(0.42, Math.min(0.54, hsl(c1)[2])), L2 = Math.max(0.42, Math.min(0.54, hsl(c2)[2]));
+    var t = function (c) { return c.join(', '); }, v = {}, pr = deep(c1, L), pr2 = deep(c1, L + 0.07), pr3 = deep(c1, L - 0.08), acc = deep(c2, L2);
+    v['--pr'] = t(pr); v['--pr2'] = t(pr2); v['--pr3'] = t(pr3); v['--pr4'] = t(deep(c1, L + 0.02, 0.7)); v['--pr5'] = t(deep(c1, L - 0.16));
     v['--deep'] = t(tone(c1, 0.3, 0.75)); v['--deep2'] = t(tone(c1, 0.34, 0.8));
-    v['--ind'] = t(tone(c2, 0.5)); v['--ind2'] = t(tone(c2, 0.66)); v['--ind3'] = t(tone(c2, 0.58));
-    v['--lav'] = t(tone(c1, 0.84, 0.9)); v['--lav2'] = t(tone(c1, 0.93, 0.9)); v['--lav3'] = t(tone(c1, 0.9, 0.8)); v['--lav4'] = t(tone(c1, 0.84));
-    v['--acc'] = t(c2); v['--acc2'] = t(tone(c2, hsl(c2)[2] - 0.06, 1.05));
-    v['--primary'] = hex(c1); v['--primary-dark'] = hex(tone(c1, L - 0.08)); v['--secondary'] = hex(tone(c1, Math.min(0.86, L + 0.12))); v['--accent'] = hex(c2);
+    v['--ind'] = t(deep(c2, 0.45)); v['--ind2'] = t(deep(c2, 0.53)); v['--ind3'] = t(deep(c2, 0.49));
+    v['--lav'] = t(tone(c1, 0.84, 0.9)); v['--lav2'] = t(tone(c1, 0.93, 0.9)); v['--lav3'] = t(tone(c1, 0.9, 0.8)); v['--lav4'] = t(tone(c1, 0.84));   // light tints: only for text
+    v['--acc'] = t(acc); v['--acc2'] = t(deep(c2, L2 - 0.06, 0.7));
+    v['--primary'] = hex(pr); v['--primary-dark'] = hex(pr3); v['--secondary'] = hex(pr2); v['--accent'] = hex(acc);
     return v;
 }
 function varsText(v) { return Object.keys(v).map(function (n) { return n + ':' + v[n]; }).join(';'); }
@@ -19810,6 +19883,12 @@ function applyShoot() {
 /* ---------- Settings > Appearance ---------- */
 function paintSet() {
     Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-appbg]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-appbg') === bgMode())); });
+    var ro = S('bgRotate', false) === true, rl = rotList(), sbk = document.getElementById('sky-block');
+    if (sbk) sbk.classList.toggle('rot-on', ro);
+    var rt = document.getElementById('rot-toggle'); if (rt) { rt.classList.toggle('active', ro); rt.setAttribute('aria-checked', String(ro)); }
+    Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-bgrot]'), function (b) { var on = rl.indexOf(b.getAttribute('data-bgrot')) >= 0; b.setAttribute('aria-pressed', String(on)); b.closest('.sky-cell').classList.toggle('in-rot', ro && on); });
+    var rn = document.getElementById('rot-note');
+    if (rn) rn.textContent = !ro ? 'Each time you open IncAtor, show one of the backgrounds you tick (a different one each time).' : rl.length < 2 ? 'Tick at least 2 backgrounds below (the round tick on each picture).' : rl.length + ' ticked. Each time you open IncAtor you get one of them, never the same twice in a row. Now showing: ' + bgName(bgMode()) + '.';
     Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-glow]'), function (b) { b.setAttribute('aria-pressed', String((b.getAttribute('data-glow') === 'match') === glowOn())); });
     var gn = document.getElementById('glow-note');
     if (gn) gn.textContent = !glowOn() ? 'Glows, card edges and highlights keep your theme\'s colours.' : bgMode() === 'theme' || !palette(bgMode()) ? 'Pick a background below and the glows across the app take its colours.' : 'Glows, card edges and highlights take the colours of ' + bgName(bgMode()) + '.';
@@ -19819,7 +19898,22 @@ function paintSet() {
     var n = document.getElementById('shoot-note'); if (n) n.textContent = !shootOn() ? '' : saver() ? 'Battery Saver is on, so they rest for now.' : hiddenTheme() ? 'This theme keeps the background plain, so they are hidden.' : reduced() ? 'Your device asks for less motion, so they are hidden.' : '';
     try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* ignore */ }
 }
-function choose(k) { save('appBg', BG.has(k) ? k : 'theme'); applyBg(); if (window.showToast) showToast(bgMode() === 'theme' ? 'Back to your theme\'s background' : bgName(bgMode()) + ' is now the background', 'success'); }
+function toggleRot(k) {
+    var l = rotList(), i = l.indexOf(k); if (i >= 0) l.splice(i, 1); else l.push(k);
+    save('bgRotateList', l);
+    if (rotOn() && l.indexOf(bgMode()) < 0) { setNow(l[0]); }
+    applyBg();
+}
+function setRotate(on) {
+    var l = rotList();
+    if (on && l.indexOf(bgMode()) < 0) { l.unshift(bgMode()); save('bgRotateList', l); }   // start with the one you have now
+    if (on) setNow(bgMode()); else { save('appBg', bgMode()); rotPick = null; }               // turning it off keeps the one on screen
+    save('bgRotate', !!on); applyBg();
+}
+function choose(k) {
+    k = BG.has(k) ? k : 'theme';
+    if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); }
+    save('appBg', k); applyBg(); if (window.showToast) showToast(bgMode() === 'theme' ? 'Back to your theme\'s background' : bgName(bgMode()) + ' is now the background', 'success'); }
 /* full-screen preview: the background moving, with a few sample cards in its glow, before you choose it */
 var pvEl = null, pvKey = '', pvBack = null;
 function closePreview() {
@@ -19866,14 +19960,17 @@ function inject() {
     bx.innerHTML = '<p class="setting-description" style="margin:0 0 10px;">Pick the background for every page. The chosen one moves in its preview. Tap the eye to see one full screen first.</p>' +
         '<div class="setting-item" id="glow-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-palette"></i></div><div class="setting-content"><h4 class="setting-title">Glow colour</h4><p class="setting-description" id="glow-note"></p></div></div>' +
         '<div class="setting-control"><span class="nm-seg" role="group" aria-label="Glow colour"><button type="button" data-glow="match">Match background</button><button type="button" data-glow="theme">Theme colours</button></span></div></div>' +
+        '<div class="setting-item" id="rot-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sync-alt"></i></div><div class="setting-content"><h4 class="setting-title">A different one each time</h4><p class="setting-description" id="rot-note"></p></div></div>' +
+        '<div class="setting-control"><div class="magic-toggle" id="rot-toggle" role="switch" tabindex="0" aria-label="A different background each time you open IncAtor"><div class="toggle-orb"></div></div></div></div>' +
         '<div class="sky-opts">' +
         BG.list.map(function (b) {
             var pv = b.k === 'theme' ? '<span class="sky-pv theme"></span>' : b.k === 'sky' ? '<span class="sky-pv sky"><i></i><i></i><i></i></span>' : '<span class="sky-pv bgx bgx-' + b.k + '">' + BG.html(b.k) + '</span>';
-            var dots = b.glow ? '<span class="sky-dots">' + b.glow.split('|').map(function (c) { return '<i style="background:rgb(' + c + ')"></i>'; }).join('') + '</span>' : '';
+            var pal = palette(b.k), dots = pal ? '<span class="sky-dots"><i style="background:rgb(' + pal['--pr'] + ')"></i><i style="background:rgb(' + pal['--acc'] + ')"></i></span>' : '';
             return '<div class="sky-cell"><button type="button" class="sky-opt" data-appbg="' + b.k + '">' + pv + '<b>' + b.name + dots + '</b><small>' + b.desc + '</small></button>' +
-                (b.k === 'theme' ? '' : '<button type="button" class="sky-pvb" data-bgpv="' + b.k + '" aria-label="Preview ' + b.name + ' full screen" title="Preview"><i class="fas fa-eye"></i></button>') + '</div>';
+                (b.k === 'theme' ? '' : '<button type="button" class="sky-pvb" data-bgpv="' + b.k + '" aria-label="Preview ' + b.name + ' full screen" title="Preview"><i class="fas fa-eye"></i></button>') +
+                '<button type="button" class="sky-rot" data-bgrot="' + b.k + '" aria-label="Use ' + b.name + ' in the rotation" title="In the rotation"><i class="fas fa-check"></i></button></div>';
         }).join('') + '</div>';
-    IncApMenu.add(['background', 'Background', 'image', function () { return bgMode() === 'theme' ? 'Current (theme)' : bgName(bgMode()); }], bx);
+    IncApMenu.add(['background', 'Background', 'image', function () { return rotOn() ? 'A different one each time (' + rotList().length + ')' : bgMode() === 'theme' ? 'Current (theme)' : bgName(bgMode()); }], bx);
     var hb = document.createElement('div'); hb.id = 'hdr-block'; hb.className = 'space-y-6';
     hb.innerHTML = '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">Space above the header</h4><p class="setting-description">On a phone: how far the greeting at the top sits from the top of the screen (below the clock and battery). Less space shows more of the page. <span id="hdr-note"></span></p></div></div>' +
         '<div class="setting-control"><div class="bub-ctl"><button type="button" class="bub-step" data-hdr="-2" aria-label="Less space">&minus;</button><input type="range" id="hdr-top" min="-20" max="80" step="2" aria-label="Space above the header"><button type="button" class="bub-step" data-hdr="2" aria-label="More space">+</button><output class="bub-val" id="hdr-top-val"></output></div></div></div>' +
@@ -19899,9 +19996,12 @@ function inject() {
     if (it2 && st) st.parentNode.insertBefore(it2, st.nextSibling);                       // right under Rising stars
     bx.addEventListener('click', function (e) {
         var pvb = e.target.closest('[data-bgpv]'); if (pvb) { preview(pvb.getAttribute('data-bgpv')); return; }
+        var rb = e.target.closest('[data-bgrot]'); if (rb) { toggleRot(rb.getAttribute('data-bgrot')); return; }
+        if (e.target.closest('#rot-toggle')) { setRotate(!(S('bgRotate', false) === true)); if (window.showToast) showToast(S('bgRotate', false) === true ? 'Tick the backgrounds you like: one of them each time you open IncAtor' : 'One background again: ' + bgName(bgMode()), 'success'); return; }
         var g = e.target.closest('[data-glow]'); if (g) { save('glowMatch', g.getAttribute('data-glow') === 'match'); applyGlow(); paintSet(); if (window.showToast) showToast(glowOn() ? 'Glows now match the background' : 'Glows use your theme colours', 'success'); return; }
         var b = e.target.closest('[data-appbg]'); if (!b) return; choose(b.getAttribute('data-appbg'));
     });
+    bx.addEventListener('keydown', function (e) { if (e.target.id === 'rot-toggle' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
     sb.addEventListener('click', function (e) { if (e.target.closest('#shoot-toggle')) { save('shootOn', !shootOn()); applyShoot(); if (shootOn()) spawn(); if (window.showToast) showToast(shootOn() ? 'Shooting stars on' : 'Shooting stars off', 'info'); } });
     sb.addEventListener('keydown', function (e) { if (e.target.id === 'shoot-toggle' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
     sb.addEventListener('input', function (e) { if (e.target.id === 'shoot-rate') { var v = parseInt(e.target.value, 10); try { appSettings.shootRate = v; } catch (er) { /* ignore */ } var o = document.getElementById('shoot-rate-val'); if (o) o.textContent = v; } });
@@ -19947,7 +20047,12 @@ css.textContent = [
     '.sky-pvb { position: absolute; top: 15px; right: 15px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.35); background: rgba(10,6,24,.45); color: #fff; font-size: 14px; cursor: pointer; -webkit-appearance: none; appearance: none; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 4px 12px rgba(0,0,0,.3); transition: transform .15s, background .2s; -webkit-tap-highlight-color: transparent; }',
     '.sky-pvb:hover { background: rgba(255,255,255,.22); } .sky-pvb:active { transform: scale(.9); } .sky-pvb:focus-visible { outline: 2px solid rgb(var(--acc)); outline-offset: 2px; }',
     '.sky-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; } .sky-dots i { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 6px currentColor, inset 0 0 0 1px rgba(255,255,255,.35); }',
-    '#glow-item { margin-bottom: 12px; }',
+    '#glow-item, #rot-item { margin-bottom: 12px; }',
+    '.sky-rot { display: none; position: absolute; top: 15px; left: 15px; width: 30px; height: 30px; border-radius: 50%; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,.75); background: rgba(10,6,24,.45); color: transparent; font-size: 13px; cursor: pointer; -webkit-appearance: none; appearance: none; box-shadow: 0 3px 10px rgba(0,0,0,.35); transition: transform .15s, background .2s; -webkit-tap-highlight-color: transparent; }',
+    '#sky-block.rot-on .sky-rot { display: flex; }',
+    '.sky-rot[aria-pressed="true"] { background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))); border-color: #fff; color: #fff; }',
+    '.sky-rot:active { transform: scale(.88); } .sky-rot:focus-visible { outline: 2px solid rgb(var(--acc)); outline-offset: 2px; }',
+    '#sky-block.rot-on .sky-cell.in-rot > .sky-opt { border-color: rgba(var(--acc), .55); }',
     /* the full-screen preview */
     '.bgpv { position: fixed; inset: 0; z-index: 2147483000; opacity: 0; transition: opacity .25s ease; background: #05030d; overflow: hidden; }',
     '.bgpv.on { opacity: 1; }',
@@ -19983,7 +20088,7 @@ css.textContent = [
     '@media (max-width: 700px) { html.hdr-set body[data-pg] #main-header { padding-top: max(0px, var(--hdr-top, 14px)) !important; margin-top: min(0px, var(--hdr-top, 14px)) !important; } }'
 ].join('\n');
 document.head.appendChild(css);
-window.IncSky = { header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { save('appBg', BG.has(v) ? v : 'theme'); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, glow: function (v) { if (v !== undefined) { save('glowMatch', !!v); applyGlow(); paintSet(); } return glowOn(); }, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
+window.IncSky = { header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, glow: function (v) { if (v !== undefined) { save('glowMatch', !!v); applyGlow(); paintSet(); } return glowOn(); }, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
 function boot() {
     applyBg(); applyShoot(); applyHdr();
     var n = 0, tm = setInterval(function () { if (inject() || ++n > 80) clearInterval(tm); }, 250);
