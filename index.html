@@ -14286,6 +14286,10 @@ var Lens = (function () {
             var c = ch.cloneNode(leaf);
             if (!leaf) Array.prototype.forEach.call(ch.childNodes, function (n) { if (n.nodeType === 3 && n.textContent.trim()) leaf = true; });   // mixed text: copy whole
             if (leaf && !c.firstChild && ch.firstChild) c = ch.cloneNode(true);
+            if (leaf && c.querySelectorAll) {                                                  // closed Settings sections: their hidden contents are not copied (they can be huge)
+                Array.prototype.forEach.call(c.querySelectorAll('.acc-section:not(.acc-open) > .acc-body, [hidden]'), function (e) { e.remove(); });
+                if (c.classList && c.classList.contains('acc-section') && !c.classList.contains('acc-open')) { var hb = c.querySelector(':scope > .acc-body'); if (hb) hb.remove(); }
+            }
             pin(c, (r.left - pr.left - bl) / Z, (r.top - pr.top - bt) / Z, r.width / Z, r.height / Z);
             cParent.appendChild(c);
             if (!leaf) flatten(ch, c, r, lo, hi, depth + 1);
@@ -19573,6 +19577,9 @@ var ROOF1 = houses(6, 90, 52, 66), ROOF2 = houses(5, 100, 60, 74), WAVE1 = wave(
 function falling(n, cls, k0, extra) {
     return rep(n, function (i) { return '<i class="' + cls + ' v' + (1 + i % 4) + '" style="left:' + (rnd(i, k0) * 100).toFixed(1) + '%;--dx:' + ((rnd(i, k0 + 1) - 0.5) * 30).toFixed(1) + 'vw;--r:' + Math.round((rnd(i, k0 + 2) - 0.5) * 900) + 'deg;' + (extra ? extra(i) : '') + 'animation-duration:' + (9 + rnd(i, k0 + 3) * 9).toFixed(1) + 's;animation-delay:-' + (rnd(i, k0 + 4) * 16).toFixed(1) + 's"></i>'; });
 }
+// drifting clouds: puffy soft shapes that cross the whole screen slowly, each at its own height, size and speed
+var CLOUDS = '<i class="cd d1" style="top:6%;animation-delay:-14s"></i><i class="cd d2" style="top:17%;animation-delay:-52s"></i><i class="cd d3" style="top:27%;animation-delay:-31s"></i><i class="cd d1 sm" style="top:37%;animation-delay:-63s"></i><i class="cd d2" style="top:2%;animation-delay:-88s"></i>';
+var CLOUDS2 = '<i class="cd d3 lo" style="top:12%;animation-delay:-75s"></i><i class="cd d2 lo" style="top:31%;animation-delay:-9s"></i><i class="cd d1 lo" style="top:44%;animation-delay:-40s"></i>';
 var LIST = [
     { k: 'theme', name: 'Current', desc: 'Your theme\'s own background' },
     { k: 'sky', glow: '167,139,250|34,211,238', name: 'Sign-in sky', desc: 'The aurora and stars from the sign-in screen', base: '#0b0420',
@@ -19638,6 +19645,12 @@ var LIST = [
       html: lights(10, ['245,158,11', '251,191,36', '96,165,250', '244,114,182', '52,211,153'], 120, 10, 24) + '<i class="fog"></i><i class="rn"></i>' + rep(14, function (i) { return '<i class="dp" style="left:' + (rnd(i, 130) * 96).toFixed(1) + '%;top:' + (rnd(i, 131) * 70 - 10).toFixed(1) + '%;width:' + (0.9 + rnd(i, 132) * 1.6).toFixed(2) + '%;animation-duration:' + (6 + rnd(i, 133) * 9).toFixed(1) + 's;animation-delay:-' + (rnd(i, 134) * 12).toFixed(1) + 's"></i>'; }) },
     { k: 'storm', glow: '129,140,248|56,189,248', name: 'Thunderstorm', desc: 'Dark clouds and a flash of lightning now and then', base: '#05070d',
       html: '<i class="cl c1"></i><i class="cl c2"></i><i class="cl c3"></i><i class="bolt"></i><i class="fl"></i><i class="rn"></i><i class="cl c4"></i>' },
+    { k: 'partly', glow: '96,165,250|253,224,71', name: 'Partly cloudy', desc: 'Sunshine with white clouds drifting across a blue sky', base: '#0f2a5a',
+      html: '<i class="sun"></i>' + CLOUDS + '<i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i>' },
+    { k: 'overcast', glow: '148,163,184|125,211,252', name: 'Cloudy day', desc: 'A grey sky full of slow, rolling clouds', base: '#1f2937',
+      html: '<i class="lt"></i>' + CLOUDS + CLOUDS2 + '<i class="hl h1"></i><i class="hl h2"></i>' },
+    { k: 'cloudnight', glow: '165,180,252|148,163,184', name: 'Cloudy night', desc: 'The moon and stars peeking between drifting clouds', base: '#070b18',
+      html: STARS + '<i class="moon"></i>' + CLOUDS + '<i class="hl h1"></i><i class="hl h2"></i>' },
     { k: 'rooftops', glow: '251,146,60|244,63,94', name: 'Sunrise over rooftops', desc: 'Houses and chimneys against a warm morning sky', base: '#1e1b4b',
       html: '<i class="sun"></i><i class="haze"></i><i class="rf r1"></i><i class="rf r2"></i><i class="smk"></i><i class="smk s2"></i>' },
     { k: 'snowpines', glow: '56,189,248|52,211,153', name: 'Northern forest', desc: 'Snow-covered pines with snow drifting down', base: '#071426',
@@ -19856,6 +19869,25 @@ var CSS = [
     '.bgx-rain .dp { aspect-ratio: .8; border-radius: 50% 50% 46% 46% / 40% 40% 60% 60%; background: radial-gradient(circle at 38% 30%, rgba(255,255,255,.85) 0 9%, rgba(226,232,240,.3) 32%, rgba(148,163,184,.14) 60%, rgba(255,255,255,.08) 70%, transparent 74%); box-shadow: inset 0 -1px 2px rgba(255,255,255,.25), 0 2px 3px rgba(0,0,0,.25); animation: bxDrop 9s cubic-bezier(.6,0,.9,.6) infinite; will-change: transform; }',
     '@keyframes bxDrop { 0%, 30% { transform: translate(0, 0); } 100% { transform: translate(1vw, 115vh); } }',
     /* thunderstorm */
+    '.bgx .cd { --cc: 255,255,255; left: -46%; width: 46%; aspect-ratio: 2.4; will-change: transform; background: radial-gradient(28% 42% at 28% 62%, rgba(var(--cc),.92) 0%, rgba(var(--cc),.78) 45%, rgba(var(--cc),0) 100%), radial-gradient(26% 50% at 48% 42%, rgba(var(--cc),.95) 0%, rgba(var(--cc),.8) 45%, rgba(var(--cc),0) 100%), radial-gradient(24% 40% at 69% 58%, rgba(var(--cc),.9) 0%, rgba(var(--cc),.74) 45%, rgba(var(--cc),0) 100%), radial-gradient(50% 26% at 50% 76%, rgba(var(--cc),.85) 0%, rgba(var(--cc),.6) 50%, rgba(var(--cc),0) 100%); animation: bxCd1 95s linear infinite; }',
+    '.bgx .cd.d2 { left: -34%; width: 34%; animation-name: bxCd2; animation-duration: 120s; } .bgx .cd.d3 { left: -58%; width: 58%; animation-name: bxCd3; animation-duration: 80s; } .bgx .cd.sm { opacity: .75; animation-duration: 140s; }',
+    '@keyframes bxCd1 { from { transform: translate3d(0,0,0); } to { transform: translate3d(320%,0,0); } }',
+    '@keyframes bxCd2 { from { transform: translate3d(0,0,0); } to { transform: translate3d(400%,0,0); } }',
+    '@keyframes bxCd3 { from { transform: translate3d(0,0,0); } to { transform: translate3d(280%,0,0); } }',
+    '.bgx-partly { background: linear-gradient(180deg, #0b2148 0%, #17427a 32%, #33699f 56%, #7aa3c4 72%, #1f3d34 100%); }',
+    '.bgx-partly .sun { right: 8%; top: 6%; width: 34%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(254,249,195,.95) 0%, rgba(253,224,71,.45) 18%, rgba(253,224,71,.1) 42%, transparent 66%); animation: bxPulse 9s ease-in-out infinite alternate; }',
+    '.bgx-partly .cd { --cc: 248,250,252; }',
+    '.bgx-partly .hl, .bgx-overcast .hl, .bgx-cloudnight .hl { border-radius: 50% 50% 0 0 / 100% 100% 0 0; }',
+    '.bgx-partly .h1 { left: -25%; width: 90%; height: 30%; bottom: -4%; background: linear-gradient(180deg, #3f7a5e, #24493a); } .bgx-partly .h2 { right: -30%; width: 100%; height: 25%; bottom: -6%; background: linear-gradient(180deg, #2b5e47, #18372b); } .bgx-partly .h3 { left: -15%; width: 80%; height: 16%; bottom: -6%; background: #10261d; }',
+    '.bgx-overcast { background: linear-gradient(180deg, #111827 0%, #2b3442 34%, #4b5563 62%, #6b7280 76%, #1f2a2a 100%); }',
+    '.bgx-overcast .lt { inset: 0 0 40% 0; background: radial-gradient(70% 60% at 65% 10%, rgba(226,232,240,.22), transparent 70%); animation: bxPulse 12s ease-in-out infinite alternate; }',
+    '.bgx-overcast .cd { --cc: 156,163,175; } .bgx-overcast .cd.lo { --cc: 100,110,124; opacity: .9; }',
+    '.bgx-overcast .h1 { left: -25%; width: 90%; height: 26%; bottom: -4%; background: linear-gradient(180deg, #34463f, #1f2d28); } .bgx-overcast .h2 { right: -30%; width: 100%; height: 20%; bottom: -6%; background: #141f1b; }',
+    '.bgx-cloudnight { background: linear-gradient(180deg, #050816 0%, #0d1530 40%, #1b2440 70%, #0b1020 100%); }',
+    '.bgx-cloudnight .bx-st { -webkit-mask: linear-gradient(#000 35%, transparent 75%); mask: linear-gradient(#000 35%, transparent 75%); }',
+    '.bgx-cloudnight .moon { right: 16%; top: 9%; width: 12%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 42% 40%, #f8fafc 0%, #e2e8f0 45%, rgba(226,232,240,0) 72%); box-shadow: 0 0 60px 18px rgba(226,232,240,.14); animation: bxPulse 8s ease-in-out infinite alternate; }',
+    '.bgx-cloudnight .cd { --cc: 71,85,105; opacity: .92; }',
+    '.bgx-cloudnight .h1 { left: -25%; width: 90%; height: 24%; bottom: -4%; background: linear-gradient(180deg, #1e293b, #0f172a); } .bgx-cloudnight .h2 { right: -30%; width: 100%; height: 18%; bottom: -6%; background: #080d1a; }',
     '.bgx-storm { background: linear-gradient(180deg, #0b0f1a 0%, #111827 45%, #1f2937 100%); }',
     '.bgx-storm .cl { height: 34%; border-radius: 50%; background: radial-gradient(closest-side, rgba(75,85,99,.9), rgba(55,65,81,.5) 60%, transparent); animation: bxStorm 14s ease-in-out infinite alternate; will-change: transform; }',
     '@keyframes bxStorm { from { transform: translateX(-12%) scale(1); } to { transform: translateX(12%) scale(1.08); } }',
@@ -19985,6 +20017,7 @@ function make() {                                                        // one 
 function size() { H = window.innerHeight || 800; if (cv) cv.style.setProperty('--rsH', H + 'px'); }
 function fill() {
     var n = LEVELS[level()]; if (phone()) n = Math.round(n * 0.75);
+    if (cv && cv.childElementCount !== stars.length) stars = Array.prototype.slice.call(cv.children);   // what is really on screen
     if (stars.length > n) { stars.splice(n).forEach(function (e) { e.remove(); }); }
     if (stars.length < n) { var f = document.createDocumentFragment(); while (stars.length < n) { var e = make(); stars.push(e); f.appendChild(e); } cv.appendChild(f); }
 }
@@ -20049,7 +20082,7 @@ function inject() {
     if (item && bub && bub.nextSibling !== item) bub.parentNode.insertBefore(item, bub.nextSibling);   // right under Bubbles
     box.addEventListener('click', function (e) {
         if (e.target.closest('#stars-toggle')) { save('starsOn', !on()); apply(); if (window.showToast) showToast(on() ? 'Rising stars on' : 'Rising stars off', 'info'); return; }
-        var b = e.target.closest('[data-stars]'); if (b && !b.disabled) { save('starsAmount', b.getAttribute('data-stars')); stars = []; apply(); }
+        var b = e.target.closest('[data-stars]'); if (b && !b.disabled) { save('starsAmount', b.getAttribute('data-stars')); apply(); }   // fill() adds or takes away stars to match (the old ones are never left behind)
     });
     box.addEventListener('keydown', function (e) { if (e.target.id === 'stars-toggle' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
     paint(); return true;
@@ -20058,7 +20091,7 @@ var css = document.createElement('style'); css.id = 'stars-css';
 css.textContent = ".fa-star { --ic: url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%202l3.1%206.3%206.9%201-5%204.9%201.2%206.8L12%2017.8%205.8%2021l1.2-6.8-5-4.9%206.9-1z'/%3E%3C/svg%3E\"); }" +
     '#stars-block [data-stars]:disabled { opacity: .45; cursor: default; }';
 document.head.appendChild(css);
-window.IncStars = { on: on, set: function (v) { save('starsOn', !!v); apply(); }, amount: function (v) { if (v) { save('starsAmount', v); if (cv) cv.textContent = ''; stars = []; apply(); } return level(); }, apply: apply, count: function () { return cv && cv.style.display !== 'none' ? stars.length : 0; }, running: function () { return running; } };
+window.IncStars = { on: on, set: function (v) { save('starsOn', !!v); apply(); }, amount: function (v) { if (v) { save('starsAmount', v); apply(); } return level(); }, apply: apply, count: function () { return cv && cv.style.display !== 'none' ? stars.length : 0; }, running: function () { return running; } };
 function boot() {
     apply();
     var n = 0, tm = setInterval(function () { if (inject() || ++n > 80) clearInterval(tm); }, 250);
@@ -20091,6 +20124,7 @@ function kind(code) {                                                   // what 
     if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
     if (code === 45 || code === 48) return 'fog';
     if (code === 3) return 'cloud';
+    if (code === 1 || code === 2) return 'partly';
     return 'clear';
 }
 function j(url) { return fetch(url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); }
@@ -20188,8 +20222,8 @@ function seasonBg(now) { var m = (now || new Date()).getMonth(); return m >= 2 &
 function weatherBg() {
     var w = window.IncWx ? IncWx.get() : null;
     if (!w || !w.kind) return timeBg();
-    var night = w.isDay === false;
-    return { storm: 'storm', snow: 'snowpines', rain: 'rain', fog: 'pines', cloud: night ? 'midnight' : 'pines', clear: night ? 'peaks' : timeBg() === 'sunset' ? 'sunset' : 'hills' }[w.kind] || timeBg();
+    var night = w.isDay === false, kd = w.code != null && IncWx.kind ? IncWx.kind(w.code) : w.kind;     // worked out again, so weather saved by an older version shows right too
+    return { storm: 'storm', snow: 'snowpines', rain: 'rain', fog: 'pines', cloud: night ? 'cloudnight' : 'overcast', partly: night ? 'cloudnight' : 'partly', clear: night ? 'peaks' : timeBg() === 'sunset' ? 'sunset' : 'hills' }[kd] || timeBg();
 }
 function resolve(k) { return k === 'auto-time' ? timeBg() : k === 'auto-season' ? seasonBg() : k === 'auto-weather' ? weatherBg() : k; }
 function bgChoice() {                                                  // what you picked (may be an automatic one)
@@ -20415,7 +20449,7 @@ function closePreview() {
 function pvKeys(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePreview(); } }
 /* the slider in the preview of the automatic backgrounds: try any hour, month or weather */
 var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-var WXS = [['Clear day', 'hills'], ['Clear night', 'peaks'], ['Cloudy', 'pines'], ['Fog', 'pines'], ['Rain', 'rain'], ['Snow', 'snowpines'], ['Thunderstorm', 'storm']];
+var WXS = [['Clear day', 'hills'], ['Clear night', 'peaks'], ['Partly cloudy', 'partly'], ['Cloudy', 'overcast'], ['Cloudy night', 'cloudnight'], ['Fog', 'pines'], ['Rain', 'rain'], ['Snow', 'snowpines'], ['Thunderstorm', 'storm']];
 var PART = { rooftops: 'Morning', hills: 'Daytime', sunset: 'Evening', peaks: 'Night' };
 function hourText(h) { var ap = h < 12 ? 'AM' : 'PM', hh = h % 12 === 0 ? 12 : h % 12; return hh + ':00 ' + ap; }
 function slideModel(k) {
@@ -20423,8 +20457,8 @@ function slideModel(k) {
     if (k === 'auto-time') return { min: 0, max: 23, val: now.getHours(), lab: ['12 AM', '12 PM', '11 PM'], at: function (v) { var d = new Date(now); d.setHours(v, 0, 0, 0); var r = timeBg(d); return { bg: r, text: hourText(v) + ' · ' + (PART[r] || '') + ': ' + bgName(r) }; } };
     if (k === 'auto-season') return { min: 0, max: 11, val: now.getMonth(), lab: ['Jan', 'Jun', 'Dec'], at: function (v) { var r = seasonBg(new Date(now.getFullYear(), v, 15)); return { bg: r, text: MONTHS[v] + ' · ' + bgName(r) }; } };
     var w = window.IncWx ? IncWx.get() : null, i0 = 0;
-    if (w && w.kind) i0 = { clear: w.isDay === false ? 1 : 0, cloud: 2, fog: 3, rain: 4, snow: 5, storm: 6 }[w.kind] || 0;
-    return { min: 0, max: WXS.length - 1, val: i0, lab: ['Clear', 'Rain', 'Storm'], at: function (v) { var x = WXS[v]; return { bg: x[1], text: x[0] + ' · ' + bgName(x[1]) }; } };
+    if (w && w.kind) { var kd = w.code != null && IncWx.kind ? IncWx.kind(w.code) : w.kind, nt = w.isDay === false; i0 = { clear: nt ? 1 : 0, partly: nt ? 4 : 2, cloud: nt ? 4 : 3, fog: 5, rain: 6, snow: 7, storm: 8 }[kd] || 0; }
+    return { min: 0, max: WXS.length - 1, val: i0, lab: ['Clear', 'Cloudy', 'Storm'], at: function (v) { var x = WXS[v]; return { bg: x[1], text: x[0] + ' · ' + bgName(x[1]) }; } };
 }
 function preview(k) {
     var auto = isAuto(k), rk = auto ? resolve(k) : k, b0 = BG.get(rk); if (!b0) return;
@@ -20436,7 +20470,7 @@ function preview(k) {
     el.innerHTML = bgHtml +
         '<div class="bgpv-ui"' + (v ? ' style="' + varsText(v) + '"' : '') + '>' +
             '<div class="bgpv-top"><span class="bgpv-tag"><i class="fas fa-eye"></i> Preview</span><b>' + b.name + '</b><small>' + b.desc + '</small></div>' +
-            (auto ? (function () { var m = slideModel(k); return '<div class="bgpv-slide"><output id="bgpv-out">' + m.at(m.val).text + '</output><input type="range" id="bgpv-range" min="' + m.min + '" max="' + m.max + '" step="1" value="' + m.val + '" aria-label="Try ' + b.name + '"><div class="bgpv-labs"><span>' + m.lab[0] + '</span><span>' + m.lab[1] + '</span><span>' + m.lab[2] + '</span></div><small>Slide to see how it changes. Now: ' + m.at(m.val).text.split(' · ').pop() + '</small></div>'; })() : '') +
+            (auto ? (function () { var m = slideModel(k), first = k === 'auto-weather' && !(window.IncWx && IncWx.get() && IncWx.get().kind) ? 'No weather yet · ' + b0.name : m.at(m.val).text; return '<div class="bgpv-slide"><output id="bgpv-out">' + first + '</output><input type="range" id="bgpv-range" min="' + m.min + '" max="' + m.max + '" step="1" value="' + m.val + '" aria-label="Try ' + b.name + '"><div class="bgpv-labs"><span>' + m.lab[0] + '</span><span>' + m.lab[1] + '</span><span>' + m.lab[2] + '</span></div><small>Slide to see how it changes. Now: ' + first.split(' · ').pop() + '</small></div>'; })() : '') +
             '<div class="bgpv-cards">' +
                 '<div class="bgpv-card big"><span class="bgpv-ic"><i class="fas fa-plus"></i></span><div><b>New Entry</b><small>How buttons and cards glow</small></div></div>' +
                 '<div class="bgpv-row"><div class="bgpv-card"><span class="bgpv-ic a"><i class="fas fa-folder-open"></i></span><b>Entries</b></div><div class="bgpv-card"><span class="bgpv-ic b"><i class="fas fa-chart-pie"></i></span><b>Analytics</b></div></div>' +
@@ -20482,7 +20516,8 @@ function inject() {
         '<h4 class="sky-gh"><i class="fas fa-magic"></i> Automatic</h4><div class="sky-opts sky-auto">' +
         AUTO.map(function (a) { var r = resolve(a.k);
             return '<div class="sky-cell"><button type="button" class="sky-opt" data-appbg="' + a.k + '"><span class="sky-pv bgx bgx-' + r + '" data-r="' + r + '">' + BG.html(r) + '</span><span class="sky-auto-ic"><i class="fas fa-' + a.icon + '"></i></span><b>' + a.name + '</b><small>' + a.desc + '</small><em class="sky-now" data-autonow="' + a.k + '"></em></button>' +
-                '<button type="button" class="sky-pvb" data-bgpv="' + a.k + '" aria-label="Preview ' + a.name + ' full screen" title="Preview"><i class="fas fa-eye"></i></button></div>';
+                '<button type="button" class="sky-pvb" data-bgpv="' + a.k + '" aria-label="Preview ' + a.name + ' full screen" title="Preview"><i class="fas fa-eye"></i></button>' +
+                '<button type="button" class="sky-try" data-bgpv="' + a.k + '"><i class="fas fa-sliders-h"></i> Preview &amp; slide</button></div>';
         }).join('') + '</div><h4 class="sky-gh"><i class="fas fa-image"></i> Pick one</h4>' +
         '<div class="sky-opts">' +
         BG.list.map(function (b) {
@@ -20583,6 +20618,8 @@ css.textContent = [
     '#glow-item { flex-wrap: wrap; }',
     '.sky-gh { display: flex; align-items: center; gap: 8px; margin: 16px 2px 10px; font-size: .78rem; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: rgba(255,255,255,.7); }',
     '.sky-auto .sky-opt { position: relative; } .sky-auto-ic { position: absolute; top: 16px; left: 16px; width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))); box-shadow: 0 4px 12px rgba(0,0,0,.35); }',
+    '.sky-auto .sky-opt { padding-bottom: 58px !important; } .sky-try { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 10px; border-radius: 12px; border: 1px solid rgba(var(--pr), .5); background: rgba(var(--pr), .16); color: #fff; font: 700 .8rem var(--font, inherit); cursor: pointer; -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; } .sky-try:active { transform: scale(.97); }',
+    'html.lm .sky-try { color: #3b0764; }',
     '.sky-now { font-style: normal; font-size: .72rem; font-weight: 700; color: rgb(var(--acc)); margin-top: 2px; }',
     '.sky-rot { display: none; position: absolute; top: 15px; left: 15px; width: 30px; height: 30px; border-radius: 50%; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,.75); background: rgba(10,6,24,.45); color: transparent; font-size: 13px; cursor: pointer; -webkit-appearance: none; appearance: none; box-shadow: 0 3px 10px rgba(0,0,0,.35); transition: transform .15s, background .2s; -webkit-tap-highlight-color: transparent; }',
     '#sky-block.rot-on .sky-rot { display: flex; }',
@@ -20595,6 +20632,8 @@ css.textContent = [
     'html.bgpv-open, html.bgpv-open body { overflow: hidden !important; }',
     '.bgpv-bg { position: absolute; inset: 0; }',
     '.bgpv-bg.bgx-sky { background: radial-gradient(120% 80% at 50% 110%, #1e0b4b 0%, #0b0420 55%, #05010d 100%); }',
+    '.bgpv-ui > * { flex-shrink: 0; }',
+    '.bgpv-ui { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }',
     '.bgpv-ui { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(env(safe-area-inset-bottom, 0px) + 18px); color: #fff; font-family: var(--font, inherit); max-width: 560px; margin: 0 auto; }',
     '.bgpv-top { text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.5); } .bgpv-top b { display: block; font-size: 1.45rem; margin-top: 8px; } .bgpv-top small { display: block; font-size: .86rem; color: rgba(255,255,255,.78); margin-top: 3px; }',
     '.bgpv-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: .72rem; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.25); }',
@@ -20949,7 +20988,12 @@ function renderTax() {
     const ys = $('ts-year'); ys.innerHTML = yearOpts(UI.taxYear);
     const d = yearData(UI.taxYear), P = plan(UI.taxYear, d), done = P.target > 0 ? Math.min(1, P.saved / P.target) : 0;
     const e = P.est;
+    const R = 46, C = 2 * Math.PI * R, tone = P.target <= 0 ? 'ok' : done >= 1 ? 'ok' : done >= .5 ? 'mid' : 'low';
     el.innerHTML = `
+        <div class="ts-meter ${tone}"><div class="ts-ring" role="img" aria-label="${Math.round(done * 100)}% of the tax set-aside put aside"><svg viewBox="0 0 110 110" aria-hidden="true"><circle cx="55" cy="55" r="${R}" class="ts-track"/><circle cx="55" cy="55" r="${R}" class="ts-fill" style="stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${(C * (1 - done)).toFixed(1)}"/></svg><div><b>${Math.round(done * 100)}%</b><small>put aside</small></div></div>
+            <div class="ts-mside"><div class="ts-mrow"><span>Set aside in total</span><b>${fmt(P.target)}</b></div><div class="ts-mrow"><span>Put aside so far</span><b>${fmt(P.saved)}</b></div>
+                <div class="ts-mrow st"><span>${P.left > 0 ? 'Still to put aside' : 'You are covered'}</span><b>${P.left > 0 ? fmt(P.left) : '<i class="fas fa-check-circle"></i>'}</b></div>
+                <button type="button" class="app-btn ts-madd" data-ts="add"><i class="fas fa-plus mr-2"></i>Add money put aside</button></div></div>
         <div class="ts-grid">
             <div class="ts-line"><span>Income before GST</span><b>${fmt(d.sales)}</b></div>
             <div class="ts-line"><span>Business expenses before GST</span><b>- ${fmt(d.expCost)}</b></div>
@@ -20960,10 +21004,8 @@ function renderTax() {
             <div class="ts-line"><span>GST you owe <small>(collected ${fmt(d.gstOut)} - credits ${fmt(d.itc)})</small></span><b>${fmt(P.gstPart)}</b></div>
             <div class="ts-line big"><span>Set aside in total</span><b>${fmt(P.target)}</b></div>
         </div>
-        <div class="ts-progress"><div class="ts-bar"><i style="width:${(done * 100).toFixed(1)}%"></i></div>
-            <div class="ts-pl"><span>Put aside: <b>${fmt(P.saved)}</b></span><span>${P.left > 0 ? `Still to put aside: <b>${fmt(P.left)}</b>` : '<b class="ok">You are covered</b>'}</span></div></div>
         <div class="ts-tip"><i class="fas fa-calculator"></i><span>For each new job, put aside about <b>${pct(P.rate)}</b> of the price before GST, plus all the GST you charge.${P.mode !== 'flat' && d.profit > 0 ? ` That is your rate on the next dollar; on average it is ${pct(e.effective)} of your profit so far.` : ''}</span></div>
-        <div class="ts-actions"><button type="button" class="app-btn" data-ts="add"><i class="fas fa-plus mr-2"></i>Add money put aside</button><button type="button" class="app-btn" data-ts="how"><i class="fas fa-info-circle mr-2"></i>How this is worked out</button></div>
+        <div class="ts-actions"><button type="button" class="app-btn" data-ts="how"><i class="fas fa-info-circle mr-2"></i>How this is worked out</button></div>
         <div class="ts-mode"><label>Estimate with <select id="ts-mode" class="year-filter-select"><option value="rates"${P.mode !== 'flat' ? ' selected' : ''}>${e.usedYear} BC + federal tax rates</option><option value="flat"${P.mode === 'flat' ? ' selected' : ''}>A flat percentage</option></select></label>
             ${P.mode === 'flat' ? `<label>Percent of profit <input id="ts-pct" type="number" min="0" max="80" step="1" class="year-filter-select" style="width:80px" value="${P.flat}"></label>` : ''}</div>
         ${P.log.length ? `<div class="ts-log"><h4>Put aside in ${UI.taxYear}</h4>${P.log.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(x => `<div class="ts-row"><span>${h(fdate(x.date))}</span><span class="ts-k">${x.kind === 'cra' ? 'Paid to CRA' : 'Saved'}${x.note ? ' - ' + h(x.note) : ''}</span><b>${fmt(N(x.amount))}</b><button type="button" class="ts-x" data-ts="del" data-id="${h(x.id)}" title="Remove">&times;</button></div>`).join('')}</div>` : ''}
@@ -21131,6 +21173,15 @@ st.textContent = `
 .ts-line.t { border-bottom: 1px solid rgba(255,255,255,.25); } .ts-line.t b { font-size: 1rem; }
 .ts-line.big { border: 0; margin-top: 6px; padding: 12px 14px; border-radius: 14px; background: rgba(34,197,94,.12); font-size: 1.02rem; } .ts-line.big b { font-size: 1.2rem; color: #86efac; }
 .ts-progress { margin: 14px 0 10px; } .ts-bar { height: 10px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; } .ts-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #22c55e, #14b8a6); transition: width .4s; }
+.ts-meter { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; padding: 14px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.ts-ring { position: relative; width: 118px; height: 118px; flex: none; } .ts-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ts-track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 11; } .ts-fill { fill: none; stroke: #22c55e; stroke-width: 11; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+.ts-meter.mid .ts-fill { stroke: #f59e0b; } .ts-meter.low .ts-fill { stroke: #f97316; }
+.ts-ring > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; } .ts-ring b { font-size: 1.45rem; line-height: 1.1; } .ts-ring small { font-size: .7rem; opacity: .75; }
+.ts-mside { flex: 1 1 170px; min-width: 0; } .ts-mrow { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: .9rem; border-bottom: 1px dashed rgba(255,255,255,.1); } .ts-mrow b { white-space: nowrap; }
+.ts-mrow.st { font-weight: 700; border-bottom: 0; } .ts-meter.ok .ts-mrow.st b { color: #86efac; } .ts-meter.mid .ts-mrow.st b, .ts-meter.low .ts-mrow.st b { color: #fcd34d; }
+.ts-madd { margin-top: 8px; width: 100%; justify-content: center; }
+html.lm .ts-meter.mid .ts-mrow.st b, html.lm .ts-meter.low .ts-mrow.st b { color: #b45309; } html.lm .ts-meter.ok .ts-mrow.st b { color: #047857; }
 .ts-pl { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .82rem; margin-top: 6px; } .ts-pl .ok { color: #86efac; }
 .ts-tip { display: flex; gap: 10px; align-items: flex-start; font-size: .84rem; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.05); margin-bottom: 12px; } .ts-tip i { margin-top: 3px; color: #86efac; }
 .ts-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 10px; }
@@ -22014,7 +22065,7 @@ function party(title, text) {
 
 /* ======================= weather in the greeting ======================= */
 function wxOn() { return S('wxGreet', false) === true; }
-var ICONS = { clear: 'sun', cloud: 'cloud-sun', fog: 'cloud', rain: 'cloud-rain', snow: 'snowflake', storm: 'bolt' };
+var ICONS = { clear: 'sun', partly: 'cloud-sun', cloud: 'cloud', fog: 'cloud', rain: 'cloud-rain', snow: 'snowflake', storm: 'bolt' };
 function wxText(w) { if (!w || w.t == null || !isFinite(w.t)) return ''; return w.t + '°C, ' + (w.words || '') + (w.place ? ' in ' + w.place : ''); }
 function applyWx() {
     var g = document.getElementById('greeting'), line = document.getElementById('wx-greet'), w = window.IncWx ? IncWx.get() : null, txt = wxOn() ? wxText(w) : '';
@@ -22611,11 +22662,10 @@ window.IncMode = { mode: function (v) { if (v) { save('uiMode', v); apply(); } r
 
 </script>
 <script id="incator-money">
-/* Analytics: Cash flow at a glance and the Tax set-aside meter.
-   Cash flow: money in from your jobs and business spending from your receipts, month by month, with the difference, and
-   how the year compares with last year so far.
-   Tax set-aside: how much of what you are paid to put aside for GST and income tax, and how much you have put aside.
-   Estimates only, not tax advice. */
+/* Analytics: Cash flow at a glance.
+   Money in from your jobs and business spending (project expenses and receipts, counted once, the same way as the
+   year-end package), month by month, with what is left over, and how the year compares with last year so far.
+   (The Tax set-aside card and its meter are in yearend.js.) */
 (function () {
 'use strict';
 if (window.IncMoney) return;
@@ -22629,38 +22679,17 @@ function receipts() { try { return window.RcptStore ? RcptStore.all() : []; } ca
 function claim(r) { try { return RcptStore.claim(r); } catch (e) { return { claimable: 0, itc: 0 }; } }
 function year() { var s = document.getElementById('year-filter'), v = s ? s.value : 'all', y = parseInt(v, 10); return isFinite(y) ? y : new Date().getFullYear(); }
 function ym(d) { var s = String(d || ''); return [parseInt(s.slice(0, 4), 10), parseInt(s.slice(5, 7), 10) - 1]; }
-function gstOn() { var v = S('taxGstReg', null); if (v === true || v === false) return v; return S('rcTaxMode', 'separate') !== 'together'; }
-function rate() { var v = N(S('taxRate', 20)); return Math.max(0, Math.min(60, v)); }
-function savedFor(y) { var o = S('taxSaved', {}); return o && typeof o === 'object' ? N(o[y]) : 0; }
-
 /* ---------- numbers ---------- */
 function months(y, upto) {
     var m = []; for (var i = 0; i < 12; i++) m.push({ inc: 0, out: 0 });
     var limit = upto == null ? 12 : upto;                              // last year: only up to the same date, for a fair comparison
-    entries().forEach(function (e) { var p = ym(e.date); if (p[0] === y && p[1] >= 0 && p[1] < limit) m[p[1]].inc += N(e.total); });
-    receipts().forEach(function (r) { var p = ym(r.date); if (p[0] === y && p[1] >= 0 && p[1] < limit) { var c = claim(r); m[p[1]].out += N(c.claimable) + (c.gstIn ? 0 : N(c.itc)); } });
+    function at(d) { var p = ym(d); return p[0] === y && p[1] >= 0 && p[1] < limit ? m[p[1]] : null; }
+    entries().forEach(function (e) { var b = at(e.date); if (b) b.inc += N(e.total); });
+    var pj = []; try { pj = typeof projects !== 'undefined' && Array.isArray(projects) ? projects : JSON.parse(appStore.getItem('incomeProjects') || '[]'); } catch (e) { pj = []; }
+    pj.forEach(function (p) { (p.expenses || []).forEach(function (x) { var b = at(x.date); if (b) b.out += N(x.amount) + N(x.gst); }); });
+    receipts().forEach(function (r) { if (r.projectUid) return; var b = at(r.date); if (!b) return; var c = claim(r); b.out += N(c.claimable) + (c.gstIn ? 0 : N(c.itc)); });   // receipts on a project are counted through it, once
     return m;
 }
-function totals(y) {
-    var t = { received: 0, before: 0, gst: 0, spend: 0, itc: 0, n: 0 };
-    entries().forEach(function (e) { if (ym(e.date)[0] !== y) return; t.n++; t.received += N(e.total); t.gst += N(e.gst); t.before += N(e.total) - N(e.gst); });
-    receipts().forEach(function (r) { if (ym(r.date)[0] !== y) return; var c = claim(r); t.spend += N(c.claimable); t.itc += c.gstIn ? 0 : N(c.itc); });
-    var g = gstOn();
-    t.gstOwed = g ? Math.max(0, t.gst - t.itc) : 0;
-    t.profit = (g ? t.before : t.received) - t.spend;
-    t.incomeTax = Math.max(0, t.profit) * rate() / 100;
-    t.setAside = t.gstOwed + t.incomeTax;
-    t.per1000 = t.received > 0 ? t.setAside / t.received * 1000 : (g ? 1000 * (0.05 / 1.05) : 0) + 1000 * rate() / 100 / (g ? 1.05 : 1);
-    return t;
-}
-function quarterGst(y) {                                              // this quarter's GST (for a quarterly return)
-    var now = new Date(), q = y === now.getFullYear() ? Math.floor(now.getMonth() / 3) : 3, from = q * 3, to = from + 3, g = 0, itc = 0;
-    entries().forEach(function (e) { var p = ym(e.date); if (p[0] === y && p[1] >= from && p[1] < to) g += N(e.gst); });
-    receipts().forEach(function (r) { var p = ym(r.date); if (p[0] === y && p[1] >= from && p[1] < to) { var c = claim(r); itc += c.gstIn ? 0 : N(c.itc); } });
-    var due = new Date(y, to, 0); due.setMonth(due.getMonth() + 1);
-    return { q: q + 1, owed: Math.max(0, g - itc), due: due };
-}
-
 /* ---------- drawing ---------- */
 var MN = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 function chart(m) {
@@ -22682,32 +22711,16 @@ function chart(m) {
 function render() {
     var page = document.getElementById('summary-page'); if (!page) return;
     var anchor = page.querySelector('.summary-ledger'); if (!anchor) return;
-    var cf = document.getElementById('cf-card'), tx = document.getElementById('tx-card');
+    var cf = document.getElementById('cf-card');
     if (!cf) { cf = document.createElement('div'); cf.id = 'cf-card'; cf.className = 'mo-card'; anchor.insertAdjacentElement('afterend', cf); }
-    if (!tx) { tx = document.createElement('div'); tx.id = 'tx-card'; tx.className = 'mo-card'; cf.insertAdjacentElement('afterend', tx); }
     var y = year(), now = new Date(), m = months(y), tIn = 0, tOut = 0;
     m.forEach(function (x) { tIn += x.inc; tOut += x.out; });
     var upto = y === now.getFullYear() ? now.getMonth() + 1 : 12, last = months(y - 1, upto), lIn = 0, lOut = 0; last.forEach(function (x) { lIn += x.inc; lOut += x.out; });
     var net = tIn - tOut, lNet = lIn - lOut, cmp = function (a, b) { if (!b) return '<small class="mo-cmp">no data for ' + (y - 1) + '</small>'; var p = (a - b) / Math.abs(b) * 100; return '<small class="mo-cmp ' + (p >= 0 ? 'up' : 'down') + '">' + (p >= 0 ? '▲ ' : '▼ ') + Math.abs(p).toFixed(0) + '% vs ' + (y - 1) + '</small>'; };
-    cf.innerHTML = '<div class="mo-head"><span class="mo-ic in"><i class="fas fa-chart-line"></i></span><div><b>Cash flow at a glance</b><small>' + y + (y === now.getFullYear() ? ' so far' : '') + ' · jobs and business receipts</small></div></div>' +
+    cf.innerHTML = '<div class="mo-head"><span class="mo-ic in"><i class="fas fa-chart-line"></i></span><div><b>Cash flow at a glance</b><small>' + y + (y === now.getFullYear() ? ' so far' : '') + ' · jobs in, business costs out</small></div></div>' +
         '<div class="mo-kpis"><div><span>Money in</span><b class="pos">' + money(tIn) + '</b>' + cmp(tIn, lIn) + '</div><div><span>Spending</span><b class="neg">' + money(tOut) + '</b>' + cmp(tOut, lOut) + '</div><div><span>Left over</span><b>' + money(net) + '</b>' + cmp(net, lNet) + '</div></div>' +
-        chart(m) + '<div class="mo-legend"><span><i class="in"></i>Money in (jobs, with GST)</span><span><i class="out"></i>Business spending (receipts)</span><span><i class="net"></i>Left over</span></div>' +
+        chart(m) + '<div class="mo-legend"><span><i class="in"></i>Money in (jobs, with GST)</span><span><i class="out"></i>Business spending (receipts and project costs, with GST)</span><span><i class="net"></i>Left over</span></div>' +
         (y === now.getFullYear() ? '<p class="mo-note">Compared with ' + (y - 1) + ' up to the end of ' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][upto - 1] + '.</p>' : '');
-    var t = totals(y), saved = savedFor(y), pct = t.setAside > 0 ? Math.min(1, saved / t.setAside) : 0, q = quarterGst(y), R = 46, C = 2 * Math.PI * R;
-    tx.innerHTML = '<div class="mo-head"><span class="mo-ic tx"><i class="fas fa-piggy-bank"></i></span><div><b>Tax set-aside</b><small>' + y + ' · an estimate to help you plan, not tax advice</small></div></div>' +
-        '<div class="tx-main"><div class="tx-ring"><svg viewBox="0 0 110 110" aria-hidden="true"><circle cx="55" cy="55" r="' + R + '" class="tx-track"/><circle cx="55" cy="55" r="' + R + '" class="tx-fill" style="stroke-dasharray:' + C.toFixed(1) + ';stroke-dashoffset:' + (C * (1 - pct)).toFixed(1) + '"/></svg><div><b>' + Math.round(pct * 100) + '%</b><small>put aside</small></div></div>' +
-        '<div class="tx-sum"><p class="tx-big">Put aside about <b>' + money(t.per1000) + '</b> of every $1,000 you are paid</p>' +
-        '<div class="tx-row"><span>Suggested for ' + y + '</span><b>' + money(t.setAside) + '</b></div>' +
-        '<div class="tx-row"><span>Put aside so far</span><b>' + money(saved) + '</b></div>' +
-        '<div class="tx-row ' + (t.setAside - saved > 0 ? 'warn' : 'ok') + '"><span>' + (t.setAside - saved > 0 ? 'Still to put aside' : 'Covered') + '</span><b>' + money(Math.max(0, t.setAside - saved)) + '</b></div></div></div>' +
-        '<div class="tx-parts">' +
-        (gstOn() ? '<div class="tx-row"><span>GST collected on jobs</span><b>' + money(t.gst) + '</b></div><div class="tx-row"><span>GST paid on business receipts (credits)</span><b>' + (t.itc > 0 ? '−' : '') + money(t.itc) + '</b></div><div class="tx-row sub"><span>GST to send to the CRA</span><b>' + money(t.gstOwed) + '</b></div>' : '<div class="tx-row"><span>Not registered for GST</span><b>no GST to send</b></div>') +
-        '<div class="tx-row"><span>Income ' + (gstOn() ? 'before GST' : '') + ' minus business spending</span><b>' + money(t.profit) + '</b></div><div class="tx-row sub"><span>Income tax at ' + rate() + '%</span><b>' + money(t.incomeTax) + '</b></div>' +
-        (gstOn() && t.n ? '<div class="tx-q"><i class="fas fa-clock"></i> Quarter ' + q.q + ': ' + (q.owed > 0 ? 'about ' + money(q.owed) + ' GST' : 'no GST owing yet') + ', usually due by ' + q.due.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }) + ' (if you file quarterly).</div>' : '') + '</div>' +
-        '<div class="tx-set"><label>Put aside so far in ' + y + '<input type="number" inputmode="decimal" min="0" step="50" class="inv-input" id="tx-saved" value="' + (saved || '') + '" placeholder="0"></label>' +
-        '<label>Income tax rate<span class="tx-pct"><input type="number" inputmode="decimal" min="0" max="60" step="1" class="inv-input" id="tx-rate" value="' + rate() + '">%</span></label>' +
-        '<label class="tx-chk"><input type="checkbox" id="tx-gst"' + (gstOn() ? ' checked' : '') + '> Registered for GST</label></div>' +
-        '<p class="mo-note">Income tax rates depend on your total income and province; 20% is a common starting point for a self-employed person in BC. Ask your accountant for your own rate.</p>';
 }
 var t0 = 0;
 function soon() { clearTimeout(t0); t0 = setTimeout(function () { if (document.body.getAttribute('data-pg') === 'summary') render(); }, 120); }
@@ -22715,9 +22728,6 @@ function wire() {
     var page = document.getElementById('summary-page'); if (!page) return false;
     page.addEventListener('change', function (e) {
         if (e.target.id === 'year-filter') { soon(); return; }
-        if (e.target.id === 'tx-saved') { var o = Object.assign({}, S('taxSaved', {}) || {}); o[year()] = Math.max(0, N(e.target.value)); save('taxSaved', o); render(); }
-        if (e.target.id === 'tx-rate') { save('taxRate', Math.max(0, Math.min(60, N(e.target.value)))); render(); }
-        if (e.target.id === 'tx-gst') { save('taxGstReg', e.target.checked); render(); }
     });
     page.addEventListener('click', function (e) { if (e.target.closest('.year-filter-reset')) soon(); });
     try { new MutationObserver(soon).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
@@ -22727,7 +22737,7 @@ function wire() {
 var css = [
     '.mo-card { margin: 20px 0; padding: 18px; border-radius: 20px; background: rgba(255,255,255,.05); border: 1px solid rgba(var(--pr), .3); box-shadow: 0 0 22px rgba(var(--pr), .12); }',
     '.mo-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; } .mo-head b { display: block; font-size: 1.05rem; } .mo-head small { display: block; font-size: .78rem; color: rgba(255,255,255,.7); }',
-    '.mo-ic { flex: none; width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; } .mo-ic.in { background: linear-gradient(135deg, #10b981, #0ea5e9); } .mo-ic.tx { background: linear-gradient(135deg, #f59e0b, #ef4444); }',
+    '.mo-ic { flex: none; width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; } .mo-ic.in { background: linear-gradient(135deg, #10b981, #0ea5e9); }',
     '.mo-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; } .mo-kpis > div { padding: 10px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); min-width: 0; }',
     '.mo-kpis span { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; color: rgba(255,255,255,.65); font-weight: 700; } .mo-kpis b { display: block; font-size: 1.05rem; margin: 3px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mo-kpis b.pos { color: #34d399; } .mo-kpis b.neg { color: #fb923c; }',
     '.mo-cmp { font-size: .7rem; color: rgba(255,255,255,.6); } .mo-cmp.up { color: #86efac; } .mo-cmp.down { color: #fca5a5; }',
@@ -22735,21 +22745,622 @@ var css = [
     '.cf-net { fill: none; stroke: rgb(var(--pr2)); stroke-width: 2; stroke-linejoin: round; } .cf-dot { fill: rgb(var(--pr2)); } .cf-dot.neg { fill: #f87171; }',
     '.mo-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .74rem; color: rgba(255,255,255,.75); margin-top: 6px; } .mo-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; } .mo-legend i.in { background: #34d399; } .mo-legend i.out { background: #fb923c; } .mo-legend i.net { background: rgb(var(--pr2)); border-radius: 50%; }',
     '.mo-note { font-size: .74rem; color: rgba(255,255,255,.62); margin: 10px 0 0; line-height: 1.4; }',
-    '.tx-main { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; } .tx-ring { position: relative; width: 116px; height: 116px; flex: none; } .tx-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }',
-    '.tx-track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 11; } .tx-fill { fill: none; stroke: #f59e0b; stroke-width: 11; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }',
-    '.tx-ring > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; } .tx-ring b { font-size: 1.4rem; } .tx-ring small { font-size: .7rem; color: rgba(255,255,255,.7); }',
-    '.tx-sum { flex: 1 1 180px; min-width: 0; } .tx-big { font-size: .92rem; margin: 0 0 8px; line-height: 1.4; } .tx-big b { color: #fcd34d; font-size: 1.1rem; }',
-    '.tx-row { display: flex; justify-content: space-between; gap: 10px; font-size: .86rem; padding: 5px 0; border-bottom: 1px dashed rgba(255,255,255,.1); } .tx-row b { white-space: nowrap; } .tx-row.sub { font-weight: 700; } .tx-row.warn b { color: #fcd34d; } .tx-row.ok b { color: #86efac; }',
-    '.tx-parts { margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.04); } .tx-q { margin-top: 8px; font-size: .78rem; color: rgba(255,255,255,.78); }',
-    '.tx-set { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 12px; align-items: flex-end; } .tx-set label { display: flex; flex-direction: column; gap: 4px; font-size: .76rem; color: rgba(255,255,255,.75); } .tx-set input[type=number] { max-width: 150px; }',
-    '.tx-pct { display: inline-flex; align-items: center; gap: 4px; } .tx-pct input { max-width: 80px !important; } .tx-chk { flex-direction: row !important; align-items: center; gap: 8px !important; font-size: .84rem !important; } .tx-chk input { width: 18px; height: 18px; accent-color: rgb(var(--acc)); }',
-    'html.lm #summary-page .mo-card { background: rgba(255,255,255,.82); } html.lm #summary-page .tx-parts, html.lm #summary-page .mo-kpis > div { background: rgba(124,58,237,.05); } html.lm #summary-page .tx-big b, html.lm #summary-page .tx-row.warn b { color: #b45309; } html.lm #summary-page .mo-kpis b.pos { color: #047857; } html.lm #summary-page .mo-kpis b.neg { color: #c2410c; }',
-    '@media (max-width: 420px) { .mo-kpis b { font-size: .92rem; } .tx-ring { width: 100px; height: 100px; } }'
+    'html.lm #summary-page .mo-card { background: rgba(255,255,255,.82); } html.lm #summary-page .mo-kpis > div { background: rgba(124,58,237,.05); } html.lm #summary-page .mo-kpis b.pos { color: #047857; } html.lm #summary-page .mo-kpis b.neg { color: #c2410c; }',
+    '@media (max-width: 420px) { .mo-kpis b { font-size: .92rem; } }'
 ].join('\n');
 var st = document.createElement('style'); st.id = 'incator-money-css'; st.textContent = css; document.head.appendChild(st);
 function boot() { var n = 0, tm = setInterval(function () { if (wire() || ++n > 40) { clearInterval(tm); soon(); } }, 250); }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncMoney = { render: render, totals: totals, months: months, quarter: quarterGst };
+window.IncMoney = { render: render, months: months };
+})();
+
+</script>
+<script id="incator-roof">
+/* IncAtor - Roof calculator.
+   Add as many roof sections as you like (rectangles, triangles, trapezoids or a known area, each with its own pitch),
+   the edges (eaves, rakes, ridges, hips, valleys, walls), tear-off layers and storeys. IncAtor works out the squares,
+   every material (rounded up to whole bundles, rolls and pieces) and the labour, with your own prices from
+   Settings > Roof calculator. Turn items on or off, change a quantity, add one-off items, save the estimate,
+   or turn it into a quote. */
+(function () {
+'use strict';
+if (window.IncRoof) return;
+const $ = id => document.getElementById(id);
+const N = v => { const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(n) ? n : 0; };
+const r2 = n => Math.round((n + (n < 0 ? -1e-9 : 1e-9)) * 100) / 100;
+const h = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = n => (n < 0 ? '-$' : '$') + Math.abs(r2(n)).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const num1 = n => (Math.round(n * 10) / 10).toLocaleString('en-CA', { maximumFractionDigits: 1 });
+const qtyTxt = n => (Math.round(n * 100) / 100).toLocaleString('en-CA', { maximumFractionDigits: 2 });
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const clone = o => JSON.parse(JSON.stringify(o));
+const sget = (k, d) => { try { const v = appSettings[k]; return v === undefined || v === null ? d : v; } catch (e) { return d; } };
+const sset = (k, v) => { appSettings[k] = v; try { appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { toast('Could not save (storage full)', 'error'); } };
+const toast = (m, t) => { try { showToast(m, t || 'info'); } catch (e) { /* ignore */ } };
+const ask = o => { try { return showConfirmation(o); } catch (e) { return Promise.resolve(window.confirm(o.message)); } };
+
+/* ================================================================ what each item is worked out from ================================================================ */
+// [key, name in lists, measure unit, family]
+const BASES = [
+    ['area', 'Roof area', 'sq ft', 'area'],
+    ['squares', 'Roof squares', 'squares', 'sq'],
+    ['tearoff', 'Tear-off (squares x layers)', 'squares', 'sq'],
+    ['steep', 'Steep part of the roof', 'squares', 'sq'],
+    ['vsteep', 'Very steep part of the roof', 'squares', 'sq'],
+    ['storey', 'Squares x extra storeys', 'squares', 'sq'],
+    ['eaves', 'Eaves', 'lin ft', 'line'],
+    ['rakes', 'Rakes (gable edges)', 'lin ft', 'line'],
+    ['eavesRakes', 'Eaves + rakes', 'lin ft', 'line'],
+    ['ridge', 'Ridges', 'lin ft', 'line'],
+    ['hips', 'Hips', 'lin ft', 'line'],
+    ['ridgeHips', 'Ridges + hips', 'lin ft', 'line'],
+    ['valleys', 'Valleys', 'lin ft', 'line'],
+    ['eavesValleys', 'Eaves + valleys', 'lin ft', 'line'],
+    ['walls', 'Walls (step flashing)', 'lin ft', 'line'],
+    ['count', 'A number you enter', 'each', 'count'],
+    ['fixed', 'Fixed amount per job', 'job', 'fixed']
+];
+const BASE = {}; BASES.forEach(b => { BASE[b[0]] = { k: b[0], name: b[1], unit: b[2], fam: b[3] }; });
+const LINES = [['eaves', 'Eaves', 'Bottom edges, where the gutters are'], ['rakes', 'Rakes', 'Sloped gable edges'], ['ridge', 'Ridges', 'The top peaks'], ['hips', 'Hips', 'Sloped outside corners'], ['valleys', 'Valleys', 'Sloped inside corners'], ['walls', 'Walls', 'Where the roof meets a wall (step flashing)']];
+function coverLabel(it) {
+    const b = BASE[it.basis] || BASE.area, u = it.unit || 'unit';
+    if (b.fam === 'area') return 'Sq ft one ' + u + ' covers';
+    if (b.fam === 'sq') return 'Squares per ' + u;
+    if (b.fam === 'line') return 'Lin ft one ' + u + ' covers';
+    if (b.fam === 'count') return 'How many per one counted';
+    return 'Quantity per job';
+}
+
+/* ================================================================ your price list (Settings) ================================================================ */
+// Example prices only (BC, 2026-ish): set your own in Settings > Roof calculator.
+const DEF_MAT = [
+    { id: 'm-shingle', name: 'Architectural shingles', unit: 'bundle', basis: 'area', cover: 33.3, price: 45, on: true },
+    { id: 'm-under', name: 'Synthetic underlayment', unit: 'roll', basis: 'area', cover: 1000, price: 165, on: true },
+    { id: 'm-ice', name: 'Ice & water shield', unit: 'roll', basis: 'eavesValleys', cover: 65, price: 130, on: true },
+    { id: 'm-starter', name: 'Starter strip', unit: 'bundle', basis: 'eavesRakes', cover: 105, price: 60, on: true },
+    { id: 'm-cap', name: 'Hip & ridge cap', unit: 'bundle', basis: 'ridgeHips', cover: 33, price: 80, on: true },
+    { id: 'm-drip', name: 'Drip edge', unit: '10 ft piece', basis: 'eavesRakes', cover: 10, price: 14, on: true },
+    { id: 'm-nails', name: 'Roofing nails (coil)', unit: 'box', basis: 'area', cover: 1500, price: 60, on: true },
+    { id: 'm-capnail', name: 'Cap nails', unit: 'box', basis: 'area', cover: 2000, price: 35, on: true },
+    { id: 'm-pipe', name: 'Pipe flashing', unit: 'piece', basis: 'count', cover: 1, price: 20, on: true, count: 'Pipe flashings' },
+    { id: 'm-vent', name: 'Roof vent', unit: 'piece', basis: 'count', cover: 1, price: 35, on: true, count: 'Roof vents' },
+    { id: 'm-ridgevent', name: 'Ridge vent', unit: '4 ft piece', basis: 'ridge', cover: 4, price: 22, on: false },
+    { id: 'm-step', name: 'Step flashing', unit: 'bundle of 100', basis: 'walls', cover: 40, price: 55, on: true },
+    { id: 'm-valley', name: 'Valley metal', unit: '10 ft piece', basis: 'valleys', cover: 10, price: 30, on: false },
+    { id: 'm-seal', name: 'Roof sealant', unit: 'tube', basis: 'fixed', cover: 3, price: 11, on: true },
+    { id: 'm-osb', name: 'OSB sheathing', unit: 'sheet', basis: 'count', cover: 1, price: 32, on: false, count: 'Sheathing sheets' },
+    { id: 'm-bin', name: 'Disposal bin', unit: 'bin', basis: 'fixed', cover: 1, price: 475, on: true }
+];
+const DEF_LAB = [
+    { id: 'l-install', name: 'Install shingles', unit: 'square', basis: 'squares', cover: 1, price: 130, on: true },
+    { id: 'l-tear', name: 'Tear-off', unit: 'square', basis: 'tearoff', cover: 1, price: 55, on: true },
+    { id: 'l-steep', name: 'Steep roof extra', unit: 'square', basis: 'steep', cover: 1, price: 30, on: true },
+    { id: 'l-vsteep', name: 'Very steep roof extra', unit: 'square', basis: 'vsteep', cover: 1, price: 30, on: true },
+    { id: 'l-storey', name: 'Extra storey', unit: 'square', basis: 'storey', cover: 1, price: 15, on: true },
+    { id: 'l-pipe', name: 'Install pipe flashings', unit: 'each', basis: 'count', cover: 1, price: 25, on: true, count: 'Pipe flashings' },
+    { id: 'l-vent', name: 'Install roof vents', unit: 'each', basis: 'count', cover: 1, price: 25, on: true, count: 'Roof vents' },
+    { id: 'l-chim', name: 'Chimney flashing', unit: 'each', basis: 'count', cover: 1, price: 275, on: true, count: 'Chimneys' },
+    { id: 'l-sky', name: 'Skylight flashing', unit: 'each', basis: 'count', cover: 1, price: 225, on: false, count: 'Skylights' },
+    { id: 'l-osb', name: 'Replace sheathing', unit: 'sheet', basis: 'count', cover: 1, price: 30, on: false, count: 'Sheathing sheets' },
+    { id: 'l-clean', name: 'Clean-up and haul away', unit: 'job', basis: 'fixed', cover: 1, price: 250, on: true }
+];
+const DEF_OPTS = { waste: 10, steepFrom: 8, vsteepFrom: 10, markup: 0, profit: 0 };
+function fixItem(it, kind) {
+    const o = Object.assign({}, it);
+    o.id = String(o.id || uid(kind === 'lab' ? 'l-' : 'm-')); o.name = String(o.name || '').slice(0, 80) || 'Item';
+    o.unit = String(o.unit || (kind === 'lab' ? 'each' : 'piece')).slice(0, 30); if (!BASE[o.basis]) o.basis = 'area';
+    o.cover = N(o.cover) > 0 ? N(o.cover) : 1; o.price = Math.max(0, N(o.price)); o.on = o.on !== false;
+    if (o.basis === 'count') o.count = String(o.count || o.name).slice(0, 40); else delete o.count;
+    return o;
+}
+function matList() { const v = sget('roofMat', null); return (Array.isArray(v) ? v : DEF_MAT).map(x => fixItem(x, 'mat')); }
+function labList() { const v = sget('roofLab', null); return (Array.isArray(v) ? v : DEF_LAB).map(x => fixItem(x, 'lab')); }
+function opts() { return Object.assign({}, DEF_OPTS, sget('roofOpts', {}) || {}); }
+function pricesSet() { return !!sget('roofPricesSet', false); }
+
+/* ================================================================ the estimate you are working on ================================================================ */
+const DRAFT = 'roofDraft';
+function newSection(n) { return { id: uid('s'), name: 'Section ' + n, shape: 'rect', a: '', b: '', c: '', pitch: 6, meas: 'slope', n: 1 }; }
+function newJob() { return { v: 1, id: null, name: '', customer: '', address: '', sections: [newSection(1)], lines: {}, counts: {}, layers: 1, storeys: 1, waste: '', use: {}, qty: {}, extra: [], snap: null, notes: '' }; }
+let job = null;
+function loadDraft() {
+    try { const j = JSON.parse(appStore.getItem(DRAFT) || 'null'); if (j && Array.isArray(j.sections)) { job = Object.assign(newJob(), j); return; } } catch (e) { /* new one */ }
+    job = newJob();
+}
+let saveT = 0;
+function keep() { clearTimeout(saveT); saveT = setTimeout(() => { try { appStore.setItem(DRAFT, JSON.stringify(job)); } catch (e) { /* storage full */ } }, 250); }
+
+// Lengths: 32, 32.5, 32'6, 32' 6", 32 6, 32ft 6in
+function len(v) {
+    const s = String(v == null ? '' : v).trim().toLowerCase().replace(/,/g, '');
+    if (!s) return 0;
+    if (/^\d*\.?\d+$/.test(s)) return parseFloat(s);
+    const m = s.match(/^(\d*\.?\d+)\s*(?:'|’|ft|feet|foot)?\s*(?:(\d*\.?\d+)\s*(?:"|”|in|inch|inches)?)?$/);
+    if (m) return parseFloat(m[1]) + (m[2] ? parseFloat(m[2]) / 12 : 0);
+    const k = s.match(/^(\d*\.?\d+)\s*(?:"|in|inch|inches)$/); if (k) return parseFloat(k[1]) / 12;
+    return N(s);
+}
+const pitchF = p => Math.sqrt(1 + Math.pow(N(p) / 12, 2));
+const SHAPES = { rect: ['Rectangle', 'Length', 'Width'], tri: ['Triangle', 'Base', 'Height'], trap: ['Trapezoid', 'Top', 'Bottom', 'Height'], area: ['Area', 'Area (sq ft)'] };
+function shapeArea(s) {
+    const a = len(s.a), b = len(s.b), c = len(s.c);
+    if (s.shape === 'tri') return a * b / 2;
+    if (s.shape === 'trap') return (a + b) / 2 * c;
+    if (s.shape === 'area') return N(s.a);
+    return a * b;
+}
+function secArea(s) { return shapeArea(s) * (s.meas === 'plan' ? pitchF(s.pitch) : 1) * Math.max(1, Math.round(N(s.n)) || 1); }
+function set() { return job.snap ? { mat: job.snap.mat.map(x => fixItem(x, 'mat')), lab: job.snap.lab.map(x => fixItem(x, 'lab')), o: Object.assign({}, DEF_OPTS, job.snap.opts || {}) } : { mat: matList(), lab: labList(), o: opts() }; }
+const isOn = it => job.use[it.id] !== undefined ? !!job.use[it.id] : it.on;
+function counts(I) { const seen = [], all = I.mat.concat(I.lab); all.forEach(it => { if (it.basis === 'count' && isOn(it) && seen.indexOf(it.count) < 0) seen.push(it.count); }); return seen; }
+
+function calc() {
+    const I = set(), O = I.o, gstRate = N(sget('gstRate', 5));
+    let area = 0, steep = 0, vsteep = 0, maxP = 0;
+    const secs = job.sections.map(s => { const a = secArea(s); area += a; if (N(s.pitch) >= O.steepFrom) steep += a; if (N(s.pitch) >= O.vsteepFrom) vsteep += a; if (a > 0) maxP = Math.max(maxP, N(s.pitch)); return a; });
+    const waste = job.waste === '' || job.waste == null ? N(O.waste) : Math.max(0, N(job.waste)), wf = 1 + waste / 100;
+    const L = {}; LINES.forEach(l => { L[l[0]] = len(job.lines[l[0]]); });
+    const lineOf = { eaves: L.eaves, rakes: L.rakes, eavesRakes: L.eaves + L.rakes, ridge: L.ridge, hips: L.hips, ridgeHips: L.ridge + L.hips, valleys: L.valleys, eavesValleys: L.eaves + L.valleys, walls: L.walls };
+    const layers = Math.max(0, Math.round(N(job.layers))), storeys = Math.max(1, Math.round(N(job.storeys)) || 1);
+    function measure(basis, mat) {
+        const w = mat ? wf : 1;
+        switch (basis) {
+            case 'area': return area * w;
+            case 'squares': return area * w / 100;
+            case 'tearoff': return area / 100 * layers;
+            case 'steep': return steep * w / 100;
+            case 'vsteep': return vsteep * w / 100;
+            case 'storey': return area / 100 * (storeys - 1);
+            default: return lineOf[basis] || 0;
+        }
+    }
+    function row(it, mat) {
+        const fam = (BASE[it.basis] || BASE.area).fam;
+        let q = fam === 'count' ? N(job.counts[it.count]) * it.cover : fam === 'fixed' ? it.cover : measure(it.basis, mat) / (it.cover || 1);
+        q = Math.max(0, mat ? Math.ceil(q - 1e-9) : r2(q)) + 0;
+        const auto = q, ov = job.qty[it.id];
+        if (ov !== undefined && ov !== '' && isFinite(parseFloat(ov))) q = Math.max(0, parseFloat(ov));
+        const on = isOn(it);
+        return { it: it, on: on, auto: auto, q: q, over: q !== auto, cost: on ? r2(q * it.price) : 0 };
+    }
+    const mat = I.mat.map(it => row(it, true)), lab = I.lab.map(it => row(it, false));
+    const ex = (job.extra || []).map(x => ({ x: x, cost: r2(N(x.qty) * N(x.price)) }));
+    const matT = r2(mat.reduce((s, r) => s + r.cost, 0) + ex.filter(e => e.x.kind !== 'lab').reduce((s, e) => s + e.cost, 0));
+    const labT = r2(lab.reduce((s, r) => s + r.cost, 0) + ex.filter(e => e.x.kind === 'lab').reduce((s, e) => s + e.cost, 0));
+    const markup = r2(matT * N(O.markup) / 100), sub = r2(matT + markup + labT), profit = r2(sub * N(O.profit) / 100), before = r2(sub + profit), gst = r2(before * gstRate / 100);
+    return { I: I, O: O, secs: secs, area: area, sq: area / 100, areaW: area * wf, sqW: area * wf / 100, waste: waste, steep: steep, vsteep: vsteep, maxP: maxP, L: L, layers: layers, storeys: storeys,
+        mat: mat, lab: lab, ex: ex, matT: matT, labT: labT, markup: markup, sub: sub, profit: profit, before: before, gstRate: gstRate, gst: gst, total: r2(before + gst), perSq: area > 0 ? before / (area / 100) : 0 };
+}
+
+/* ================================================================ the page ================================================================ */
+function card(id, icon, color, title, sub, inner) {
+    return `<div class="magic-calc-display animate-item rf-card" id="${id}"><div class="live-calc-header" style="margin-bottom:14px;"><div class="live-calc-icon" style="background:linear-gradient(135deg,${color}33,${color}55);color:${color};"><i class="fas fa-${icon}"></i></div><div style="flex:1;min-width:0;"><h3 class="live-calc-title" style="color:${color};">${title}</h3>${sub ? `<p class="text-gray-400 text-sm">${sub}</p>` : ''}</div></div>${inner}</div>`;
+}
+function injectPage() {
+    const settings = $('settings-page'); if (!settings || $('roofcalc-page')) return;
+    const tabs = `<div class="bz-tabs"><button type="button" class="bz-tab" onclick="showPage('quotes')"><i class="fas fa-file-alt mr-2"></i>Quotes</button><button type="button" class="bz-tab" onclick="showPage('projects')"><i class="fas fa-briefcase mr-2"></i>Projects</button></div>`;
+    const inner = tabs + `<div id="rf-banner"></div>` +
+        card('rf-job', 'clipboard-list', '#a78bfa', 'Job', 'Optional: shows on the saved estimate and the quote',
+            `<div class="rf-g3"><label class="rf-f"><span>Job name</span><input class="inv-input" data-j="name" maxlength="80" placeholder="e.g. Main house re-roof"></label><label class="rf-f"><span>Customer</span><input class="inv-input" data-j="customer" maxlength="80" placeholder="Name"></label><label class="rf-f"><span>Job address</span><input class="inv-input" data-j="address" maxlength="120" placeholder="Street, city"></label></div><div id="rf-from"></div>`) +
+        card('rf-secs', 'home', '#38bdf8', 'Roof sections', 'Add every roof plane or area. Lengths in feet: 32.5 or 32\'6 both work.',
+            `<div id="rf-seclist"></div><div class="rf-btns"><button type="button" class="app-btn" data-rf="addsec"><i class="fas fa-plus mr-2"></i>Add a section</button></div><details class="rf-help"><summary>How to measure</summary><p><b>On the roof (slope):</b> measure the real roof surface, from eave to ridge. The pitch is then only used for steep-roof labour.</p><p><b>From a plan or the ground:</b> measure the flat footprint (from a drawing, satellite photo or the ground). IncAtor multiplies by the pitch to get the real roof area (for example, 6/12 adds about 12%).</p><p>A hip roof is usually 2 trapezoids (front and back) and 2 triangles (the ends). Use "x 2" for identical sides.</p></details>`) +
+        card('rf-lines', 'border-style', '#f472b6', 'Edges', 'Total length of each, in feet. Leave empty if there are none.', `<div class="rf-g3" id="rf-linegrid"></div>`) +
+        card('rf-det', 'sliders-h', '#fbbf24', 'Job details', '', `<div class="rf-g3" id="rf-detgrid"></div><div id="rf-counts"></div>`) +
+        card('rf-est', 'calculator', '#34d399', 'Estimate', 'Tap a checkbox to leave an item out. Tap a quantity to change it.', `<div id="rf-out"></div>`) +
+        `<div class="rf-actions"><button type="button" class="app-btn" data-rf="save"><i class="fas fa-save mr-2"></i>Save estimate</button><button type="button" class="app-btn rf-main" data-rf="quote"><i class="fas fa-file-alt mr-2"></i>Make a quote</button><button type="button" class="app-btn" data-rf="share"><i class="fas fa-share mr-2"></i>Share</button><button type="button" class="app-btn" data-rf="new"><i class="fas fa-plus mr-2"></i>New estimate</button></div>` +
+        card('rf-saved', 'folder-open', '#c084fc', 'Saved estimates', '', `<div id="rf-savedlist"></div>`);
+    const html = `<div id="roofcalc-page" class="page">
+        <div class="back-btn animate-item" onclick="showPage('home')"><i class="fas fa-arrow-left"></i> Back to Home</div>
+        <div class="stunning-form-container animate-item">
+            <div class="magical-header"><div class="floating-orb orb-1"></div><div class="floating-orb orb-2"></div><div class="floating-orb orb-3"></div>
+                <div class="header-content"><div class="magic-icon"><i class="fas fa-house-roof"></i><div class="icon-glow"></div></div>
+                <h2 class="magic-title">Roof calculator</h2><p class="magic-subtitle">Squares, materials and labour with your prices</p></div></div>
+            <div class="form-grid">${inner}</div>
+        </div></div>`;
+    settings.parentNode.insertAdjacentHTML('beforeend', html);
+    const pg = $('roofcalc-page');
+    pg.addEventListener('input', onInput);
+    pg.addEventListener('change', onChange);
+    pg.addEventListener('click', onClick);
+    pg.addEventListener('toggle', e => { const d = e.target; if (d && d.matches && d.matches('details[data-more]')) openUnused[d.getAttribute('data-more')] = d.open; }, true);
+    // navigation bar (it goes under "More" unless you add it to the bar in Settings > Appearance > Navigation bar)
+    const nav = document.querySelector('.floating-nav');
+    if (nav && !nav.querySelector('[data-page="roofcalc"]')) {
+        const it = document.createElement('div'); it.className = 'nav-item'; it.setAttribute('data-tooltip', 'Roof calc'); it.setAttribute('data-page', 'roofcalc'); it.setAttribute('onclick', "navigateToPage('roofcalc')"); it.innerHTML = '<i class="fas fa-house-roof"></i>';
+        const ref = nav.querySelector('[data-page="summary"]'); if (ref) nav.insertBefore(it, ref); else nav.appendChild(it);
+        try { if (window.IncNavMore && IncNavMore.apply) IncNavMore.apply(); } catch (e) { /* ignore */ }
+    }
+    addTabs();
+}
+function addTabs() {                                           // a "Roof calc" tab next to Quotes and Projects
+    document.querySelectorAll('.bz-tabs').forEach(t => {
+        if (t.querySelector('.bz-tab-rf')) return;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'bz-tab bz-tab-rf'; b.innerHTML = '<i class="fas fa-house-roof mr-2"></i>Roof calc';
+        b.onclick = () => showPage('roofcalc');
+        if (t.closest('#roofcalc-page')) b.classList.add('on');
+        const cu = t.querySelector('.bz-tab-cu'); if (cu) t.insertBefore(b, cu); else t.appendChild(b);
+    });
+}
+
+function pitchOpts(sel) { let o = ''; for (let p = 0; p <= 24; p++) o += `<option value="${p}"${+sel === p ? ' selected' : ''}>${p === 0 ? 'Flat (0/12)' : p + '/12'}</option>`; return o; }
+function paintAll() {
+    if (!$('roofcalc-page')) return;
+    const c = calc();
+    paintBanner(); paintJob(); paintSections(c); paintLines(); paintDetails(c); paintOut(c); paintSaved();
+}
+function paintBanner() {
+    const el = $('rf-banner'); if (!el) return;
+    el.innerHTML = pricesSet() || job.snap ? '' : `<div class="rf-warn"><i class="fas fa-info-circle"></i><span>These are <b>example prices</b>. Set your own material and labour prices once in Settings &gt; Roof calculator.</span><button type="button" class="app-btn" data-rf="settings">Set my prices</button></div>`;
+}
+function paintJob() {
+    document.querySelectorAll('#rf-job [data-j]').forEach(i => { const k = i.getAttribute('data-j'); if (document.activeElement !== i) i.value = job[k] || ''; });
+    const f = $('rf-from'); if (!f) return;
+    const sv = job.id ? (sget('roofJobs', []) || []).find(x => x.id === job.id) : null;
+    f.innerHTML = (sv ? `<p class="rf-note"><i class="fas fa-save"></i> Saved estimate from ${h(new Date(sv.at).toLocaleDateString())}. Tap <b>Save estimate</b> to update it.</p>` : '') +
+        (job.snap ? `<div class="rf-warn soft"><i class="fas fa-tag"></i><span>Using the prices saved with this estimate.</span><button type="button" class="app-btn" data-rf="useprices">Use my current prices</button></div>` : '');
+}
+function paintSections(c) {
+    const el = $('rf-seclist'); if (!el) return;
+    if (el.childElementCount !== job.sections.length || el.getAttribute('data-sig') !== job.sections.map(s => s.id + s.shape + s.meas).join()) {
+        el.innerHTML = job.sections.map((s, i) => {
+            const S = SHAPES[s.shape] || SHAPES.rect;
+            const dims = s.shape === 'area' ? `<label class="rf-f"><span>${S[1]}</span><input class="inv-input" data-s="a" data-i="${i}" inputmode="decimal" value="${h(s.a)}" placeholder="0"></label>`
+                : `<label class="rf-f"><span>${S[1]} (ft)</span><input class="inv-input" data-s="a" data-i="${i}" inputmode="text" value="${h(s.a)}" placeholder="0"></label><label class="rf-f"><span>${S[2]} (ft)</span><input class="inv-input" data-s="b" data-i="${i}" inputmode="text" value="${h(s.b)}" placeholder="0"></label>` +
+                  (s.shape === 'trap' ? `<label class="rf-f"><span>${S[3]} (ft)</span><input class="inv-input" data-s="c" data-i="${i}" inputmode="text" value="${h(s.c)}" placeholder="0"></label>` : '');
+            return `<div class="rf-sec" data-sid="${h(s.id)}">
+                <div class="rf-sh"><input class="rf-sname" data-s="name" data-i="${i}" value="${h(s.name)}" maxlength="40" aria-label="Section name"><b class="rf-sa" id="rf-sa-${i}"></b>
+                    <button type="button" class="rf-ib" data-rf="dup" data-i="${i}" aria-label="Copy this section" title="Copy"><i class="fas fa-copy"></i></button><button type="button" class="rf-ib del" data-rf="delsec" data-i="${i}" aria-label="Delete this section" title="Delete"><i class="fas fa-trash"></i></button></div>
+                <div class="rf-seg" role="group" aria-label="Shape">${Object.keys(SHAPES).map(k => `<button type="button" data-rf="shape" data-i="${i}" data-v="${k}" aria-pressed="${s.shape === k}">${SHAPES[k][0]}</button>`).join('')}</div>
+                <div class="rf-g3">${dims}
+                    <label class="rf-f"><span>Pitch</span><select class="inv-input" data-s="pitch" data-i="${i}">${pitchOpts(s.pitch)}</select></label>
+                    <label class="rf-f"><span>How many like this</span><select class="inv-input" data-s="n" data-i="${i}">${[1, 2, 3, 4, 5, 6, 8, 10].map(n => `<option value="${n}"${+s.n === n ? ' selected' : ''}>x ${n}</option>`).join('')}</select></label></div>
+                <div class="rf-seg sm" role="group" aria-label="Measured">${[['slope', 'Measured on the roof'], ['plan', 'From a plan / the ground']].map(m => `<button type="button" data-rf="meas" data-i="${i}" data-v="${m[0]}" aria-pressed="${s.meas === m[0]}">${m[1]}</button>`).join('')}</div>
+            </div>`;
+        }).join('');
+        el.setAttribute('data-sig', job.sections.map(s => s.id + s.shape + s.meas).join());
+    }
+    job.sections.forEach((s, i) => {
+        const b = $('rf-sa-' + i); if (!b) return;
+        const base = shapeArea(s), a = c.secs[i], extra = s.meas === 'plan' && base > 0 ? ' (x' + pitchF(s.pitch).toFixed(3) + ' pitch)' : '';
+        b.textContent = a > 0 ? num1(a) + ' sq ft' + extra : '';
+    });
+}
+function paintLines() {
+    const el = $('rf-linegrid'); if (!el || el.childElementCount) { document.querySelectorAll('#rf-linegrid [data-l]').forEach(i => { if (document.activeElement !== i) i.value = job.lines[i.getAttribute('data-l')] || ''; }); return; }
+    el.innerHTML = LINES.map(l => `<label class="rf-f"><span>${l[1]} (ft)<small>${l[2]}</small></span><input class="inv-input" data-l="${l[0]}" inputmode="text" placeholder="0" value="${h(job.lines[l[0]] || '')}"></label>`).join('');
+}
+function paintDetails(c) {
+    const el = $('rf-detgrid'); if (!el) return;
+    const ws = job.waste === '' || job.waste == null;
+    el.innerHTML = `<label class="rf-f"><span>Tear-off layers</span><select class="inv-input" data-d="layers">${[[0, 'None (new roof / roof-over)'], [1, '1 layer'], [2, '2 layers'], [3, '3 layers']].map(o => `<option value="${o[0]}"${+job.layers === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
+        <label class="rf-f"><span>Storeys</span><select class="inv-input" data-d="storeys">${[1, 2, 3, 4].map(n => `<option value="${n}"${+job.storeys === n ? ' selected' : ''}>${n} storey${n > 1 ? 's' : ''}</option>`).join('')}</select></label>
+        <label class="rf-f"><span>Waste %<small>${ws ? 'Your usual ' + c.O.waste + '%' : 'For this job'}</small></span><input class="inv-input" data-d="waste" inputmode="decimal" placeholder="${h(c.O.waste)}" value="${ws ? '' : h(job.waste)}"></label>`;
+    const cn = $('rf-counts'), list = counts(c.I);
+    cn.innerHTML = list.length ? `<h4 class="rf-h4">How many on this roof</h4><div class="rf-g3">${list.map(k => `<label class="rf-f"><span>${h(k)}</span><input class="inv-input" data-c="${h(k)}" type="number" min="0" step="1" inputmode="numeric" placeholder="0" value="${h(job.counts[k] == null ? '' : job.counts[k])}"></label>`).join('')}</div>` : '';
+}
+function rowHtml(r, kind) {
+    const it = r.it, b = BASE[it.basis] || BASE.area;
+    return `<div class="rf-row${r.on ? '' : ' off'}"><label class="rf-chk"><input type="checkbox" data-use="${h(it.id)}"${r.on ? ' checked' : ''} aria-label="Include ${h(it.name)}"></label>
+        <div class="rf-rn"><b>${h(it.name)}</b><small>${money(it.price)} ${/^each$/i.test(it.unit) ? 'each' : 'per ' + h(it.unit)}${b.fam === 'fixed' ? '' : b.fam === 'count' ? ' · you count them' : ' · from ' + h(b.name.toLowerCase())}</small></div>
+        <label class="rf-q${r.over ? ' over' : ''}"><input type="text" inputmode="decimal" data-qty="${h(it.id)}" value="${qtyTxt(r.q)}" aria-label="Quantity of ${h(it.name)}"${r.on ? '' : ' disabled'}><small>${h(it.unit)}${r.over ? ` <button type="button" class="rf-reset" data-rf="autoqty" data-id="${h(it.id)}" title="Back to ${qtyTxt(r.auto)}">auto ${qtyTxt(r.auto)}</button>` : ''}</small></label>
+        <b class="rf-c">${r.on ? money(r.cost) : '-'}</b></div>`;
+}
+function exHtml(e, i) {
+    const x = e.x;
+    return `<div class="rf-row ex"><span class="rf-chk"><button type="button" class="rf-ib del" data-rf="delex" data-i="${i}" aria-label="Remove ${h(x.name)}"><i class="fas fa-times"></i></button></span>
+        <div class="rf-rn"><input class="rf-exn" data-ex="name" data-i="${i}" value="${h(x.name)}" maxlength="80" aria-label="Item name"><small><input class="rf-exp" data-ex="price" data-i="${i}" inputmode="decimal" value="${h(x.price)}" aria-label="Price"> per <input class="rf-exu" data-ex="unit" data-i="${i}" value="${h(x.unit)}" maxlength="20" aria-label="Unit"></small></div>
+        <label class="rf-q"><input type="text" inputmode="decimal" data-ex="qty" data-i="${i}" value="${h(x.qty)}" aria-label="Quantity"><small>${h(x.unit)}</small></label><b class="rf-c">${money(e.cost)}</b></div>`;
+}
+const used = r => r.on && (r.q > 0 || r.over);
+const openUnused = {};
+function unusedHtml(rows, what) {
+    const L = rows.filter(r => !used(r)); if (!L.length) return '';
+    return `<details class="rf-more" data-more="${what}"${openUnused[what] ? ' open' : ''}><summary>Not used on this job (${L.length})<small>Turned off, or nothing to count yet</small></summary><div class="rf-rows">${L.map(r => rowHtml(r)).join('')}</div></details>`;
+}
+function paintOut(c) {
+    const el = $('rf-out'); if (!el) return;
+    const steepTxt = c.steep > 0 ? `<span><b>${num1(c.steep / 100)}</b> steep squares (${c.O.steepFrom}/12+)</span>` : '';
+    const exM = c.ex.map((e, i) => [e, i]).filter(p => p[0].x.kind !== 'lab'), exL = c.ex.map((e, i) => [e, i]).filter(p => p[0].x.kind === 'lab');
+    el.innerHTML = `
+        <div class="rf-kpis"><div><span>Roof area</span><b>${num1(c.area)}</b><small>sq ft</small></div><div><span>Squares</span><b>${num1(c.sq)}</b><small>${num1(c.sqW)} with ${num1(c.waste)}% waste</small></div><div><span>Price per square</span><b>${c.area > 0 ? money(c.perSq) : '-'}</b><small>before GST</small></div></div>
+        <div class="rf-chips">${steepTxt}${c.L.eaves + c.L.rakes > 0 ? `<span><b>${num1(c.L.eaves + c.L.rakes)}</b> ft eaves + rakes</span>` : ''}${c.L.ridge + c.L.hips > 0 ? `<span><b>${num1(c.L.ridge + c.L.hips)}</b> ft ridges + hips</span>` : ''}${c.L.valleys > 0 ? `<span><b>${num1(c.L.valleys)}</b> ft valleys</span>` : ''}</div>
+        <h4 class="rf-h4">Materials <span>${money(c.matT)}</span></h4>
+        <div class="rf-rows">${c.mat.filter(used).map(r => rowHtml(r, 'mat')).join('')}${exM.map(p => exHtml(p[0], p[1])).join('')}</div>${unusedHtml(c.mat, 'materials')}
+        <button type="button" class="app-btn rf-addex" data-rf="addex" data-k="mat"><i class="fas fa-plus mr-2"></i>Add a material for this job</button>
+        <h4 class="rf-h4">Labour <span>${money(c.labT)}</span></h4>
+        <div class="rf-rows">${c.lab.filter(used).map(r => rowHtml(r, 'lab')).join('')}${exL.map(p => exHtml(p[0], p[1])).join('')}</div>${unusedHtml(c.lab, 'labour')}
+        <button type="button" class="app-btn rf-addex" data-rf="addex" data-k="lab"><i class="fas fa-plus mr-2"></i>Add labour for this job</button>
+        <div class="rf-tot">
+            <div><span>Materials</span><b>${money(c.matT)}</b></div>
+            ${c.markup ? `<div><span>Markup on materials (${num1(c.O.markup)}%)</span><b>${money(c.markup)}</b></div>` : ''}
+            <div><span>Labour</span><b>${money(c.labT)}</b></div>
+            ${c.profit ? `<div><span>Overhead &amp; profit (${num1(c.O.profit)}%)</span><b>${money(c.profit)}</b></div>` : ''}
+            <div class="sub"><span>Total before GST</span><b>${money(c.before)}</b></div>
+            <div><span>GST (${num1(c.gstRate)}%)</span><b>${money(c.gst)}</b></div>
+            <div class="big"><span>Total</span><b>${money(c.total)}</b></div>
+        </div>
+        <p class="rf-note">An estimate from your measurements and prices. Check quantities before ordering.</p>`;
+}
+function paintSaved() {
+    const el = $('rf-savedlist'); if (!el) return;
+    const L = (sget('roofJobs', []) || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    el.innerHTML = L.length ? L.map(s => `<div class="rf-sv${s.id === job.id ? ' cur' : ''}"><button type="button" class="rf-svo" data-rf="open" data-id="${h(s.id)}"><b>${h(s.job.name || s.job.address || 'Roof estimate')}</b><small>${h(new Date(s.at).toLocaleDateString())}${s.job.customer ? ' · ' + h(s.job.customer) : ''} · ${num1(N(s.sq))} squares · ${money(N(s.before))} + GST</small></button><button type="button" class="rf-ib del" data-rf="delsaved" data-id="${h(s.id)}" aria-label="Delete this estimate"><i class="fas fa-trash"></i></button></div>`).join('')
+        : '<p class="rf-note">Estimates you save show here, so you can open them again later. They are backed up with your settings.</p>';
+}
+
+/* ---------- typing and tapping ---------- */
+let outT = 0;
+function soonOut() { clearTimeout(outT); outT = setTimeout(() => { const c = calc(); paintSections(c); paintOut(c); }, 90); }
+function onInput(e) {
+    const t = e.target;
+    if (t.hasAttribute('data-j')) { job[t.getAttribute('data-j')] = t.value; keep(); return; }
+    if (t.hasAttribute('data-s')) { const s = job.sections[+t.getAttribute('data-i')]; if (!s) return; s[t.getAttribute('data-s')] = t.value; keep(); soonOut(); return; }
+    if (t.hasAttribute('data-l')) { job.lines[t.getAttribute('data-l')] = t.value; keep(); soonOut(); return; }
+    if (t.hasAttribute('data-c')) { const v = t.value; job.counts[t.getAttribute('data-c')] = v === '' ? '' : Math.max(0, Math.round(N(v))); keep(); soonOut(); return; }
+    if (t.getAttribute('data-d') === 'waste') { job.waste = t.value.trim() === '' ? '' : Math.max(0, Math.min(100, N(t.value))); keep(); soonOut(); return; }
+}
+function onChange(e) {
+    const t = e.target;
+    if (t.hasAttribute('data-s')) { const s = job.sections[+t.getAttribute('data-i')]; if (!s) return; const k = t.getAttribute('data-s'); s[k] = k === 'pitch' || k === 'n' ? +t.value : t.value; keep(); soonOut(); return; }
+    if (t.hasAttribute('data-d') && t.getAttribute('data-d') !== 'waste') { job[t.getAttribute('data-d')] = +t.value; keep(); soonOut(); return; }
+    if (t.hasAttribute('data-use')) { const id = t.getAttribute('data-use'), I = set(), it = I.mat.concat(I.lab).find(x => x.id === id); if (!it) return; if (t.checked === it.on) delete job.use[id]; else job.use[id] = t.checked; keep(); paintAll(); return; }
+    if (t.hasAttribute('data-qty')) { const id = t.getAttribute('data-qty'), v = t.value.trim(); if (v === '' || !isFinite(parseFloat(v))) delete job.qty[id]; else job.qty[id] = Math.max(0, parseFloat(v)); keep(); paintOut(calc()); return; }
+    if (t.hasAttribute('data-ex')) { const x = job.extra[+t.getAttribute('data-i')]; if (!x) return; const k = t.getAttribute('data-ex'); x[k] = k === 'qty' || k === 'price' ? Math.max(0, N(t.value)) : t.value.slice(0, 80); keep(); paintOut(calc()); return; }
+}
+async function onClick(e) {
+    const b = e.target.closest('[data-rf]'); if (!b) return;
+    const a = b.getAttribute('data-rf'), i = +b.getAttribute('data-i');
+    if (a === 'addsec') { job.sections.push(newSection(job.sections.length + 1)); keep(); paintAll(); setTimeout(() => { const x = document.querySelector('#rf-seclist .rf-sec:last-child [data-s="a"]'); if (x) { x.scrollIntoView({ block: 'center', behavior: 'smooth' }); try { x.focus({ preventScroll: true }); } catch (er) { /* ignore */ } } }, 60); }
+    else if (a === 'dup') { const s = clone(job.sections[i]); s.id = uid('s'); s.name = (s.name || 'Section') + ' (copy)'; job.sections.splice(i + 1, 0, s); keep(); paintAll(); }
+    else if (a === 'delsec') { if (job.sections.length === 1) { job.sections = [newSection(1)]; } else job.sections.splice(i, 1); keep(); paintAll(); }
+    else if (a === 'shape') { const s = job.sections[i]; s.shape = b.getAttribute('data-v'); keep(); paintAll(); }
+    else if (a === 'meas') { job.sections[i].meas = b.getAttribute('data-v'); keep(); paintAll(); }
+    else if (a === 'autoqty') { delete job.qty[b.getAttribute('data-id')]; keep(); paintOut(calc()); }
+    else if (a === 'addex') { const k = b.getAttribute('data-k'); job.extra.push({ id: uid('x'), kind: k, name: k === 'lab' ? 'Extra labour' : 'Extra material', qty: 1, unit: k === 'lab' ? 'hour' : 'piece', price: 0 }); keep(); paintOut(calc()); setTimeout(() => { const x = document.querySelectorAll('#rf-out .rf-exn'); const last = Array.from(x).filter(el => job.extra[+el.getAttribute('data-i')] && job.extra[+el.getAttribute('data-i')].kind === k).pop(); if (last) { try { last.focus(); last.select(); } catch (er) { /* ignore */ } } }, 40); }
+    else if (a === 'delex') { job.extra.splice(i, 1); keep(); paintOut(calc()); }
+    else if (a === 'settings') openSettings();
+    else if (a === 'useprices') { job.snap = null; keep(); paintAll(); toast('Now using your current prices', 'success'); }
+    else if (a === 'save') saveJob();
+    else if (a === 'quote') toQuote();
+    else if (a === 'share') share();
+    else if (a === 'new') { const c = calc(); if (c.area > 0 && !job.id) { const ok = await ask({ title: 'Start a new estimate?', message: 'This estimate is not saved. Start a new one anyway?', type: 'warning', confirmText: 'Start new', cancelText: 'Keep this one' }); if (!ok) return; } job = newJob(); keep(); resetDom(); paintAll(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    else if (a === 'open') { const s = (sget('roofJobs', []) || []).find(x => x.id === b.getAttribute('data-id')); if (!s) return; job = Object.assign(newJob(), clone(s.job), { id: s.id, snap: s.prices ? clone(s.prices) : null }); keep(); resetDom(); paintAll(); window.scrollTo({ top: 0, behavior: 'smooth' }); toast('Estimate opened', 'success'); }
+    else if (a === 'delsaved') { const id = b.getAttribute('data-id'); const ok = await ask({ title: 'Delete this estimate?', message: 'The saved estimate is removed. Quotes made from it stay.', type: 'danger', confirmText: 'Delete', cancelText: 'Keep' }); if (!ok) return; sset('roofJobs', (sget('roofJobs', []) || []).filter(x => x.id !== id)); if (job.id === id) { job.id = null; keep(); } paintAll(); toast('Estimate deleted', 'info'); }
+}
+function resetDom() { const l = $('rf-linegrid'); if (l) l.innerHTML = ''; const s = $('rf-seclist'); if (s) s.removeAttribute('data-sig'); }
+function openSettings() {
+    showPage('settings');
+    setTimeout(() => { const sec = $('roof-settings-section'); if (!sec) return; const hd = sec.querySelector(':scope > .acc-head'); if (hd && !sec.classList.contains('acc-open')) hd.click(); else sec.scrollIntoView({ behavior: 'smooth' }); }, 700);
+}
+
+/* ---------- save, quote, share ---------- */
+function snapshot() { const I = set(); return { mat: I.mat, lab: I.lab, opts: I.o }; }
+function saveJob() {
+    const c = calc(); if (!(c.area > 0) && !c.ex.length) { toast('Add a roof section first', 'error'); return; }
+    const list = (sget('roofJobs', []) || []).slice(), at = new Date().toISOString(), j = clone(job); delete j.snap; delete j.id;
+    const rec = { id: job.id || uid('rj'), at: at, job: j, prices: snapshot(), sq: r2(c.sq), before: c.before, total: c.total };
+    const k = list.findIndex(x => x.id === rec.id); if (k >= 0) list[k] = rec; else list.push(rec);
+    while (list.length > 80) list.shift();
+    sset('roofJobs', list); job.id = rec.id; job.snap = clone(rec.prices); keep(); paintAll(); toast(k >= 0 ? 'Estimate updated' : 'Estimate saved', 'success');
+}
+function scope(c) {
+    const out = [];
+    if (c.area > 0) out.push('Roof area about ' + num1(c.sq) + ' squares (' + Math.round(c.area).toLocaleString('en-CA') + ' sq ft)' + (c.maxP ? ', pitch up to ' + c.maxP + '/12' : ''));
+    c.lab.filter(r => r.on && r.q > 0 && r.it.basis === 'tearoff').forEach(() => out.push('Tear off ' + c.layers + ' layer' + (c.layers > 1 ? 's' : '') + ' of existing roofing and haul away'));
+    c.mat.filter(r => r.on && r.q > 0 && r.it.basis !== 'fixed').forEach(r => out.push('Supply and install ' + r.it.name.replace(/\s*\(.*\)$/, '').toLowerCase()));
+    c.ex.filter(e => e.x.kind !== 'lab' && e.cost > 0).forEach(e => out.push('Supply and install ' + String(e.x.name).toLowerCase()));
+    c.lab.filter(r => r.on && r.q > 0 && r.it.basis === 'count').forEach(r => out.push(r.it.name.replace(/^install\s+/i, 'Install ') + ' (' + qtyTxt(r.q) + ')'));
+    c.ex.filter(e => e.x.kind === 'lab' && e.cost > 0).forEach(e => out.push(e.x.name));
+    if (c.lab.some(r => r.on && r.q > 0 && /clean/i.test(r.it.name)) || c.mat.some(r => r.on && r.q > 0 && /bin|disposal/i.test(r.it.name))) out.push('Clean up and haul away all debris');
+    return out.filter((x, i, a) => a.indexOf(x) === i);
+}
+function toQuote() {
+    const c = calc();
+    if (!(c.before > 0)) { toast('Add a roof section and prices first', 'error'); return; }
+    if (!window.BIZ || !BIZ.newQuote || !BIZ.editorDraft) { toast('Quotes are not ready yet, try again in a moment', 'error'); return; }
+    BIZ.newQuote();
+    const d = BIZ.editorDraft();
+    if (job.customer) d.customerName = job.customer;
+    if (job.address) d.jobAddress = job.address;
+    d.title = job.name || 'Roof replacement';
+    d.sections = [{ title: job.name || 'Roof replacement', bullets: scope(c).join('\n'), amount: c.before.toFixed(2) }];
+    d.roofCalc = job.id || null;
+    BIZ.rerenderEditor();
+    toast('Quote filled in from the roof calculator. Check the wording, then save it.', 'success');
+}
+function summaryText(c) {
+    const L = [];
+    L.push('Roof estimate' + (job.name ? ': ' + job.name : '')); if (job.customer) L.push('Customer: ' + job.customer); if (job.address) L.push('Address: ' + job.address);
+    L.push(''); L.push('Roof area: ' + num1(c.area) + ' sq ft (' + num1(c.sq) + ' squares, ' + num1(c.sqW) + ' with ' + num1(c.waste) + '% waste)');
+    L.push(''); L.push('MATERIALS');
+    c.mat.filter(r => r.on && r.q > 0).forEach(r => L.push('- ' + r.it.name + ': ' + qtyTxt(r.q) + ' ' + r.it.unit + ' x ' + money(r.it.price) + ' = ' + money(r.cost)));
+    c.ex.filter(e => e.x.kind !== 'lab').forEach(e => L.push('- ' + e.x.name + ': ' + qtyTxt(N(e.x.qty)) + ' ' + e.x.unit + ' x ' + money(N(e.x.price)) + ' = ' + money(e.cost)));
+    L.push('Materials: ' + money(c.matT)); L.push(''); L.push('LABOUR');
+    c.lab.filter(r => r.on && r.q > 0).forEach(r => L.push('- ' + r.it.name + ': ' + qtyTxt(r.q) + ' ' + r.it.unit + ' x ' + money(r.it.price) + ' = ' + money(r.cost)));
+    c.ex.filter(e => e.x.kind === 'lab').forEach(e => L.push('- ' + e.x.name + ': ' + qtyTxt(N(e.x.qty)) + ' ' + e.x.unit + ' x ' + money(N(e.x.price)) + ' = ' + money(e.cost)));
+    L.push('Labour: ' + money(c.labT)); L.push('');
+    if (c.markup) L.push('Markup on materials: ' + money(c.markup)); if (c.profit) L.push('Overhead & profit: ' + money(c.profit));
+    L.push('Total before GST: ' + money(c.before)); L.push('GST: ' + money(c.gst)); L.push('Total: ' + money(c.total));
+    return L.join('\n');
+}
+async function share() {
+    const c = calc(); if (!(c.area > 0)) { toast('Add a roof section first', 'error'); return; }
+    const txt = summaryText(c);
+    if (navigator.share) { try { await navigator.share({ title: 'Roof estimate', text: txt }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(txt); toast('Estimate copied. Paste it into a message or email.', 'success'); } catch (e) { toast('Could not share on this device', 'error'); }
+}
+
+/* ================================================================ Settings > Roof calculator ================================================================ */
+const openEd = {};
+function itemEditor(it, kind, i) {
+    const b = BASE[it.basis] || BASE.area, open = !!openEd[it.id];
+    return `<div class="rs-item${it.on ? '' : ' off'}${open ? ' open' : ''}" data-k="${kind}" data-i="${i}" data-id="${h(it.id)}">
+        <div class="rs-r1"><label class="rs-on" title="Use on new estimates"><input type="checkbox" data-f="on"${it.on ? ' checked' : ''} aria-label="Use ${h(it.name)} on new estimates"></label>
+            <input class="inv-input rs-name" data-f="name" value="${h(it.name)}" maxlength="80" aria-label="Name">
+            <label class="rs-price"><span>$</span><input class="inv-input" data-f="price" inputmode="decimal" value="${h(it.price)}" aria-label="Price per ${h(it.unit)}"><small>${/^each$/i.test(it.unit) ? 'each' : 'per ' + h(it.unit)}</small></label>
+            <button type="button" class="rf-ib rs-more" data-rs="more" aria-expanded="${open}" aria-label="More for ${h(it.name)}"><i class="fas fa-chevron-down"></i></button></div>
+        <div class="rs-r2"${open ? '' : ' hidden'}>
+            <label class="rf-f"><span>${kind === 'lab' ? 'Charged per' : 'Sold by the'}</span><input class="inv-input" data-f="unit" maxlength="30" value="${h(it.unit)}" placeholder="${kind === 'lab' ? 'square' : 'bundle'}"></label>
+            <label class="rf-f"><span>Worked out from</span><select class="inv-input" data-f="basis">${BASES.map(x => `<option value="${x[0]}"${x[0] === it.basis ? ' selected' : ''}>${x[1]}</option>`).join('')}</select></label>
+            <label class="rf-f"><span>${h(coverLabel(it))}</span><input class="inv-input" data-f="cover" inputmode="decimal" value="${h(it.cover)}"></label>
+            ${b.fam === 'count' ? `<label class="rf-f"><span>Counted as<small>Items with the same name share one number</small></span><input class="inv-input" data-f="count" maxlength="40" value="${h(it.count || '')}"></label>` : ''}
+            <div class="rs-del"><button type="button" class="app-btn" data-rs="del"><i class="fas fa-trash mr-2"></i>Delete ${h(it.name)}</button></div>
+        </div></div>`;
+}
+function injectSettings() {
+    const page = $('settings-page'); if (!page || $('roof-settings-section')) return;
+    const anchor = $('quote-settings-section') || $('receipt-settings-section');
+    const sec = document.createElement('div');
+    sec.className = 'magic-calc-display animate-item'; sec.id = 'roof-settings-section'; sec.style.cssText = 'margin: 20px 0; padding: 20px;';
+    sec.innerHTML = `<div class="live-calc-header" style="margin-bottom:16px;"><div class="live-calc-icon" style="background:linear-gradient(135deg,rgba(56,189,248,.2),rgba(56,189,248,.3));color:#38bdf8;"><i class="fas fa-house-roof"></i></div><div><h3 class="live-calc-title" style="color:#38bdf8;">Roof calculator</h3><p class="text-gray-400 text-sm">Your material and labour prices, waste and markup</p></div></div>
+        <div class="space-y-6" id="rs-body"></div>`;
+    if (anchor) anchor.insertAdjacentElement('afterend', sec);
+    else { const grid = page.querySelector('.form-grid') || page; grid.appendChild(sec); }
+    sec.addEventListener('change', onSetChange);
+    sec.addEventListener('click', onSetClick);
+    paintSettings();
+}
+function paintSettings() {
+    const el = $('rs-body'); if (!el) return;
+    const O = opts(), M = matList(), L = labList();
+    el.innerHTML = `
+        <div class="setting-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">General</h4><p class="setting-description">Used on every new estimate. You can still change the waste on each job.</p></div></div>
+            <div class="rf-g3 rs-gen">
+                <label class="rf-f"><span>Waste %</span><input class="inv-input" data-o="waste" inputmode="decimal" value="${h(O.waste)}"></label>
+                <label class="rf-f"><span>Steep from</span><select class="inv-input" data-o="steepFrom">${[6, 7, 8, 9, 10, 11, 12].map(p => `<option value="${p}"${+O.steepFrom === p ? ' selected' : ''}>${p}/12</option>`).join('')}</select></label>
+                <label class="rf-f"><span>Very steep from</span><select class="inv-input" data-o="vsteepFrom">${[8, 9, 10, 11, 12, 14, 16].map(p => `<option value="${p}"${+O.vsteepFrom === p ? ' selected' : ''}>${p}/12</option>`).join('')}</select></label>
+                <label class="rf-f"><span>Markup on materials %</span><input class="inv-input" data-o="markup" inputmode="decimal" value="${h(O.markup)}"></label>
+                <label class="rf-f"><span>Overhead &amp; profit %</span><input class="inv-input" data-o="profit" inputmode="decimal" value="${h(O.profit)}"></label>
+            </div></div>
+        <div class="setting-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-truck"></i></div><div class="setting-content"><h4 class="setting-title">Materials</h4><p class="setting-description">Add every material you use and type your price. Tick a material to put it on new estimates (you can still leave it out of a job). Tap <i class="fas fa-chevron-down"></i> to change how it is sold and worked out, e.g. shingles: sold by the bundle, one bundle covers 33.3 sq ft (3 bundles per square).</p></div></div>
+            <div class="rs-list" id="rs-mat">${M.map((it, i) => itemEditor(it, 'mat', i)).join('')}</div>
+            <div class="rf-btns"><button type="button" class="app-btn" data-rs="add" data-k="mat"><i class="fas fa-plus mr-2"></i>Add a material</button><button type="button" class="app-btn" data-rs="reset" data-k="mat"><i class="fas fa-undo-alt mr-2"></i>Back to the example list</button></div></div>
+        <div class="setting-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-hard-hat"></i></div><div class="setting-content"><h4 class="setting-title">Labour</h4><p class="setting-description">What you charge for the work: per square, per foot, per item you count, or a fixed amount per job. Steep extras are added on top of the normal install price.</p></div></div>
+            <div class="rs-list" id="rs-lab">${L.map((it, i) => itemEditor(it, 'lab', i)).join('')}</div>
+            <div class="rf-btns"><button type="button" class="app-btn" data-rs="add" data-k="lab"><i class="fas fa-plus mr-2"></i>Add labour</button><button type="button" class="app-btn" data-rs="reset" data-k="lab"><i class="fas fa-undo-alt mr-2"></i>Back to the example list</button></div></div>
+        <p class="setting-description">Prices are saved with your settings, so they are backed up to Google Drive and come to your other devices. Saved estimates keep the prices they were made with.</p>`;
+}
+function listOf(kind) { return kind === 'lab' ? labList() : matList(); }
+function saveList(kind, L) { sset(kind === 'lab' ? 'roofLab' : 'roofMat', L); repaintCalc(); }
+function repaintCalc() { if ($('roofcalc-page') && document.querySelector('#roofcalc-page.active')) paintAll(); else paintBanner(); }
+function onSetChange(e) {
+    const t = e.target;
+    if (t.hasAttribute('data-o')) {
+        const O = Object.assign({}, sget('roofOpts', {}) || {}), k = t.getAttribute('data-o');
+        O[k] = Math.max(0, Math.min(k === 'waste' ? 100 : k === 'markup' || k === 'profit' ? 500 : 24, N(t.value)));
+        sset('roofOpts', O); toast('Saved', 'success'); repaintCalc(); return;
+    }
+    const box = t.closest('.rs-item'); if (!box || !t.hasAttribute('data-f')) return;
+    const kind = box.getAttribute('data-k'), i = +box.getAttribute('data-i'), L = listOf(kind), it = L[i]; if (!it) return;
+    const f = t.getAttribute('data-f');
+    if (f === 'on') it.on = t.checked;
+    else if (f === 'price' || f === 'cover') { it[f] = Math.max(0, N(t.value)); if (f === 'cover' && !(it.cover > 0)) it.cover = 1; }
+    else if (f === 'basis') { it.basis = t.value; if (it.basis === 'count' && !it.count) it.count = it.name; const fam = BASE[it.basis].fam; if (fam === 'sq' || fam === 'count' || fam === 'fixed') it.cover = 1; }
+    else it[f] = String(t.value).slice(0, f === 'name' ? 80 : 40);
+    if (f === 'price') sset('roofPricesSet', true);
+    L[i] = fixItem(it, kind); saveList(kind, L);
+    if (f === 'basis' || f === 'unit' || f === 'on') { box.outerHTML = itemEditor(L[i], kind, i); }
+    toast(f === 'price' ? 'Price saved' : 'Saved', 'success');
+}
+async function onSetClick(e) {
+    const b = e.target.closest('[data-rs]'); if (!b) return;
+    const a = b.getAttribute('data-rs');
+    if (a === 'more') { const box = b.closest('.rs-item'), id = box.getAttribute('data-id'), on = !openEd[id]; openEd[id] = on; box.classList.toggle('open', on); box.querySelector('.rs-r2').hidden = !on; b.setAttribute('aria-expanded', String(on)); return; }
+    if (a === 'add') {
+        const kind = b.getAttribute('data-k'), L = listOf(kind);
+        const ni = fixItem(kind === 'lab' ? { name: 'New labour', unit: 'square', basis: 'squares', cover: 1, price: 0, on: true } : { name: 'New material', unit: 'piece', basis: 'area', cover: 100, price: 0, on: true }, kind);
+        openEd[ni.id] = true; L.push(ni);
+        saveList(kind, L); paintSettings();
+        setTimeout(() => { const x = document.querySelector('#rs-' + kind + ' .rs-item:last-child .rs-name'); if (x) { x.scrollIntoView({ block: 'center', behavior: 'smooth' }); try { x.focus({ preventScroll: true }); x.select(); } catch (er) { /* ignore */ } } }, 60);
+    } else if (a === 'del') {
+        const box = b.closest('.rs-item'), kind = box.getAttribute('data-k'), i = +box.getAttribute('data-i'), L = listOf(kind), it = L[i]; if (!it) return;
+        const ok = await ask({ title: 'Delete ' + it.name + '?', message: 'It is taken off your price list. Saved estimates keep it.', type: 'danger', confirmText: 'Delete', cancelText: 'Keep' }); if (!ok) return;
+        L.splice(i, 1); saveList(kind, L); paintSettings(); toast(it.name + ' deleted', 'info');
+    } else if (a === 'reset') {
+        const kind = b.getAttribute('data-k');
+        const ok = await ask({ title: 'Go back to the example list?', message: 'Your ' + (kind === 'lab' ? 'labour' : 'material') + ' list and prices are replaced by the example ones.', type: 'warning', confirmText: 'Replace', cancelText: 'Keep mine' }); if (!ok) return;
+        sset(kind === 'lab' ? 'roofLab' : 'roofMat', null); paintSettings(); repaintCalc(); toast('Example list back', 'info');
+    }
+}
+
+/* ================================================================ styles ================================================================ */
+const css = `
+.fa-house-roof { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12 12 3l10 9'/%3E%3Cpath d='M5 10v10h14V10'/%3E%3Cpath d='M10 20v-6h4v6'/%3E%3C/svg%3E"); }
+.rf-card { margin: 16px 0 !important; padding: 18px !important; }
+.rf-g3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
+.rf-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; } .rf-f > span { font-size: .78rem; font-weight: 600; color: rgba(255,255,255,.78); } .rf-f > span small { display: block; font-weight: 400; font-size: .7rem; color: rgba(255,255,255,.55); }
+.rf-f .inv-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.rf-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.rf-help { margin-top: 12px; font-size: .84rem; color: rgba(255,255,255,.78); } .rf-help summary { cursor: pointer; font-weight: 600; color: rgb(var(--lav)); } .rf-help p { margin: 8px 0 0; line-height: 1.45; }
+.rf-sec { padding: 12px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+.rf-sh { display: flex; align-items: center; gap: 8px; } .rf-sname { flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.25); color: inherit; font: 700 1rem var(--font, inherit); padding: 4px 2px; }
+.rf-sa { font-size: .8rem; color: #7dd3fc; white-space: nowrap; }
+.rf-ib { flex: none; width: 34px; height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.rf-ib.del { color: #fca5a5; border-color: rgba(248,113,113,.35); }
+.rf-seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); }
+.rf-seg button { flex: 1 1 auto; padding: 7px 10px; border-radius: 9px; border: 0; background: transparent; color: rgba(255,255,255,.75); font: 600 .82rem var(--font, inherit); cursor: pointer; }
+.rf-seg button[aria-pressed="true"] { color: #fff; background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--ind2))); }
+.rf-seg.sm button { font-size: .76rem; padding: 6px 8px; }
+.rf-h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 8px; font-size: .95rem; font-weight: 700; } .rf-h4 span { color: #6ee7b7; }
+.rf-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .rf-kpis > div { padding: 10px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); min-width: 0; }
+.rf-kpis span { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; color: rgba(255,255,255,.62); } .rf-kpis b { display: block; font-size: 1.15rem; margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .rf-kpis small { font-size: .7rem; color: rgba(255,255,255,.6); }
+.rf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .rf-chips span { font-size: .74rem; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.8); }
+.rf-rows { display: flex; flex-direction: column; gap: 6px; }
+.rf-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 92px 84px; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07); }
+.rf-row.off { opacity: .5; } .rf-row.off .rf-rn b { text-decoration: line-through; }
+.rf-chk { display: flex; align-items: center; justify-content: center; } .rf-chk input { width: 20px; height: 20px; accent-color: rgb(var(--acc)); } .rf-chk .rf-ib { width: 28px; height: 28px; }
+.rf-rn { min-width: 0; } .rf-rn b { display: block; font-size: .9rem; overflow-wrap: anywhere; } .rf-rn small { display: block; font-size: .72rem; color: rgba(255,255,255,.6); }
+.rf-q { display: flex; flex-direction: column; align-items: stretch; } .rf-q input { width: 100%; box-sizing: border-box; padding: 4px 8px; border-radius: 9px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: inherit; font: 600 .92rem var(--font, inherit); text-align: right; }
+.rf-q small { font-size: .66rem; text-align: right; color: rgba(255,255,255,.55); overflow: hidden; text-overflow: ellipsis; } .rf-q.over input { border-color: #fbbf24; }
+.rf-reset { border: 0; background: none; color: #fcd34d; font: inherit; padding: 0; cursor: pointer; text-decoration: underline; }
+.rf-c { text-align: right; font-size: .9rem; white-space: nowrap; }
+.rf-row.ex input.rf-exn { width: 100%; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.25); color: inherit; font: 700 .9rem var(--font, inherit); padding: 2px 0; }
+.rf-row.ex small input { width: 64px; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.25); color: inherit; font: inherit; padding: 0; } .rf-row.ex small input.rf-exu { width: 70px; }
+.rf-addex { margin-top: 8px; }
+.rf-more { margin-top: 8px; } .rf-more > summary { cursor: pointer; padding: 8px 10px; border-radius: 12px; border: 1px dashed rgba(255,255,255,.2); font-size: .84rem; font-weight: 600; color: rgba(255,255,255,.75); list-style: none; } .rf-more > summary::-webkit-details-marker { display: none; }
+.rf-more > summary small { display: block; font-weight: 400; font-size: .7rem; color: rgba(255,255,255,.5); } .rf-more[open] > summary { margin-bottom: 6px; }
+.rf-tot { margin-top: 16px; padding: 12px 14px; border-radius: 16px; background: rgba(52,211,153,.07); border: 1px solid rgba(52,211,153,.25); }
+.rf-tot > div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: .92rem; } .rf-tot > div.sub { border-top: 1px solid rgba(255,255,255,.15); margin-top: 4px; padding-top: 8px; font-weight: 700; }
+.rf-tot > div.big { font-size: 1.15rem; font-weight: 800; } .rf-tot > div.big b { color: #6ee7b7; }
+.rf-note { font-size: .76rem; color: rgba(255,255,255,.6); margin: 10px 0 0; line-height: 1.4; }
+.rf-warn { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin: 0 0 6px; border-radius: 14px; background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.35); font-size: .84rem; }
+.rf-warn > i { color: #fbbf24; } .rf-warn > span { flex: 1 1 200px; } .rf-warn .app-btn { padding: 7px 12px !important; }
+.rf-warn.soft { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.15); margin-top: 10px; }
+.rf-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; } .rf-actions .app-btn { flex: 1 1 140px; justify-content: center; }
+.rf-actions .rf-main { background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))) !important; color: #fff !important; border-color: transparent !important; }
+.rf-sv { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; } .rf-svo { flex: 1; min-width: 0; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: inherit; cursor: pointer; font: inherit; }
+.rf-svo b { display: block; } .rf-svo small { display: block; font-size: .74rem; color: rgba(255,255,255,.62); } .rf-sv.cur .rf-svo { border-color: rgba(var(--pr2), .7); }
+.rs-list { display: flex; flex-direction: column; gap: 10px; }
+.rs-item { padding: 12px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 10px; } .rs-item.off { opacity: .7; }
+.rs-item { padding: 10px; gap: 0; } .rs-item.open .rs-r2 { margin-top: 10px; }
+.rs-r1 { display: flex; align-items: center; gap: 8px; } .rs-r1 .rs-name { flex: 1; min-width: 0; font-weight: 700; font-size: .95rem !important; padding-left: 10px !important; padding-right: 8px !important; }
+.rs-on { display: flex; align-items: center; flex: none; } .rs-on input { width: 20px; height: 20px; accent-color: rgb(var(--acc)); }
+.rs-price { flex: none; width: 96px; position: relative; display: flex; flex-direction: column; } .rs-price > span { position: absolute; left: 9px; top: 50%; transform: translateY(-62%); font-size: .85rem; opacity: .7; pointer-events: none; }
+.rs-price input { width: 100%; box-sizing: border-box; font-size: .95rem !important; padding-left: 20px !important; padding-right: 6px !important; text-align: right; } .rs-price small { position: absolute; right: 2px; bottom: -15px; font-size: .62rem; opacity: .6; white-space: nowrap; }
+.rs-item { padding-bottom: 18px; } .rs-more i { transition: transform .2s; } .rs-item.open .rs-more i { transform: rotate(180deg); }
+.rs-r2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 10px; } .rs-r2[hidden] { display: none; }
+.rs-del { grid-column: 1 / -1; } .rs-del .app-btn { color: #fca5a5 !important; border-color: rgba(248,113,113,.4) !important; }
+@media (max-width: 420px) {
+  .rf-row { grid-template-columns: 26px minmax(0, 1fr) 76px; grid-template-areas: "c n n" "c q t"; row-gap: 6px; }
+  .rf-row .rf-chk { grid-area: c; align-self: start; padding-top: 2px; } .rf-row .rf-rn { grid-area: n; } .rf-row .rf-q { grid-area: q; flex-direction: row; align-items: center; gap: 6px; } .rf-row .rf-q input { width: 76px; } .rf-row .rf-q small { text-align: left; white-space: nowrap; } .rf-row .rf-c { grid-area: t; align-self: center; }
+  .rf-row { grid-template-columns: 26px minmax(0, 1fr) auto; }
+  .rf-kpis b { font-size: 1rem; }
+  .rf-g3 { grid-template-columns: 1fr 1fr; }
+}
+html.lm #roofcalc-page .rf-seg button[aria-pressed="true"], html.lm #roofcalc-page .rf-actions .rf-main { color: #fff !important; }
+html.lm .rf-sa { color: #0369a1; } html.lm .rf-h4 span, html.lm .rf-tot > div.big b { color: #047857; } html.lm .rf-reset { color: #b45309; }
+`;
+const st = document.createElement('style'); st.id = 'incator-roof-css'; st.textContent = css; document.head.appendChild(st);
+
+/* ================================================================ start ================================================================ */
+function boot() {
+    loadDraft(); injectPage(); injectSettings(); setTimeout(addTabs, 900); setTimeout(addTabs, 2500);
+    paintAll();
+    try { new MutationObserver(() => { if (document.body.getAttribute('data-pg') === 'roofcalc') { addTabs(); paintAll(); } if (document.body.getAttribute('data-pg') === 'settings' && !$('roof-settings-section')) injectSettings(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+window.IncRoof = { calc: calc, job: () => job, len: len, pitchF: pitchF, scope: () => scope(calc()), text: () => summaryText(calc()), materials: matList, labour: labList, opts: opts,
+    reload: () => { loadDraft(); resetDom(); paintAll(); }, paint: paintAll, settings: paintSettings };
 })();
 
 </script>
@@ -22822,6 +23433,20 @@ function watch() {
 }
 if (!watch()) document.addEventListener('DOMContentLoaded', watch);
 window.IncPerf = { css: function () { return st.textContent; }, cardHeight: cardHeight };
+})();
+/* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
+(function () {
+'use strict';
+var VERSION = '2026.10.24 (v12)';
+function put() {
+    var pg = document.getElementById('settings-page'); if (!pg) return false;
+    if (document.getElementById('inc-version')) return true;
+    var p = document.createElement('p'); p.id = 'inc-version'; p.textContent = 'IncAtor version ' + VERSION;
+    p.style.cssText = 'text-align:center;font-size:.75rem;opacity:.55;margin:18px 0 90px;';
+    (pg.querySelector('.stunning-form-container') || pg).appendChild(p); return true;
+}
+if (!put()) document.addEventListener('DOMContentLoaded', put);
+window.IncVersion = VERSION;
 })();
 
 </script>
