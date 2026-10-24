@@ -1,5 +1,5 @@
 /* IncAtor service worker: lets the app open instantly and when offline. Your data is never touched (it lives in the browser / your Google Drive). */
-var CACHE = 'incator-v7';
+var CACHE = 'incator-v8';
 self.addEventListener('install', function (e) { self.skipWaiting(); });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); }));
