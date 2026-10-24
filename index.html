@@ -19376,7 +19376,11 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 'use strict';
 if (window.IncBgs) return;
 function rep(n, f) { var s = ''; for (var i = 0; i < n; i++) s += f(i); return s; }
-var STARS = '<i class="bx-st"></i><i class="bx-st s2"></i><i class="bx-st sb"></i>';
+// stars: each one twinkles on its own, at its own random moment and speed (never all together)
+var STARS = rep(40, function (i) {
+    var big = rnd(i, 201) > 0.8, sz = big ? 2.2 + rnd(i, 202) * 1.2 : 1 + rnd(i, 203) * 1.1, y = Math.pow(rnd(i, 204), 1.35) * 62;
+    return '<i class="tw' + (big ? ' big' : '') + ' t' + (1 + (i % 3)) + '" style="left:' + (rnd(i, 205) * 100).toFixed(1) + '%;top:' + y.toFixed(1) + '%;width:' + sz.toFixed(1) + 'px;height:' + sz.toFixed(1) + 'px;animation-duration:' + (2.4 + rnd(i, 206) * 5.6).toFixed(2) + 's;animation-delay:-' + (rnd(i, 207) * 8).toFixed(2) + 's"></i>';
+});
 // a fixed "random" spread, the same every time (so the page never jumps when it is drawn again)
 function rnd(i, k) { var x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); }
 // pine tree ridges: a row of pointed tips at slightly different heights
@@ -19800,6 +19804,13 @@ var CSS = [
     '.bgx .sn.v2 { animation-name: bxFall2; } .bgx .e.v2 { animation-name: bxEmber2; } .bgx .f.v2 { animation-name: bxFly2; } .bgx .lf.v2, .bgx .pt.v2 { animation-name: bxLeaf2; }',
     '.bgx .sn.v3 { animation-name: bxFall3; } .bgx .e.v3 { animation-name: bxEmber3; } .bgx .f.v3 { animation-name: bxFly3; } .bgx .lf.v3, .bgx .pt.v3 { animation-name: bxLeaf3; }',
     '.bgx .sn.v4 { animation-name: bxFall4; } .bgx .e.v4 { animation-name: bxEmber4; } .bgx .f.v4 { animation-name: bxFly4; } .bgx .lf.v4, .bgx .pt.v4 { animation-name: bxLeaf4; }',
+    '.bgx .tw { border-radius: 50%; background: #fff; opacity: .3; will-change: opacity; animation: twA 4s ease-in-out infinite; }',
+    '.bgx .tw.big { box-shadow: 0 0 6px 1px rgba(255,255,255,.75); } .bgx .tw.big::before, .bgx .tw.big::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(255,255,255,.7); transform: translate(-50%, -50%); } .bgx .tw.big::before { width: 9px; height: 1px; } .bgx .tw.big::after { width: 1px; height: 9px; }',
+    '.bgx .tw.t2 { animation-name: twB; } .bgx .tw.t3 { animation-name: twC; }',
+    '@keyframes twA { 0%, 100% { opacity: .25; } 42% { opacity: .3; } 50% { opacity: 1; } 58% { opacity: .3; } }',
+    '@keyframes twB { 0%, 100% { opacity: .35; } 18% { opacity: .95; } 30% { opacity: .3; } 70% { opacity: .55; } }',
+    '@keyframes twC { 0%, 100% { opacity: .2; } 60% { opacity: .25; } 70% { opacity: 1; } 76% { opacity: .5; } 84% { opacity: .9; } 92% { opacity: .3; } }',
+    '.sky-pv .tw.big::before, .sky-pv .tw.big::after { display: none; }',
     /* phones: a little lighter */
     '@media (hover: none), (pointer: coarse) { .bgx .bx-st.s2 { display: none; } }'
 ].join('\n');
@@ -19830,7 +19841,8 @@ function save(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', 
 function on() { return S('starsOn', true) !== false; }
 function level() { var v = S('starsAmount', DEF); return LEVELS[v] ? v : DEF; }
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
-function reduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+function reduced() { return osCalm() && S('motionAlways', false) !== true; }   // the phone asks for less motion (unless you chose Move anyway)
 function hiddenTheme() { var t = document.documentElement.getAttribute('data-theme'); return t === 'graphite' || t === 'terminal' || t === 'business'; }
 function phone() { if (PH === null) PH = (window.innerWidth || 400) < 900 || (navigator.maxTouchPoints || 0) > 0; return PH; }   // worked out once (reading the width every frame made the page re-measure itself)
 var TINT = ['255,255,255', '255,255,255', '221,214,254', '165,243,252', '251,207,232', '254,240,138'];
@@ -20006,7 +20018,8 @@ if (window.IncSky) return;
 function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
 function save(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ } }
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
-function reduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+function reduced() { return osCalm() && S('motionAlways', false) !== true; }   // the phone asks for less motion (unless you chose Move anyway)
 function hiddenTheme() { var t = document.documentElement.getAttribute('data-theme'); return t === 'graphite' || t === 'terminal' || t === 'business'; }
 function rnd(a, b) { return a + Math.random() * (b - a); }
 
@@ -20192,6 +20205,7 @@ function paintSet() {
     var ch = bgChoice();
     Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-appbg]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-appbg') === ch)); });
     Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-autonow]'), function (b) { var k = b.getAttribute('data-autonow'), r = resolve(k); b.textContent = 'Now: ' + bgName(r); var pv = b.parentNode.querySelector('.sky-pv'); if (pv && pv.getAttribute('data-r') !== r) { pv.setAttribute('data-r', r); pv.className = 'sky-pv bgx bgx-' + r; pv.innerHTML = BG.html(r); } });
+    paintWhy();
     var ro = S('bgRotate', false) === true, rl = rotList(), sbk = document.getElementById('sky-block');
     if (sbk) sbk.classList.toggle('rot-on', ro);
     var rt = document.getElementById('rot-toggle'); if (rt) { rt.classList.toggle('active', ro); rt.setAttribute('aria-checked', String(ro)); }
@@ -20222,11 +20236,43 @@ function setRotate(on) {
     if (on) setNow(bgMode()); else { save('appBg', bgMode()); rotPick = null; }               // turning it off keeps the one on screen
     save('bgRotate', !!on); applyBg();
 }
+/* why the background, bubbles or stars might not be moving, with a one-tap fix for each */
+function whyStill() {
+    var r = [], h = document.documentElement;
+    if (saver()) r.push(['saver', 'Battery Saver is on, so the background, bubbles and stars rest.', 'Turn Battery Saver off']);
+    if (h.classList.contains('big-calm')) r.push(['big', 'Big numbers is resting the moving effects.', 'Let them move']);
+    if (reduced()) r.push(['os', 'Your phone asks for less motion (Reduce Motion is on in its Accessibility settings), so the background stays still.', 'Move anyway']);
+    if (hiddenTheme()) r.push(['theme', 'This theme keeps the background plain.', '']);
+    return r;
+}
+function paintWhy() {
+    var el = document.getElementById('motion-why'); if (!el) return;
+    var r = whyStill();
+    el.innerHTML = r.map(function (x) { return '<div class="mw-row"><i class="fas fa-pause-circle"></i><span>' + x[1] + '</span>' + (x[2] ? '<button type="button" class="app-btn mw-fix" data-mwfix="' + x[0] + '">' + x[2] + '</button>' : '') + '</div>'; }).join('') +
+        (osCalm() && S('motionAlways', false) === true ? '<div class="mw-row ok"><i class="fas fa-check"></i><span>Moving even though your phone asks for less motion.</span><button type="button" class="app-btn mw-fix" data-mwfix="calm">Follow my phone</button></div>' : '');
+    el.style.display = el.innerHTML ? '' : 'none';
+}
+function applyMotion() {
+    document.documentElement.classList.toggle('motion-ok', S('motionAlways', false) === true);
+    try { if (window.IncStars) IncStars.apply(); } catch (e) { /* ignore */ }
+    try { if (window.IncBubbles && IncBubbles.motion) IncBubbles.motion(); } catch (e) { /* ignore */ }
+    applyShoot(); paintWhy();
+}
+function fixWhy(k) {
+    if (k === 'saver' && window.IncSaver) IncSaver.set(false);
+    if (k === 'big' && window.IncLooks) IncLooks.big(true, false);
+    if (k === 'os') save('motionAlways', true);
+    if (k === 'calm') save('motionAlways', false);
+    applyMotion(); applyBg();
+    if (window.showToast) showToast(k === 'calm' ? 'Following your phone\'s Reduce Motion' : 'Everything is moving again', 'success');
+}
 function choose(k) {
     k = BG.has(k) || isAuto(k) ? k : 'theme';
     if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); }
     save('appBg', k); applyBg();
     if (k === 'auto-weather' && window.IncWx) IncWx.refresh(false).then(function () { applyBg(); });
+    var why = k === 'theme' ? [] : whyStill().filter(function (x) { return x[0] !== 'theme'; });
+    if (why.length && window.showToast) { showToast(why[0][1] + ' See Settings > Appearance > Background to change that.', 'info'); paintWhy(); return; }
     if (window.showToast) showToast(isAuto(k) ? autoName(k) + ': showing ' + bgName(bgMode()) + ' now' : bgMode() === 'theme' ? 'Back to your theme\'s background' : bgName(bgMode()) + ' is now the background', 'success'); }
 /* full-screen preview: the background moving, with a few sample cards in its glow, before you choose it */
 var pvEl = null, pvKey = '', pvBack = null;
@@ -20276,6 +20322,7 @@ function inject() {
         '<div class="setting-item" id="glow-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-palette"></i></div><div class="setting-content"><h4 class="setting-title">Glow colour</h4><p class="setting-description" id="glow-note"></p></div></div>' +
         '<div class="setting-control"><span class="nm-seg" role="group" aria-label="Glow colour"><button type="button" data-glow="match">Match background</button><button type="button" data-glow="theme">Theme colours</button><button type="button" data-glow="custom">My colour</button></span></div>' +
             '<div class="glow-custom" id="glow-custom"><div class="gsw-row"><button type="button" class="gsw" data-gsw="#7c3aed" style="background:#7c3aed" aria-label="Colour #7c3aed"></button><button type="button" class="gsw" data-gsw="#2563eb" style="background:#2563eb" aria-label="Colour #2563eb"></button><button type="button" class="gsw" data-gsw="#0891b2" style="background:#0891b2" aria-label="Colour #0891b2"></button><button type="button" class="gsw" data-gsw="#059669" style="background:#059669" aria-label="Colour #059669"></button><button type="button" class="gsw" data-gsw="#65a30d" style="background:#65a30d" aria-label="Colour #65a30d"></button><button type="button" class="gsw" data-gsw="#d97706" style="background:#d97706" aria-label="Colour #d97706"></button><button type="button" class="gsw" data-gsw="#ea580c" style="background:#ea580c" aria-label="Colour #ea580c"></button><button type="button" class="gsw" data-gsw="#dc2626" style="background:#dc2626" aria-label="Colour #dc2626"></button><button type="button" class="gsw" data-gsw="#db2777" style="background:#db2777" aria-label="Colour #db2777"></button><button type="button" class="gsw" data-gsw="#9333ea" style="background:#9333ea" aria-label="Colour #9333ea"></button></div><label class="gpick"><input type="color" id="glow-color" aria-label="Pick any colour"><span>Any colour</span></label></div></div>' +
+        '<div class="motion-why" id="motion-why" role="status"></div>' +
         '<div class="setting-item" id="rot-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sync-alt"></i></div><div class="setting-content"><h4 class="setting-title">A different one each time</h4><p class="setting-description" id="rot-note"></p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="rot-toggle" role="switch" tabindex="0" aria-label="A different background each time you open IncAtor"><div class="toggle-orb"></div></div></div></div>' +
         '<h4 class="sky-gh"><i class="fas fa-magic"></i> Automatic</h4><div class="sky-opts sky-auto">' +
@@ -20316,6 +20363,7 @@ function inject() {
     var it2 = menu.querySelector('.ap-item[data-ap="shoot"]'), st = menu.querySelector('.ap-item[data-ap="stars"]') || menu.querySelector('.ap-item[data-ap="bubbles"]');
     if (it2 && st) st.parentNode.insertBefore(it2, st.nextSibling);                       // right under Rising stars
     bx.addEventListener('click', function (e) {
+        var mw = e.target.closest('[data-mwfix]'); if (mw) { fixWhy(mw.getAttribute('data-mwfix')); return; }
         var pvb = e.target.closest('[data-bgpv]'); if (pvb) { preview(pvb.getAttribute('data-bgpv')); return; }
         var rb = e.target.closest('[data-bgrot]'); if (rb) { toggleRot(rb.getAttribute('data-bgrot')); return; }
         if (e.target.closest('#rot-toggle')) { setRotate(!(S('bgRotate', false) === true)); if (window.showToast) showToast(S('bgRotate', false) === true ? 'Tick the backgrounds you like: one of them each time you open IncAtor' : 'One background again: ' + bgName(bgMode()), 'success'); return; }
@@ -20351,7 +20399,7 @@ css.textContent = [
     '.isk-st.s2 { background-size: 520px 520px; background-position: 120px 80px; opacity: .35; animation-duration: 7s; animation-delay: -3s; }',
     '@keyframes iskTw { from { opacity: .15; transform: translateY(0); } to { opacity: .6; transform: translateY(-14px); } }',
     'body.battery-saver #inc-sky *, html.inc-sky-calm #inc-sky * { animation: none !important; }',
-    '@media (prefers-reduced-motion: reduce) { #inc-sky * { animation: none !important; } }',
+    '@media (prefers-reduced-motion: reduce) { html:not(.motion-ok) #inc-sky * { animation: none !important; } }',
     '@media (hover: none), (pointer: coarse) { .isk-st.s2 { display: none; } }',
     '.sky-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }',
     '.sky-opt { -webkit-appearance: none; appearance: none; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px; border-radius: 16px; border: 1.5px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #fff; font: inherit; text-align: left; cursor: pointer; transition: border-color .2s, transform .2s; }',
@@ -20372,6 +20420,9 @@ css.textContent = [
     '.sky-pvb:hover { background: rgba(255,255,255,.22); } .sky-pvb:active { transform: scale(.9); } .sky-pvb:focus-visible { outline: 2px solid rgb(var(--acc)); outline-offset: 2px; }',
     '.sky-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; } .sky-dots i { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 6px currentColor, inset 0 0 0 1px rgba(255,255,255,.35); }',
     '#glow-item, #rot-item { margin-bottom: 12px; }',
+    '#inc-sky.anim-kick *, #inc-stars.anim-kick .rs { animation-play-state: paused !important; }',
+    '.motion-why { display: grid; gap: 8px; margin: 0 0 12px; } .mw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border-radius: 14px; font-size: .84rem; line-height: 1.4; color: #fde68a; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.4); }',
+    '.mw-row span { flex: 1 1 200px; } .mw-row.ok { color: #bbf7d0; background: rgba(34,197,94,.1); border-color: rgba(34,197,94,.35); } .mw-fix { padding: 7px 12px !important; font-size: .8rem !important; }',
     '.glow-custom { flex-basis: 100%; margin-top: 12px; } .gsw-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }',
     '.gsw { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); cursor: pointer; -webkit-appearance: none; appearance: none; box-shadow: 0 3px 10px rgba(0,0,0,.3); } .gsw[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.35), 0 3px 10px rgba(0,0,0,.3); }',
     '.gpick { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: .86rem; color: rgba(255,255,255,.85); } .gpick input { width: 44px; height: 32px; border: 0; padding: 0; background: none; border-radius: 8px; cursor: pointer; }',
@@ -20426,15 +20477,23 @@ css.textContent = [
     '@media (max-width: 700px) { html.hdr-set body[data-pg] #main-header { padding-top: max(0px, var(--hdr-top, 14px)) !important; margin-top: min(0px, var(--hdr-top, 14px)) !important; } }'
 ].join('\n');
 document.head.appendChild(css);
-window.IncSky = { header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) || isAuto(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, choice: bgChoice, resolve: resolve, timeBg: timeBg, seasonBg: seasonBg, weatherBg: weatherBg, glow: function (v) { if (v !== undefined) setGlow(v ? 'match' : 'theme'); return glowOn(); }, glowMode: function (m, hx) { if (hx) save('glowColor', hx); if (m) setGlow(m); return glowMode(); }, customPalette: customPalette, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
+window.IncSky = { header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) || isAuto(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, choice: bgChoice, resolve: resolve, whyStill: whyStill, motionAlways: function (v) { if (v !== undefined) { save('motionAlways', !!v); applyMotion(); applyBg(); } return S('motionAlways', false) === true; }, timeBg: timeBg, seasonBg: seasonBg, weatherBg: weatherBg, glow: function (v) { if (v !== undefined) setGlow(v ? 'match' : 'theme'); return glowOn(); }, glowMode: function (m, hx) { if (hx) save('glowColor', hx); if (m) setGlow(m); return glowMode(); }, customPalette: customPalette, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
 function boot() {
+    document.documentElement.classList.toggle('motion-ok', S('motionAlways', false) === true);
     applyBg(); applyShoot(); applyHdr();
+    window.addEventListener('incmotion', paintWhy);
+    // iPhone can leave CSS animations frozen after the app comes back from the background: give them a nudge so they carry on
+    function kick() { ['inc-sky', 'inc-stars'].forEach(function (id) { var el = document.getElementById(id); if (!el) return; el.classList.add('anim-kick'); requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.remove('anim-kick'); }); }); }); }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) kick(); });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) kick(); });
+    window.addEventListener('focus', kick);
+    try { matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', function () { applyMotion(); }); } catch (e) { /* older phones */ }
     setInterval(function () { if (isAuto(bgChoice()) && resolve(bgChoice()) !== skyKind) applyBg(); }, 60000);   // the hour or the weather changed
     window.addEventListener('incwx', function () { if (isAuto(bgChoice())) applyBg(); else paintSet(); });
     var n = 0, tm = setInterval(function () { if (inject() || ++n > 80) clearInterval(tm); }, 250);
     window.addEventListener('resize', function () { size(); });
     document.addEventListener('visibilitychange', applyShoot);
-    try { new MutationObserver(function () { applyShoot(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); var ls = saver(); new MutationObserver(function () { var v = saver(); if (v !== ls) { ls = v; applyShoot(); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
+    try { new MutationObserver(function () { applyShoot(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); var ls = saver(); new MutationObserver(function () { var v = saver(); if (v !== ls) { ls = v; paintWhy(); applyShoot(); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
@@ -21185,7 +21244,7 @@ if (window.IncBubbles) return;
 var BG_MAX = 40, CARD_MAX = 8, BG_DEF = 10, CARD_DEF = 3, SPD_MAX = 300, SPD_DEF = 100;
 var CARD_SEL = '.home-card, .mh-tile, .rc-hc, .rc-scan';
 var TINTS = ['--pr2', '--pr', '--acc', '--pr3', '--acc2', '--ind2'];
-var reduce = false; try { reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { reduce = false; }
+function reduceNow() { var os = false; try { os = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { os = false; } var always = false; try { always = appSettings.motionAlways === true; } catch (e) { always = false; } return os && !always; }   // the phone asks for less motion, unless you chose Move anyway
 
 function num(k, d, max) { var v; try { v = appSettings[k]; } catch (e) { v = undefined; } v = typeof v === 'number' && isFinite(v) ? Math.round(v) : d; return Math.max(0, Math.min(max, v)); }
 function saver() { try { return appSettings.batterySaver === true; } catch (e) { return false; } }   // Battery Saver: no bubbles
@@ -21265,7 +21324,7 @@ function make(el, w, h, sMin, sMax, vmax) {
 }
 var rings = 0;
 function ring(it, ang, strength) {                              // a faint ring spreading from where it was hit
-    if (rings > 6 || strength < 0.35 || !it.el.parentNode || reduce) return;
+    if (rings > 6 || strength < 0.35 || !it.el.parentNode || reduceNow()) return;
     var cx = it.x + it.r + Math.cos(ang) * it.r, cy = it.y + it.r + Math.sin(ang) * it.r, d = it.s * (0.5 + strength * 0.4);
     var g = document.createElement(it.el.tagName === 'I' ? 'i' : 'div'); g.className = 'bub-ring';
     g.style.cssText = 'left:' + (cx - d / 2).toFixed(1) + 'px;top:' + (cy - d / 2).toFixed(1) + 'px;width:' + d.toFixed(1) + 'px;height:' + d.toFixed(1) + 'px;opacity:' + (0.15 + strength * 0.25).toFixed(2);
@@ -21460,7 +21519,7 @@ function bursts(now) {
 var last = 0, tick = 0;
 function frame(t) {
     requestAnimationFrame(frame);
-    if (document.hidden) { last = t; return; }
+    if (document.hidden || ((tick & 31) === 0 ? (frame.calm = reduceNow()) : frame.calm)) { last = t; tick++; return; }
     var dt = last ? Math.min(3, (t - last) / 16.667) : 1; last = t; tick++;
     var i, k, L;
     if (tick % 90 === 1 && bg.box) { try { bg.on = getComputedStyle(bg.box).display !== 'none'; } catch (e) { bg.on = true; } }
@@ -21546,7 +21605,7 @@ function boot() {
     setTimeout(scan, 900);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-if (!reduce) requestAnimationFrame(frame);
+requestAnimationFrame(frame);
 })();
 
 </script>
@@ -21682,9 +21741,14 @@ function applyCards() {
 /* ======================= big numbers ======================= */
 var NUMS = '.entry-compact-total, .ledger-grand, .orb-value, .lc-total, .grand-total-card, .total-orb, .bz-amt, .total-highlight, .stats-value, .rc-a, .financial-value, .live-calc-value, .live-calc-total, .chart-bar-value, .calculation-value, .total-amount, .monthly-tile-total, .monthly-detail-value, .list-entry-amount, .cc-amt, .fr-amt, .grand, .rc-sumline b';
 function bigOn() { return S('bigNumbers', false) === true; }
+function bigCalm() { return S('bigCalm', false) === true; }            // only if you ask: rest the moving effects too
 function applyBig() {
     document.documentElement.classList.toggle('big-num', bigOn());
-    setToggle('look-big', bigOn()); refreshMenu();
+    document.documentElement.classList.toggle('big-calm', bigOn() && bigCalm());
+    setToggle('look-big', bigOn()); setToggle('look-bigcalm', bigCalm());
+    var ci = document.getElementById('look-bigcalm-row'); if (ci) ci.style.display = bigOn() ? '' : 'none';
+    refreshMenu();
+    try { window.dispatchEvent(new Event('incmotion')); } catch (e) { /* ignore */ }
 }
 
 /* ======================= home logo ======================= */
@@ -21822,8 +21886,9 @@ function inject() {
     a.innerHTML = item('border-style', 'Card style', 'How the cards look on every page.', seg('Card style', [['data-cards', 'glass', 'Glass'], ['data-cards', 'solid', 'Solid dark'], ['data-cards', 'outline', 'Outline']]), 'look-cards');
     IncApMenu.add(['cards', 'Card style', 'border-style', function () { return { glass: 'Glass', solid: 'Solid dark', outline: 'Outline' }[cardStyle()]; }], a);
     var b = document.createElement('div'); b.id = 'looks-big'; b.className = 'space-y-6';
-    b.innerHTML = item('search-plus', 'Big numbers', 'Larger totals and buttons, and the moving effects (bubbles, stars, moving backgrounds) rest. Good for checking amounts outdoors or with gloves on.', toggle('look-big', 'Big numbers'));
-    IncApMenu.add(['bignum', 'Big numbers', 'search-plus', function () { return bigOn() ? 'On: larger totals, fewer effects' : 'Off'; }], b);
+    b.innerHTML = item('search-plus', 'Big numbers', 'Larger totals and bigger buttons. Good for checking amounts outdoors or with gloves on.', toggle('look-big', 'Big numbers')) +
+        '<div id="look-bigcalm-row">' + item('pause-circle', 'Also rest the moving effects', 'Bubbles, rising stars and the moving background stay still while Big numbers is on. Off: they keep moving as usual.', toggle('look-bigcalm', 'Also rest the moving effects')) + '</div>';
+    IncApMenu.add(['bignum', 'Big numbers', 'search-plus', function () { return bigOn() ? (bigCalm() ? 'On, effects resting' : 'On') : 'Off'; }], b);
     var c = document.createElement('div'); c.id = 'looks-logo'; c.className = 'space-y-6';
     c.innerHTML = '<div class="setting-item logo-item"><div class="logo-pv" id="logo-pv"></div><div class="setting-content"><h4 class="setting-title">Your logo on the home screen</h4><p class="setting-description">Shown in place of the IncAtor orb, with the same glow. A square picture works best (PNG with a see-through background looks great).</p>' +
         '<div class="logo-acts"><label class="app-btn logo-up"><i class="fas fa-upload mr-2"></i> Choose picture<input type="file" accept="image/*" id="logo-file" hidden></label><button type="button" class="app-btn" id="logo-remove"><i class="fas fa-trash-alt mr-2"></i> Use the IncAtor orb</button></div>' +
@@ -21861,7 +21926,10 @@ function paintCel() {
 function keyToggle(box, id) { box.addEventListener('keydown', function (ev) { if (ev.target.id === id && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); ev.target.click(); } }); }
 function wire(a, b, c, d, e, f) {
     a.addEventListener('click', function (ev) { var x = ev.target.closest('[data-cards]'); if (x) { save('cardStyle', x.getAttribute('data-cards')); applyCards(); } });
-    b.addEventListener('click', function (ev) { if (ev.target.closest('#look-big')) { save('bigNumbers', !bigOn()); applyBig(); toast(bigOn() ? 'Big numbers on' : 'Big numbers off', 'info'); } }); keyToggle(b, 'look-big');
+    b.addEventListener('click', function (ev) {
+        if (ev.target.closest('#look-big')) { save('bigNumbers', !bigOn()); applyBig(); toast(bigOn() ? 'Big numbers on' : 'Big numbers off', 'info'); return; }
+        if (ev.target.closest('#look-bigcalm')) { save('bigCalm', !bigCalm()); applyBig(); toast(bigCalm() ? 'The moving effects rest while Big numbers is on' : 'The moving effects keep moving', 'info'); }
+    }); keyToggle(b, 'look-big'); keyToggle(b, 'look-bigcalm');
     c.addEventListener('change', function (ev) {
         if (ev.target.id === 'logo-file' && ev.target.files && ev.target.files[0]) {
             var file = ev.target.files[0]; ev.target.value = '';
@@ -21893,8 +21961,8 @@ function wire(a, b, c, d, e, f) {
 /* ======================= styles ======================= */
 var css = [
     /* card styles */
-    'html.cards-solid ' + TOP.split(',').join(', html.cards-solid ') + ' { background: rgb(var(--panel, 28, 18, 58)) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1px solid rgba(255,255,255,.14) !important; box-shadow: 0 8px 22px rgba(0,0,0,.35) !important; }',
-    sel(INNER, 'html.cards-solid') + ' { background: rgba(255,255,255,.06) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-color: rgba(255,255,255,.14) !important; box-shadow: none !important; }',
+    'html.cards-solid .stunning-form-container { background: rgba(var(--panel, 28, 18, 58), .45) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1px solid rgba(255,255,255,.12) !important; box-shadow: 0 8px 22px rgba(0,0,0,.3) !important; }',
+    'html.cards-solid .mh-tile, html.cards-solid .home-card, ' + sel(INNER, 'html.cards-solid') + ' { background: rgb(var(--panel, 28, 18, 58)) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1px solid rgba(255,255,255,.16) !important; box-shadow: 0 6px 16px rgba(0,0,0,.3) !important; }',
     'html.cards-outline ' + TOP.split(',').join(', html.cards-outline ') + ' { background: transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1.5px solid rgba(var(--pr), .55) !important; box-shadow: none !important; }',
     sel(INNER, 'html.cards-outline') + ' { background: transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1px solid rgba(255,255,255,.2) !important; box-shadow: none !important; }',
     'html.cards-solid .stunning-form-container::before, html.cards-solid .stunning-form-container::after, html.cards-outline .stunning-form-container::before, html.cards-outline .stunning-form-container::after { display: none !important; }',
@@ -21902,8 +21970,8 @@ var css = [
     sel(NUMS, 'html.big-num') + ' { font-size: 1.3em !important; font-weight: 800 !important; letter-spacing: .2px; }',
     'html.big-num body { font-size: 1.06em; } html.big-num .app-btn, html.big-num .rc-rvb, html.big-num .bz-btn { min-height: 48px; font-size: 1.02rem !important; }',
     'html.big-num .mh-tile b, html.big-num .ap-t b, html.big-num .setting-title { font-size: 1.08em; }',
-    'html.big-num #inc-stars, html.big-num #inc-shoot, html.big-num .floating-bubbles, html.big-num .cb-layer, html.big-num .floating-orb { display: none !important; }',
-    'html.big-num #inc-sky *, html.big-num .iconic-entry-card, html.big-num .mh-tile-icon, html.big-num .mh-ring, html.big-num .breathing-text, html.big-num .magic-icon i { animation: none !important; }',
+    'html.big-calm #inc-stars, html.big-calm #inc-shoot, html.big-calm .floating-bubbles, html.big-calm .cb-layer, html.big-calm .floating-orb { display: none !important; }',
+    'html.big-calm #inc-sky *, html.big-calm .iconic-entry-card, html.big-calm .mh-tile-icon, html.big-calm .mh-ring, html.big-calm .breathing-text, html.big-calm .magic-icon i { animation: none !important; }',
     /* logo */
     '.mh-orb.has-logo { padding: 0; overflow: hidden; background: rgba(255,255,255,.08); }',
     '.home-logo-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }',
@@ -21953,7 +22021,7 @@ function boot() {
     try { new MutationObserver(function () { if (!document.getElementById('wx-greet')) applyWx(); }).observe(document.getElementById('main-header') || document.body, { childList: true, subtree: true }); } catch (e) { /* ignore */ }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncLooks = { cards: function (v) { if (v) { save('cardStyle', v); applyCards(); } return cardStyle(); }, big: function (v) { if (v !== undefined) { save('bigNumbers', !!v); applyBig(); } return bigOn(); },
+window.IncLooks = { cards: function (v) { if (v) { save('cardStyle', v); applyCards(); } return cardStyle(); }, big: function (v, calm) { if (v !== undefined) save('bigNumbers', !!v); if (calm !== undefined) save('bigCalm', !!calm); applyBig(); return bigOn(); }, bigCalm: bigCalm,
     logo: function (v, name) { if (v !== undefined) save('homeLogo', v || null); if (name !== undefined) save('homeLogoName', name); applyLogo(); return logo(); }, readLogo: readLogo,
     celebrate: party, checkCelebrate: checkCelebrate, goal: function (v) { if (v !== undefined) { save('goalMonthly', v || null); paintCel(); } return goal(); },
     weather: function (v) { if (v !== undefined) { save('wxGreet', !!v); applyWx(); if (v && window.IncWx) IncWx.refresh(false); } return wxOn(); }, applyWx: applyWx, empty: function (v) { if (v !== undefined) { save('emptyAnim', !!v); applyEmpty(); } return emptyAnim(); } };
@@ -21998,6 +22066,7 @@ var css = [
     '.fa-gift { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Crect%20x=%223%22%20y=%228%22%20width=%2218%22%20height=%224%22%20rx=%221%22/%3E%3Cpath%20d=%22M12%208v13M19%2012v7a2%202%200%200%201-2%202H7a2%202%200%200%201-2-2v-7M7.5%208a2.5%202.5%200%200%201%200-5C11%203%2012%208%2012%208s1-5%204.5-5a2.5%202.5%200%200%201%200%205%22/%3E%3C/svg%3E"); }',
     '.fa-moon { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Cpath%20d=%22M12%203a6%206%200%200%200%209%209%209%209%200%201%201-9-9Z%22/%3E%3C/svg%3E"); }',
     '.fa-lightbulb { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Cpath%20d=%22M15%2014c.2-1%20.7-1.7%201.5-2.5A6%206%200%201%200%206%208c0%201%20.2%202.2%201.5%203.5.7.7%201.3%201.5%201.5%202.5%22/%3E%3Cpath%20d=%22M9%2018h6M10%2022h4%22/%3E%3C/svg%3E"); }',
+    '.fa-pause-circle { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Ccircle%20cx=%2212%22%20cy=%2212%22%20r=%2210%22/%3E%3Cpath%20d=%22M10%2015V9M14%2015V9%22/%3E%3C/svg%3E"); }',
     '@keyframes mhBreathe { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.09); } }'
 ].join('\n');
 var st = document.createElement('style'); st.id = 'incator-perf-css'; st.textContent = css;
