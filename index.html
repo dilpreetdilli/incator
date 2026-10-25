@@ -16437,28 +16437,36 @@ document.addEventListener('DOMContentLoaded', populateGstPeriods); setTimeout(po
     function fixDateTokens(t) {
         return String(t).replace(/[0-9OoIl]{1,4}[\/.-][0-9OoIl]{1,2}[\/.-][0-9OoIl]{2,4}/g, function (tok) { return (tok.match(/[0-9]/g) || []).length >= 3 ? tok.replace(/[Oo]/g, '0').replace(/[Il]/g, '1') : tok; });
     }
-    function findDates(text, now) {
+    // pref: the way this store writes its dates, if IncAtor learned it ('YMD', 'DMY' or 'MDY')
+    function findDates(text, now, pref) {
         var out = [], m, t = fixDateTokens(text);
-        var tomorrow = new Date((now || new Date()).getTime() + 86400000 * 2);
-        function push(y, mo, d, idx) { if (y < 100) y += 2000; if (validYmd(y, mo, d, now)) out.push({ iso: y + '-' + pad2(mo) + '-' + pad2(d), idx: idx, future: new Date(y, mo - 1, d) > tomorrow }); }
+        now = now || new Date();
+        var tomorrow = new Date(now.getTime() + 86400000 * 2);
+        function push(y, mo, d, idx, order, alts) { if (y < 100) y += 2000; if (validYmd(y, mo, d, now)) out.push({ iso: y + '-' + pad2(mo) + '-' + pad2(d), idx: idx, future: new Date(y, mo - 1, d) > tomorrow, order: order || 'YMD', amb: !!(alts && Object.keys(alts).length > 1), alts: alts || null }); }
         var re1 = /(?:^|[^\d])(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})(?!\d)/g;
-        while ((m = re1.exec(t))) push(+m[1], +m[2], +m[3], m.index);
+        while ((m = re1.exec(t))) push(+m[1], +m[2], +m[3], m.index, 'YMD');
+        // 2 or 3 short numbers (14/10/26, 26/10/14, 10/14/2026...): every way of reading them is tried, and the smart pick is
+        // the store's own way (once learned), otherwise the one that is not in the future and closest to the day you scan it
         var re2 = /(?:^|[^\d])(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?!\d)/g;
         while ((m = re2.exec(t))) {
-            var a = +m[1], b = +m[2], y = +m[3];
-            if (y < 100) y += 2000;
-            var asMDY = validYmd(y, a, b, now), asDMY = validYmd(y, b, a, now);
-            var mdyFuture = asMDY && new Date(y, a - 1, b) > tomorrow, dmyFuture = asDMY && new Date(y, b - 1, a) > tomorrow;
-            if (a > 12 && asDMY) push(y, b, a, m.index);
-            else if (b > 12 && asMDY) push(y, a, b, m.index);
-            else if (asMDY && asDMY) { if (mdyFuture && !dmyFuture) push(y, b, a, m.index); else push(y, a, b, m.index); }
-            else if (asMDY) push(y, a, b, m.index); else if (asDMY) push(y, b, a, m.index);
+            var a = +m[1], b = +m[2], c = m[3], cy = c.length === 4 ? +c : 2000 + +c, cands = [['MDY', cy, a, b], ['DMY', cy, b, a]];
+            if (c.length === 2 && m[1].length === 2) cands.push(['YMD', 2000 + a, b, +c]);            // year first: 26/10/14 = 2026-10-14
+            var ok = [], alts = {};
+            cands.forEach(function (x) { if (validYmd(x[1], x[2], x[3], now)) { var dt = new Date(x[1], x[2] - 1, x[3]), iso = x[1] + '-' + pad2(x[2]) + '-' + pad2(x[3]); if (!alts[x[0]] && Object.keys(alts).map(function (k) { return alts[k]; }).indexOf(iso) < 0) alts[x[0]] = iso; ok.push({ x: x, dt: dt, fut: dt > tomorrow, age: (now - dt) / 86400000 }); } });
+            if (!ok.length) continue;
+            var best = null;
+            if (pref) ok.forEach(function (o) { if (o.x[0] === pref && !o.fut && o.age < 400) best = o; });
+            if (!best) {
+                var past = ok.filter(function (o) { return !o.fut; });
+                best = (past.length ? past : ok).slice().sort(function (p, q) { return Math.abs(p.age) - Math.abs(q.age); })[0];
+            }
+            push(best.x[1], best.x[2], best.x[3], m.index, best.x[0], alts);
         }
         var mon = '(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEPT|SEP|OCT|NOV|DEC)[A-Z]*';
         var re3 = new RegExp('(?:^|[^A-Z0-9])' + mon + '\\.?\\s*(\\d{1,2})(?:ST|ND|RD|TH)?,?\\s*(\\d{4}|\\d{2})(?!\\d)', 'g'), tu = up(t);
-        while ((m = re3.exec(tu))) push(+m[3].length === 2 ? +m[3] : +m[3], MONTHS[m[1]], +m[2], m.index);
+        while ((m = re3.exec(tu))) push(+m[3].length === 2 ? +m[3] : +m[3], MONTHS[m[1]], +m[2], m.index, 'NAME');
         var re4 = new RegExp('(?:^|[^0-9])(\\d{1,2})\\s*[-\\s]?\\s*' + mon + '\\.?[-,\\s]*(\\d{4}|\\d{2})(?!\\d)', 'g');
-        while ((m = re4.exec(tu))) push(+m[3], MONTHS[m[2]], +m[1], m.index);
+        while ((m = re4.exec(tu))) push(+m[3], MONTHS[m[2]], +m[1], m.index, 'NAME');
         out.sort(function (x, y) { return x.idx - y.idx; });
         return out;
     }
@@ -16563,10 +16571,10 @@ document.addEventListener('DOMContentLoaded', populateGstPeriods); setTimeout(po
         return b || (refs || [])[0] || null;
     }
     // Pick the purchase date: lines labelled DATE or carrying a time win; return-by, expiry and offer dates lose.
-    function pickDate(lines, now) {
+    function pickDate(lines, now, pref) {
         var best = null, bestS = -1e9;
         lines.forEach(function (l, i) {
-            var u = up(l), ds = findDates(l, now); if (!ds.length) return;
+            var u = up(l), ds = findDates(l, now, pref); if (!ds.length) return;
             ds.forEach(function (d) {
                 var s = 0;
                 if (/\b(DATE|DTE|DATED|TRANS(ACTION)?\s*DATE|PURCHASE\s*DATE|INVOICE\s*DATE|SALE\s*DATE|ORDER\s*DATE)\b/.test(u)) s += 3;
@@ -16597,6 +16605,16 @@ document.addEventListener('DOMContentLoaded', populateGstPeriods); setTimeout(po
             if (validYmd(y, mo, d, now) && new Date(y, mo - 1, d) > tomorrow && validYmd(y, d, mo, now) && new Date(y, d - 1, mo) <= tomorrow) { var t = mo; mo = d; d = t; res.notes.push('Day and month were swapped because the date looked like it was in the future.'); }
             if (validYmd(y, mo, d, now)) { res.date = y + '-' + pad2(mo) + '-' + pad2(d); res.conf.date = new Date(y, mo - 1, d) > tomorrow ? 'low' : 'high'; }
         } else if (dt) { var fd = findDates(dt, now)[0]; if (fd) { res.date = fd.iso; res.conf.date = fd.future ? 'low' : 'high'; } }
+        var printed = str(j.date_printed), pref2 = opts.dateOrder ? opts.dateOrder(res.storeKey) : null;
+        if (printed) {                                                     // the date exactly as printed: read it the same smart way as the phone reader
+            var pd = findDates(printed, now, pref2)[0];
+            if (pd) {
+                res.dateAlts = pd.alts; res.dateAmb = pd.amb; res.dateOrder = pd.order;
+                var aiAge = res.date ? (now - new Date(res.date + 'T12:00:00')) / 86400000 : null;
+                var aiOdd = !res.date || aiAge < -2 || aiAge > 400 || (pref2 && pd.alts && pd.alts[pref2] && pd.alts[pref2] !== res.date && pd.iso !== res.date);
+                if (aiOdd && pd.iso !== res.date) { if (res.date) res.notes.push('The date was read again from how it is printed (' + printed + ').'); res.date = pd.iso; res.conf.date = pd.future ? 'low' : 'high'; }
+            }
+        }
         var total = num(j.total), gst = num(j.gst != null ? j.gst : j.hst), pst = num(j.pst != null ? j.pst : (j.qst != null ? j.qst : j.rst)), sub = num(j.subtotal);
         if (gst != null && gst < 0) gst = null; if (pst != null && pst < 0) pst = null;
         if (total == null && sub != null) { total = j.taxes_included_in_prices ? sub : r2(sub + (gst || 0) + (pst || 0)); res.notes.push('No total was printed, so it was worked out from the subtotal.'); res.conf.total = 'low'; }
@@ -16652,8 +16670,9 @@ document.addEventListener('DOMContentLoaded', populateGstPeriods); setTimeout(po
         res.conf.store = ks ? 'high' : (guess ? 'low' : 'none');
 
         /* date */
-        var pick = pickDate(lines, now) || (function () { var ds = findDates(raw, now); return ds.filter(function (d) { return !d.future; })[0] || ds[0]; })();
-        if (pick) { res.date = pick.iso; res.conf.date = pick.future ? 'low' : 'high'; if (pick.future) res.notes.push('The date on this receipt looks like it is in the future.'); }
+        var pref = opts.dateOrder ? opts.dateOrder(res.storeKey) : null;
+        var pick = pickDate(lines, now, pref) || (function () { var ds = findDates(raw, now, pref); return ds.filter(function (d) { return !d.future; })[0] || ds[0]; })();
+        if (pick) { res.date = pick.iso; res.dateOrder = pick.order; res.dateAmb = pick.amb; res.dateAlts = pick.alts; res.conf.date = pick.future ? 'low' : 'high'; if (pick.future) res.notes.push('The date on this receipt looks like it is in the future.'); }
 
         /* GST number: 9 digits + RT + 4 digits, tolerant to OCR spacing */
         raw = raw.replace(/(\d{9})\s*[-]?\s*R\s?T\s?([0O]{2,3})\s?([0-9OIl])/gi, function (_, n, z, d) { return n + ' RT000' + d.replace(/[Oo]/g, '0').replace(/[Il]/g, '1'); });
@@ -16961,6 +16980,26 @@ function saveReceipts() {
 }
 function rules() { const r = appSettings.receiptRules; if (!r || typeof r !== 'object') appSettings.receiptRules = { v: {}, i: {} }; const x = appSettings.receiptRules; x.v = x.v || {}; x.i = x.i || {}; return x; }
 function saveRules() { sset('receiptRules', appSettings.receiptRules); }
+/* ---- learning what you claim: after you claim (or mark personal) receipts from a store, or items like them, a few times
+   the same way, new ones are done for you. Your own choice on a receipt always wins. ---- */
+const learnOn = () => sget('rcLearnClaims', true) !== false;
+const LEARN_MIN = 2;                                        // the same choice at least twice, and at least 80% of the time
+function noteClaim(r, mode) {
+    if (!learnOn() || !r || !r.vendorKey || r.vendorKey === 'UNKNOWN' || ['claim', 'half', 'no'].indexOf(mode) < 0) return;
+    const R = rules(); R.cl = R.cl || {}; const o = R.cl[r.vendorKey] || (R.cl[r.vendorKey] = { claim: 0, half: 0, no: 0 });
+    o[mode] = (o[mode] || 0) + 1; o.name = r.store; saveRules();
+}
+function noteItem(desc, claim) {
+    if (!learnOn() || ['claim', 'partial', 'personal'].indexOf(claim) < 0) return;
+    const key = AI.learnKey(desc); if (!key) return;
+    const R = rules(); R.ic = R.ic || {}; const o = R.ic[key] || (R.ic[key] = { claim: 0, partial: 0, personal: 0 });
+    o[claim] = (o[claim] || 0) + 1; saveRules();
+}
+function topOf(o, keys) { let best = '', n = 0, tot = 0; keys.forEach(k => { const v = +(o && o[k]) || 0; tot += v; if (v > n) { n = v; best = k; } }); return n >= LEARN_MIN && n / tot >= 0.8 ? best : ''; }
+function learnedMode(r) { if (!learnOn() || !r) return ''; const vk = r.vendorKey || (r.store ? resolveVendor(r.store).key : ''); return vk ? topOf((rules().cl || {})[vk], ['claim', 'half', 'no']) : ''; }
+function learnedItem(desc) { if (!learnOn()) return ''; const k = AI.learnKey(desc); return k ? topOf((rules().ic || {})[k], ['claim', 'partial', 'personal']) : ''; }
+function learnCounts() { const R = rules(); return { stores: Object.keys(R.cl || {}).filter(k => topOf(R.cl[k], ['claim', 'half', 'no'])).length, items: Object.keys(R.ic || {}).filter(k => topOf(R.ic[k], ['claim', 'partial', 'personal'])).length, dates: Object.keys(R.df || {}).length }; }
+const dateOrderFor = k => (k && (rules().df || {})[k]) || null;
 // How taxes go into the claim: 'separate' = before tax + PST claimable, GST back as input tax credits (GST registered);
 // 'together' = before tax + GST + PST all in the claimable amount (not registered for GST).
 const taxMode = () => sget('rcTaxMode', 'separate') === 'together' ? 'together' : 'separate';
@@ -17179,7 +17218,7 @@ function vendorCategory(name, key) {
 }
 function applyRules(d) {
     const r = rules(), vc = vendorCategory(d.store, d.vendorKey);
-    (d.items || []).forEach(it => { it.cat = AI.itemCategory(it.desc, vc, r.i); });
+    (d.items || []).forEach(it => { it.cat = AI.itemCategory(it.desc, vc, r.i); if (!it.claim) { const lc = learnedItem(it.desc); if (lc) { it.claim = lc; it.learned = true; } } });
     d.category = (r.v[d.vendorKey]) || AI.receiptCategory({ items: d.items, storeCat: vc });
     return d;
 }
@@ -17195,6 +17234,7 @@ function draftFromParse(p, pages, source) {
     d.payment = p.payment || ''; d.receiptNo = p.receiptNo || ''; d.gstNumber = p.gstNumber || ''; d.refs = p.refs || []; d.readBy = p.source === 'ai' ? (p.aiName || 'AI') : 'phone';
     if (d.total !== '' && N(d.total) > 0) d.subtotal = r2(N(d.total) - N(d.gst) - N(d.pst));
     d.items = (p.items || []).map(it => ({ desc: it.desc, qty: it.qty || 1, amount: it.amount, cat: it.cat }));
+    d.readDate = p.date || ''; d.dateOrder = p.dateOrder || ''; d.dateAmb = !!p.dateAmb; d.dateAlts = p.dateAlts || null;
     d.pending = pages || []; d.autoSub = false; d.autoTotal = false;
     d.note = (p.notes || []).join(' ') + (p.taxInferred ? ' Some tax amounts were worked out from the total.' : '');
     applyRules(d);
@@ -17224,13 +17264,14 @@ function autoCat(r) {                                         // what kind of pl
     return learned || (ks ? ks.cat : '') || (MEAL_STORE_RE.test(String(r.store || '')) ? 'Meals' : '') || (ks ? '' : r.category || '');
 }
 function autoModeFor(r) {
+    const lm = learnedMode(r); if (lm) return lm;                // what you usually do with this store
     const c = r.category || '', sc = autoCat(r);
     if (c === 'Personal' || c === 'Groceries') return '';
     if (sc === 'Meals') return mealShare() === 1 ? 'claim' : 'half';
     if (TOOL_STORE_CATS.indexOf(sc) >= 0 || sc === 'Fuel') return 'claim';
     return '';                                                // Costco, Walmart, grocery stores...: tools on them are found item by item instead
 }
-const autoWhy = (r, m) => autoCat(r) === 'Meals' ? (m === 'half' ? 'restaurant order, 50%' : 'restaurant order, claimed in full') : autoCat(r) === 'Fuel' ? 'fuel' : 'tool or building supply store';
+const autoWhy = (r, m) => learnedMode(r) ? 'you usually ' + ({ claim: 'claim', half: 'claim half of', no: 'mark as personal' }[m] || 'claim') + ' receipts from this store' : autoCat(r) === 'Meals' ? (m === 'half' ? 'restaurant order, 50%' : 'restaurant order, claimed in full') : autoCat(r) === 'Fuel' ? 'fuel' : 'tool or building supply store';
 
 /* ------------------------------------------------------------------ styles ------------------------------------------------------------------ */
 const st = document.createElement('style');
@@ -17550,6 +17591,11 @@ st.textContent = `
 .rc-hero .rc-hn { position: absolute; top: 10px; right: 12px; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; font-size: .78rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); }
 .rc-hero .rc-hn.warn { background: #f97316; }
 .rc-sect { font-size: .74rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: rgba(255,255,255,.55); margin: 4px 2px 8px; }
+.rc-yrow { display: flex; justify-content: flex-end; margin: 0 0 8px; } .rc-yrow.hub { justify-content: center; margin: 0 0 12px; }
+.rc-yr { display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(var(--pr), .35); font-size: .82rem; font-weight: 700; color: rgba(255,255,255,.85); }
+.rc-yr i { color: rgb(var(--lav)); } .rc-yr select { width: auto !important; min-width: 0; padding: 5px 30px 5px 10px !important; border-radius: 999px !important; font-weight: 800; font-size: .9rem !important; height: auto !important; }
+html.lm .rc-yr { color: #1e1b4b; background: rgba(124,58,237,.06); }
+.rc-chip.learned i { margin-right: 4px; }
 .rc-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; margin-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .rc-chips::-webkit-scrollbar { display: none; }
 .rc-cp { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: #fff; font: 600 .82rem var(--font), sans-serif; cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none; }
@@ -17627,7 +17673,7 @@ function wireNewCat(sel, after) {
     }, true);
 }
 const MODES = { capture: ['camera', 'Capture'], details: ['edit', 'Add details'], upload: ['upload', 'Upload'] };
-const UI = { saveOverride: null, mode: 'capture', view: 'hub', selMode: false, sel: new Set(), pages: { capture: [], upload: [] }, batch: false, F: { q: '', cat: '', status: '', year: '', group: 'store' }, shut: {} };
+const UI = { saveOverride: null, mode: 'capture', view: 'hub', selMode: false, sel: new Set(), pages: { capture: [], upload: [] }, batch: false, F: { q: '', cat: '', status: '', year: String(new Date().getFullYear()), group: 'store' }, shut: {} };
 let host = null;
 
 function injectPage() {
@@ -17635,6 +17681,7 @@ function injectPage() {
     if (!settings || document.getElementById('receipts-page')) return;
     const inner = `
         <div id="rc-hub">
+            <div class="rc-yrow hub"><label class="rc-yr"><i class="fas fa-calendar-alt"></i><span>Showing</span><select id="rc-year-hub" class="inv-input" aria-label="Year"></select></label></div>
             <div id="rc-grid" class="rc-hubgrid"></div>
             <div id="rc-recwrap"></div>
             <div class="rc-modes" id="rc-modes">${Object.keys(MODES).map(k => `<button type="button" class="rc-mode${k === UI.mode ? ' on' : ''}" data-rc-mode="${k}"><i class="fas fa-${MODES[k][0]}"></i><span>${MODES[k][1]}</span></button>`).join('')}</div>
@@ -17644,6 +17691,7 @@ function injectPage() {
         <div id="rc-subview" style="display:none;">
             <div class="rc-subhead"><button type="button" class="rc-back" data-rc-back><i class="fas fa-arrow-left"></i><span>Receipts</span></button><div class="rc-ttl"><h3 id="rc-subtitle"></h3><button type="button" class="rc-sm rc-newcat" id="rc-newcat" style="display:none" title="Create a new category"><i class="fas fa-plus"></i><span>New category</span></button></div>
                 <div class="rc-subact"><button type="button" class="rc-sm" id="rc-selmode-btn"><i class="fas fa-check-square"></i><span>Select</span></button><button type="button" class="rc-sm" id="rc-csv-btn"><i class="fas fa-file-csv"></i><span>CSV</span></button></div></div>
+            <div class="rc-yrow"><label class="rc-yr"><i class="fas fa-calendar-alt"></i><span>Year</span><select id="rc-year" class="inv-input" aria-label="Year"></select></label></div>
             <div id="rc-chips" class="rc-chips"></div>
             <div id="rc-sumline" class="rc-sumline"></div>
             <div id="rc-vnote" class="rc-vnote"></div>
@@ -17651,7 +17699,6 @@ function injectPage() {
                 <div class="rc-search"><i class="fas fa-search"></i><input type="text" id="rc-q" class="inv-input" placeholder="Search receipts..." autocomplete="off"><button type="button" class="rc-ftog" id="rc-ftog" aria-expanded="false" aria-controls="rc-filters"><i class="fas fa-sliders-h"></i><span>Filters</span><em id="rc-fn"></em></button></div>
                 <select id="rc-cat" class="inv-input"><option value="">All categories</option>${syncCats().map(c => `<option value="${h(c)}">${h(c)}</option>`).join('')}</select>
                 <select id="rc-status" class="inv-input"><option value="">All receipts</option><option value="check">Needs attention</option><option value="claim">Claimable</option><option value="partial">Partly claimable</option><option value="personal">Personal</option><option value="nophoto">No photo saved</option><option value="reviewed">Reviewed</option><option value="unreviewed">Not reviewed yet</option></select>
-                <select id="rc-year" class="inv-input"><option value="">All years</option></select>
                 <select id="rc-group" class="inv-input"><option value="store">By store</option><option value="category">By category</option><option value="month">By month</option><option value="none">No groups</option></select>
             </div>
             <div id="rc-list"></div>
@@ -17834,6 +17881,7 @@ function aiPrompt() {
 Return ONLY one JSON object, no other text, with exactly these keys:
 {"store": string - the business name as printed (no address),
  "date": "YYYY-MM-DD" - the purchase / transaction / invoice date. Ignore return-by, exchange, expiry, due, offer and member-since dates. It is never after today. If the printed date is ambiguous (like 03/04/26), pick the reading that is not in the future and is closest to today,
+ "date_printed": string or null - that same date exactly as printed on the receipt (for example "24/10/26" or "OCT 24 2026"),
  "time": "HH:MM" or null,
  "total": number - the FINAL amount actually paid, with all taxes INCLUDED (the line called TOTAL, GRAND TOTAL, AMOUNT DUE, BALANCE DUE, TOTAL PAID, PURCHASE, SALE or AMOUNT on a card slip). Never a subtotal, savings, points, cash tendered or change,
  "subtotal": number or null - amount before tax,
@@ -17928,7 +17976,7 @@ async function aiRead(pages, pm) {
     const out = p === 'gemini'
         ? await geminiRun(key, imgs.map(b => ({ inline_data: { mime_type: 'image/jpeg', data: b } })).concat([{ text: prompt }]))
         : await claudeRun(key, imgs.map(b => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b } })).concat([{ type: 'text', text: prompt }]));
-    const res = AI.fromAi(parseAiJson(out.text), { now: new Date() });
+    const res = AI.fromAi(parseAiJson(out.text), { now: new Date(), dateOrder: dateOrderFor });
     if (!(res.total > 0) && !res.store) throw aiErr('empty', 'The AI could not read this photo.');
     res.aiName = AI_PROVIDERS[p].name; res.aiModel = out.model;
     return res;
@@ -17954,7 +18002,7 @@ async function readPages(key) {
                 try {
                     let parsed = null;
                     if (aiOn()) { try { parsed = await aiRead([pages[i]], null); } catch (e) { aiFail = aiFail || e.message; } }
-                    if (!parsed) parsed = AI.readReceipt(await ocrPages([pages[i]], null));
+                    if (!parsed) parsed = AI.readReceipt(await ocrPages([pages[i]], null), { dateOrder: dateOrderFor });
                     const d = draftFromParse(parsed, [pages[i]], 'upload');
                     if (!d.date) d.date = today();
                     d.savePhoto = savePhotoNow();
@@ -17974,7 +18022,7 @@ async function readPages(key) {
         }
         let parsed = null, aiFail = '';
         if (aiOn()) { try { parsed = await aiRead(pages, pm); } catch (e) { aiFail = e.message; } }
-        if (!parsed) { pm.set('Getting ready...', 4); parsed = AI.readReceipt(await ocrPages(pages, pm)); }
+        if (!parsed) { pm.set('Getting ready...', 4); parsed = AI.readReceipt(await ocrPages(pages, pm), { dateOrder: dateOrderFor }); }
         pm.close();
         if (aiFail) showToast(aiFail + ' The on-phone reader was used instead.', 'info');
         if (!parsed.total && !parsed.store && !(parsed.items || []).length) showToast('The photo was hard to read. Please check or fill in the details.', 'info');
@@ -18072,11 +18120,20 @@ async function commit(d, existing, opts) {
     const rec = { id: existing ? existing.id : rid(), createdAt: existing ? existing.createdAt : new Date().toISOString(), updatedAt: new Date().toISOString(),
         date: d.date, store: v.name || 'Unknown store', vendorKey: v.key || AI.vendorKey(d.store) || 'UNKNOWN', category: d.category || 'Other', subtotal: r2(subtotal), gst: r2(gst), pst: r2(pst), total: r2(total),
         payment: d.payment || '', receiptNo: d.receiptNo || '', gstNumber: d.gstNumber || '', projectUid: d.projectUid ? (isNaN(+d.projectUid) ? d.projectUid : +d.projectUid) : null, notes: d.notes || '',
-        items: (d.items || []).filter(i => String(i.desc || '').trim() || N(i.amount)).map(i => { const o = { desc: String(i.desc || '').trim() || 'Item', qty: i.qty || 1, amount: r2(N(i.amount)), cat: i.cat || 'Other' }; if (i.claim) o.claim = i.claim; return o; }),
+        items: (d.items || []).filter(i => String(i.desc || '').trim() || N(i.amount)).map(i => { const o = { desc: String(i.desc || '').trim() || 'Item', qty: i.qty || 1, amount: r2(N(i.amount)), cat: i.cat || 'Other' }; if (i.claim) o.claim = i.claim; if (i.claim && i.learned) o.learned = true; return o; }),
         photos: (existing && existing.photos ? existing.photos.slice() : []).filter(p => !(d.removedPhotos || []).includes(p.id)), source: existing ? existing.source : d.source || 'manual' };
     if (d.claimMode === 'claim' || d.claimMode === 'half' || d.claimMode === 'no') rec.claimMode = d.claimMode;
     if (existing) ['reviewedAt', 'reviewedAs', 'autoMode'].forEach(k => { if (existing[k]) rec[k] = existing[k]; });
-    if (existing ? existing.autoMode : (rec.source === 'capture' || rec.source === 'upload')) { const am = autoModeFor(rec); if (am) rec.autoMode = am; else delete rec.autoMode; }   // scanned at a tool store, gas station or restaurant: straight to claimable
+    if (existing ? existing.autoMode : (rec.source === 'capture' || rec.source === 'upload')) { const am = autoModeFor(rec); if (am) rec.autoMode = am; else delete rec.autoMode; if (am && learnedMode(rec)) rec.learned = true; else delete rec.learned; }
+    if (rec.claimMode && (!existing || existing.claimMode !== rec.claimMode)) noteClaim(rec, rec.claimMode);       // you chose: remember it for this store
+    (d.items || []).forEach((it, k) => { if (it.claim && !it.learned) { const was = existing && existing.items && existing.items[k]; if (!was || was.claim !== it.claim || was.desc !== it.desc) noteItem(it.desc, it.claim); } });
+    if (d.dateOrder && rec.vendorKey && rec.vendorKey !== 'UNKNOWN') {         // how this store writes dates
+        const R = rules(); R.df = R.df || {};
+        let order = '';
+        if (d.date === d.readDate && !d.dateAmb) order = d.dateOrder;                                               // there was only one way to read it
+        else if (d.date !== d.readDate && d.dateAlts) Object.keys(d.dateAlts).forEach(k => { if (d.dateAlts[k] === d.date) order = k; });   // you fixed it: that is their way
+        if (['YMD', 'DMY', 'MDY'].indexOf(order) >= 0 && R.df[rec.vendorKey] !== order) { R.df[rec.vendorKey] = order; saveRules(); }
+    }   // scanned at a tool store, gas station or restaurant: straight to claimable
     if (d.markReviewed) { rec.reviewedAt = new Date().toISOString(); rec.reviewedAs = rec.claimMode === 'no' ? 'personal' : rec.claimMode || (existing && existing.reviewedAs) || 'checked'; }
     if (existing && existing.dupOk) rec.dupOk = existing.dupOk;
     const refs = (d.refs || (existing && existing.refs) || []).filter(x => x && x.value); if (refs.length) rec.refs = refs.slice(0, 12);
@@ -18175,7 +18232,7 @@ function openEditor(d, o) {
 
     const q = s => m.$(s);
     const numField = id => q(id).value.trim();
-    function readItems() { S.items = Array.from(m.el.querySelectorAll('.rc-item')).map((row, i) => { const old = S.items[i] || {}; return { desc: row.querySelector('.rc-i-desc').value, qty: old.qty || 1, amount: row.querySelector('.rc-i-amt').value, cat: row.querySelector('.rc-i-cat').value, claim: row.querySelector('.rc-i-claim').value || undefined, aiCat: old.aiCat, manual: old.manual }; }); }
+    function readItems() { S.items = Array.from(m.el.querySelectorAll('.rc-item')).map((row, i) => { const old = S.items[i] || {}; return { desc: row.querySelector('.rc-i-desc').value, qty: old.qty || 1, amount: row.querySelector('.rc-i-amt').value, cat: row.querySelector('.rc-i-cat').value, claim: row.querySelector('.rc-i-claim').value || undefined, aiCat: old.aiCat, manual: old.manual, learned: !!old.learned && (row.querySelector('.rc-i-claim').value || undefined) === old.claim }; }); }
     function paintItems() { q('#rc-items').innerHTML = S.items.map(itemRow).join('') || '<div class="bz-help">No items. Tap Add item to list what was bought. This lets IncAtor sort personal and business items.</div>'; }
     function paintPhotos() {
         const box = q('#rc-ph'), ex = (existing && existing.photos || []).filter(p => !S.removedPhotos.includes(p.id));
@@ -18351,6 +18408,7 @@ function reviewAs(ids, how) {
     L.forEach(r => {
         if (how === 'tools') { r.items = toolsOnlyCopy(r).items; delete r.claimMode; delete r.autoMode; }
         else if (how === 'claim') r.claimMode = 'claim'; else if (how === 'half') r.claimMode = 'half'; else if (how === 'personal') r.claimMode = 'no';
+        if (r.claimMode && how !== 'tools') noteClaim(r, r.claimMode);
         r.reviewedAt = iso; r.reviewedAs = how; r.updatedAt = iso; if (r.projectUid) syncProjectExpense(r, r.projectUid);
     });
     try { saveReceipts(); } catch (e) { showToast('Storage is full. The change could not be saved.', 'error'); return; }
@@ -18440,16 +18498,17 @@ function hubSub(k, list) {
 function renderChips() {
     const el = document.getElementById('rc-chips'); if (!el) return;
     el.innerHTML = HUB_ORDER.map(k => {
-        const V = VIEWS[k], n = receipts.filter(V.f).length, warn = (k === 'review' || k === 'dups') && n;
+        const V = VIEWS[k], n = (k === 'review' || k === 'dups' ? receipts : yearRecs()).filter(V.f).length, warn = (k === 'review' || k === 'dups') && n;
         return `<button type="button" class="rc-cp${UI.view === k ? ' on' : ''}" data-rc-view="${k}"><i class="fas fa-${V.ic}"></i><span>${h(V.chip || V.card)}</span><em${warn ? ' class="warn"' : ''}>${n}</em></button>`;
     }).join('');
 }
 function renderHub() {
     const grid = document.getElementById('rc-grid'), st = document.getElementById('rc-stats'); if (!grid || !st) return;
-    let spend = 0, claim = 0, itc = 0; receipts.forEach(r => { const a = claimInfo(r); spend += N(r.total); claim += a.claimable; itc += a.itc; });
-    st.innerHTML = `<div class="bz-stat"><b>${receipts.length}</b><span>Receipts</span></div><div class="bz-stat"><b>${h(money(spend))}</b><span>Spent</span></div><div class="bz-stat"><b>${h(money(claim))}</b><span>Claimable</span></div><div class="bz-stat"><b>${h(money(itc))}</b><span>${gstWord()}</span></div>`;
+    const YR = yearRecs();
+    let spend = 0, claim = 0, itc = 0; YR.forEach(r => { const a = claimInfo(r); spend += N(r.total); claim += a.claimable; itc += a.itc; });
+    st.innerHTML = `<div class="bz-stat"><b>${YR.length}</b><span>Receipts ${h(yearWord())}</span></div><div class="bz-stat"><b>${h(money(spend))}</b><span>Spent</span></div><div class="bz-stat"><b>${h(money(claim))}</b><span>Claimable</span></div><div class="bz-stat"><b>${h(money(itc))}</b><span>${gstWord()}</span></div>`;
     const hero = (view, ic, grad, title, sub, n) => `<button type="button" class="rc-hero" data-rc-view="${view}"><span class="rc-hi" style="background:linear-gradient(135deg,${grad[0]},${grad[1]})"><i class="fas fa-${ic}"></i></span><b>${h(title)}</b><small>${sub}</small>${n === undefined ? '' : `<span class="rc-hn">${n}</span>`}</button>`;
-    grid.innerHTML = hero('all', 'list', ['#6366f1', '#8b5cf6'], 'View Receipts', `${h(plural(receipts.length, 'receipt'))}<br>${h(money(spend))} spent${DUPS.clusters.length ? `<br><span class="rc-hw">${DUPS.clusters.length} possible duplicate${DUPS.clusters.length === 1 ? '' : 's'}</span>` : ''}`, receipts.length)
+    grid.innerHTML = hero('all', 'list', ['#6366f1', '#8b5cf6'], 'View Receipts', `${h(plural(YR.length, 'receipt'))} ${h(yearWord())}<br>${h(money(spend))} spent${DUPS.clusters.length ? `<br><span class="rc-hw">${DUPS.clusters.length} possible duplicate${DUPS.clusters.length === 1 ? '' : 's'}</span>` : ''}`, YR.length)
         + hero('tax', 'chart-bar', ['#14b8a6', '#3b82f6'], 'Summary', `Claimable ${h(money(claim))}<br>${gstWord()} ${h(money(itc))}`);
     renderChips();
     const rw = document.getElementById('rc-recwrap'); if (rw) rw.innerHTML = recBarHtml();
@@ -18488,7 +18547,7 @@ function receiptsFiltered() {
     const F = UI.F, q = F.q.trim().toLowerCase(), vf = (VIEWS[UI.view] || VIEWS.all).f;
     return receipts.filter(r => {
         if (!vf(r)) return false;
-        if (F.year && String(r.date || '').slice(0, 4) !== F.year) return false;
+        if (F.year && UI.view !== 'review' && UI.view !== 'dups' && String(r.date || '').slice(0, 4) !== F.year) return false;   // Needs attention and Duplicates show every year
         if (F.cat && r.category !== F.cat && !(r.items || []).some(i => i.cat === F.cat)) return false;
         if (q) { const hay = [r.store, r.category, r.receiptNo, r.notes, r.payment].concat((r.items || []).map(i => i.desc + ' ' + i.cat)).join(' ').toLowerCase(); if (hay.indexOf(q) < 0) return false; }
         if (F.status) { const a = claimInfo(r); if (F.status === 'check') { if (!needsLook(r)) return false; } else if (F.status === 'nophoto') { if ((r.photos || []).length) return false; } else if (F.status === 'reviewed') { if (!r.reviewedAt) return false; } else if (F.status === 'unreviewed') { if (r.reviewedAt) return false; } else if (a.verdict !== F.status) return false; }
@@ -18506,7 +18565,7 @@ function rowHtml(r, o) {
     const rv = !o.plain && !r.reviewedAt && (UI.view === 'review' || (ta && (UI.view === 'tools' || UI.view === 'all')));
     const half = chip[0] === 'partial' && a.manual !== 'half' && a.auto === 'half' ? '50%' : chip[1];
     const tags = `<span class="rc-chip ${chip[0]}">${a.manual ? 'You: ' : ''}${h(half)}</span>`
-        + (a.auto && !a.manual ? `<span class="rc-chip auto" title="Added to claimable when it was scanned">Auto</span>` : '')
+        + (a.auto && !a.manual ? (r.learned ? `<span class="rc-chip auto learned" title="You usually do this with receipts from ${h(r.store)}"><i class="fas fa-brain"></i>Learned</span>` : `<span class="rc-chip auto" title="Added to claimable when it was scanned">Auto</span>`) : '')
         + (r.reviewedAt ? `<span class="rc-chip rv" title="Reviewed ${h(shortDate(String(r.reviewedAt).slice(0, 10)))}"><i class="fas fa-check"></i>Reviewed</span>` : '')
         + (ta ? `<span class="rc-chip tool" title="${h(ta.names.join(', '))}"><i class="fas fa-wrench"></i>Tools ${h(money(ta.base))}</span>` : '')
         + (r.source === 'recurring' ? '<span class="rc-chip" title="Added automatically">Auto</span>' : '')
@@ -18564,14 +18623,15 @@ function renderList() {
     el.innerHTML = arr.map(x => `<div class="rc-grp${UI.shut[g + ':' + x.key] ? ' shut' : ''}" data-gk="${h(g + ':' + x.key)}"><div class="rc-gh" data-rc-gh><span class="rc-ck" data-rc-gsel><i class="fas fa-check"></i></span><i class="fas fa-chevron-down rc-chev"></i><b>${h(x.name)}</b><small>${plural(x.rows.length, 'receipt')}</small><span class="rc-t">${UI.view === 'claim' ? `<em class="rc-tc">claim</em> ${h(money(x.rows.reduce((t, r) => t + claimInfo(r).claimable, 0)))}` : h(money(x.total))}</span>${x.empty ? '' : (() => { const all = x.rows.every(r => claimInfo(r).verdict === 'claim'); return `<button type="button" class="rc-gcl${all ? ' on' : ''}" data-rc-gclaim="${h(g + ':' + x.key)}" title="${all ? 'All claimed. Tap to change them.' : 'Move every receipt here to claimable'}"><i class="fas fa-${all ? 'check-circle' : 'plus-circle'}"></i><span>${all ? 'Claimed' : 'Claim all'}</span></button>`; })()}</div><div class="rc-gb">${x.empty ? '<div class="bz-help" style="padding:10px 14px;">No receipts yet. Pick this category on a receipt to file it here.</div>' : x.rows.map(r => rowHtml(r)).join('')}</div></div>`).join('');
     paintSel();
 }
-function renderYears() {
-    const sel = document.getElementById('rc-year'); if (!sel) return;
-    const ys = Array.from(new Set(receipts.map(r => String(r.date || '').slice(0, 4)).filter(Boolean))).sort().reverse(), cur = sel.value;
-    sel.innerHTML = '<option value="">All years</option>' + ys.map(y => `<option value="${y}">${y}</option>`).join(''); sel.value = ys.indexOf(cur) >= 0 ? cur : '';
-    UI.F.year = sel.value;
+function yearList() { const cy = String(new Date().getFullYear()); return Array.from(new Set(receipts.map(r => String(r.date || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y)).concat([cy, UI.F.year].filter(Boolean)))).sort().reverse(); }
+function renderYears() {                                     // the current year is shown first; pick any year, or All years
+    const ys = yearList(), html = ys.map(y => `<option value="${y}">${y}</option>`).join('') + '<option value="">All years</option>';
+    ['rc-year', 'rc-year-hub'].forEach(id => { const sel = document.getElementById(id); if (!sel) return; if (sel.getAttribute('data-sig') !== html) { sel.innerHTML = html; sel.setAttribute('data-sig', html); } sel.value = UI.F.year; });
 }
+const yearRecs = () => UI.F.year ? receipts.filter(r => String(r.date || '').slice(0, 4) === UI.F.year) : receipts;
+const yearWord = () => UI.F.year ? 'in ' + UI.F.year : 'in all years';
 function paintFilterCount() {
-    const n = ['cat', 'status', 'year'].filter(k => UI.F[k]).length + (UI.F.group !== (VIEWS[UI.view] || VIEWS.all).group ? 1 : 0), e = document.getElementById('rc-fn');
+    const n = ['cat', 'status'].filter(k => UI.F[k]).length + (UI.F.group !== (VIEWS[UI.view] || VIEWS.all).group ? 1 : 0), e = document.getElementById('rc-fn');
     if (e) e.textContent = n ? String(n) : '';
 }
 function renderAll() { computeDups(); renderYears(); if (UI.view === 'hub') renderHub(); else { renderChips(); renderList(); } paintFilterCount(); renderSettingsStats(); }
@@ -18580,7 +18640,7 @@ function renderAll() { computeDups(); renderYears(); if (UI.view === 'hub') rend
 function applyClaim(L, mode) {
     if (!L.length) return;
     const iso = new Date().toISOString();
-    L.forEach(r => { if (mode === 'auto') delete r.claimMode; else { r.claimMode = mode; r.reviewedAt = iso; r.reviewedAs = mode === 'no' ? 'personal' : mode; } r.updatedAt = iso; if (r.projectUid) syncProjectExpense(r, r.projectUid); });
+    L.forEach(r => { if (mode === 'auto') delete r.claimMode; else { r.claimMode = mode; r.reviewedAt = iso; r.reviewedAs = mode === 'no' ? 'personal' : mode; noteClaim(r, mode); } r.updatedAt = iso; if (r.projectUid) syncProjectExpense(r, r.projectUid); });
     try { saveReceipts(); } catch (e) { showToast('Storage is full. The change could not be saved.', 'error'); }
     renderAll(); Remote.schedule();
     const w = { claim: 'added to claimable', half: 'set to 50% claimable', no: 'marked not claimable', auto: 'set back to automatic' }[mode];
@@ -18768,8 +18828,8 @@ function claimCatHtml(list, opt) {
 const claimLbl = () => taxMode() === 'together' ? 'Looks claimable (before tax + GST + PST)' : 'Looks claimable (PST included, GST separate)';
 function inRange(r, from, to) { return (!from || r.date >= from) && (!to || r.date <= to); }
 function openTax() {
-    const years = Array.from(new Set(receipts.map(r => String(r.date || '').slice(0, 4)).filter(Boolean))).sort().reverse();
-    const y0 = UI.F.year || years[0] || String(new Date().getFullYear());
+    const years = yearList();
+    const y0 = UI.F.year || String(new Date().getFullYear());
     const m = modal({ title: 'Tax summary', wide: true, html: `<div class="bz-toolbar"><select id="tx-year" class="inv-input" style="max-width:130px;">${(years.length ? years : [y0]).map(y => `<option value="${y}"${y === y0 ? ' selected' : ''}>${y}</option>`).join('')}</select>
         <select id="tx-per" class="inv-input" style="max-width:200px;"><option value="">Whole year</option><option value="1">Jan - Mar (Q1)</option><option value="2">Apr - Jun (Q2)</option><option value="3">Jul - Sep (Q3)</option><option value="4">Oct - Dec (Q4)</option></select></div><div id="tx-body"></div>`,
         actions: [{ label: 'Copy summary', run: () => { copyText(txState.text); showToast('Summary copied', 'success'); } }, { label: 'Receipts CSV', run: () => exportCsv(txState.list) }, { label: 'Items CSV', run: () => exportItemsCsv(txState.list) }, { label: 'Close', run: a => a.close() }] });
@@ -18898,7 +18958,7 @@ function wirePage() {
         else if (t.id === 'rc-batch') { UI.batch = t.checked; renderPanel(); }
         else if (t.id === 'rc-savephoto') { UI.saveOverride = t.checked; }
         else if (t.id === 'rc-cat') { UI.F.cat = t.value; renderList(); } else if (t.id === 'rc-status') { UI.F.status = t.value; renderList(); }
-        else if (t.id === 'rc-year') { UI.F.year = t.value; renderList(); } else if (t.id === 'rc-group') { UI.F.group = t.value; renderList(); }
+        else if (t.id === 'rc-year' || t.id === 'rc-year-hub') { UI.F.year = t.value; renderAll(); } else if (t.id === 'rc-group') { UI.F.group = t.value; renderList(); }
     });
     host.addEventListener('input', ev => { if (ev.target.id === 'rc-q') { UI.F.q = ev.target.value; renderList(); } });
     host.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-rc-tap]')) { ev.preventDefault(); openCamera(); } });
@@ -18943,6 +19003,8 @@ function renderSettingsStats() {
     const withPhotos = receipts.filter(r => (r.photos || []).length).length;
     PH.stats().then(s => { el.textContent = `${receipts.length} receipt${receipts.length === 1 ? '' : 's'} saved, ${s.n} photo${s.n === 1 ? '' : 's'} using about ${(s.bytes / 1048576).toFixed(1)} MB in this browser.`; }, () => { el.textContent = `${receipts.length} receipts saved. Photo storage is not available in this browser, so photos cannot be kept here.`; });
     const t = document.getElementById('rcs-toggle'); if (t) t.classList.toggle('active', savePhotosOn());
+    const tl = document.getElementById('rcs-learn'); if (tl) { tl.classList.toggle('active', learnOn()); tl.setAttribute('aria-checked', String(learnOn())); }
+    const ls = document.getElementById('rcs-learn-stats'); if (ls) { const lc = learnCounts(); ls.textContent = lc.stores || lc.items || lc.dates ? `Learned so far: ${plural(lc.stores, 'store')}, ${plural(lc.items, 'kind')} of item, the date style of ${plural(lc.dates, 'store')}.` : 'Nothing learned yet.'; }
     const ta = document.getElementById('rcs-autosave'); if (ta) { ta.classList.toggle('active', autoSaveOn()); ta.setAttribute('aria-checked', String(autoSaveOn())); }
     const bt = document.getElementById('rcs-bk-toggle'); if (bt) bt.classList.toggle('active', backupPhotosOn());
     Remote.paint();
@@ -19021,6 +19083,8 @@ function injectSettings() {
             <div id="rcs-catlist" class="rc-catlist"></div>
             <div class="rc-catadd"><input id="rcs-catname" class="inv-input" maxlength="40" placeholder="New category, e.g. Training" autocomplete="off"><select id="rcs-catclaim" class="inv-input" aria-label="Tax claim"><option value="1">Claimable</option><option value="0.5">50% claimable</option><option value="0">Not claimable</option><option value="">Ask me</option></select><button type="button" class="app-btn" id="rcs-catadd"><i class="fas fa-plus mr-2"></i>Add</button></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-camera"></i></div><div class="setting-content"><h4 class="setting-title">Save receipt photos by default</h4><p class="setting-description">When this is on, every receipt you scan or upload keeps its photo inside IncAtor (never in your phone's gallery). You can still switch it off for a single scan on the Receipts page.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-toggle"><div class="toggle-orb"></div></div></div></div>
+        <div class="setting-item" id="rcs-learn-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-brain"></i></div><div class="setting-content"><h4 class="setting-title">Learn what I claim</h4><p class="setting-description">After you claim (or mark personal) receipts from the same store, or the same kind of item, a couple of times, IncAtor starts doing it for you on new receipts. They show a <b>Learned</b> tag, and your own choice on a receipt always wins. It also learns how each store prints its dates.</p><p class="setting-description" id="rcs-learn-stats"></p></div><div class="setting-control"><div class="magic-toggle" id="rcs-learn" role="switch" tabindex="0" aria-label="Learn what I claim"><div class="toggle-orb"></div></div></div></div>
+            <div><button type="button" class="app-btn" id="rcs-learn-forget"><i class="fas fa-eraser mr-2"></i>Forget what it learned</button></div></div>
         <div class="setting-item" id="rcs-autosave-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-save"></i></div><div class="setting-content"><h4 class="setting-title">Auto save receipts</h4><p class="setting-description">When this is on, a receipt you scan or upload is read and saved straight away, without stopping on the review screen. You get a short message with Review and Undo. Receipts it can't read well, or that look like one you already saved, are saved too, under <b>Needs attention</b>, so you can put your phone away and check them later.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-autosave" role="switch" tabindex="0" aria-label="Auto save receipts"><div class="toggle-orb"></div></div></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-cloud"></i></div><div class="setting-content"><h4 class="setting-title">Back up photos to Google Drive</h4><p class="setting-description">Each photo is copied to your IncAtor folder in Google Drive and restored on any device you sign in to. Photos are not part of the numbered backup versions, so they never slow them down.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-bk-toggle"><div class="toggle-orb"></div></div></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-image"></i></div><div class="setting-content"><h4 class="setting-title">Photo size</h4><p class="setting-description">Smaller photos use less space. Standard is clear enough to read every line.</p></div></div><div class="setting-control"><select id="rcs-quality" class="inv-input" style="max-width:240px;">${Object.keys(QUAL).map(k => `<option value="${k}">${QUAL[k].label}</option>`).join('')}</select></div></div>
@@ -19063,6 +19127,11 @@ function injectSettings() {
         refreshCatSelects(); renderAll(); showToast(c.id + ' deleted', 'success');
     });
     sec.addEventListener('click', async ev => {
+        if (ev.target.closest('#rcs-learn')) { sset('rcLearnClaims', !learnOn()); renderSettingsStats(); renderAll(); showToast(learnOn() ? 'IncAtor will learn what you claim' : 'Learning is off. Nothing is claimed for you from now on', 'success'); return; }
+        if (ev.target.closest('#rcs-learn-forget')) {
+            const ok = await showConfirmation({ title: 'Forget what IncAtor learned?', type: 'warning', confirmText: 'Forget', cancelText: 'Keep', message: 'The stores and items it learned to claim, and how stores print their dates, are forgotten. Receipts you already saved do not change.' });
+            if (!ok) return; const R = rules(); delete R.cl; delete R.ic; delete R.df; saveRules(); renderSettingsStats(); showToast('Forgotten', 'info'); return;
+        }
         if (ev.target.closest('#rcs-autosave')) { sset('receiptAutoSave', !autoSaveOn()); renderSettingsStats(); renderPanel(); showToast(autoSaveOn() ? 'Receipts will be saved as soon as they are read' : 'Receipts will open for you to check before saving', 'success'); return; }
         if (ev.target.closest('#rcs-toggle')) { sset('receiptSavePhotos', !savePhotosOn()); UI.saveOverride = null; renderSettingsStats(); renderPanel(); showToast(savePhotosOn() ? 'Receipt photos will be saved by default' : 'Receipt photos will not be saved by default', 'success'); }
         else if (ev.target.closest('#rcs-bk-toggle')) { sset('receiptBackupPhotos', !backupPhotosOn()); renderSettingsStats(); showToast(backupPhotosOn() ? 'Photos will be backed up to Google Drive' : 'Photo backup to Google Drive is off', 'success'); if (backupPhotosOn()) Remote.schedule(300); }
@@ -19246,7 +19315,7 @@ function editRecurring(t, done) {
 window.RcptStore = {
     count: () => receipts.length,
     photoStats: () => PH.stats(),
-    claim: r => claimInfo(r), autoSave: v => { if (v !== undefined) { sset('receiptAutoSave', !!v); renderSettingsStats(); renderPanel(); } return autoSaveOn(); }, csv: list => exportCsv(list, true), itemsCsv: list => exportItemsCsv(list, true), photo: id => photoRecord(id),
+    claim: r => claimInfo(r), learned: () => ({ counts: learnCounts(), rules: JSON.parse(JSON.stringify(rules())) }), learnedMode: r => learnedMode(r), learnedItem: d => learnedItem(d), autoSave: v => { if (v !== undefined) { sset('receiptAutoSave', !!v); renderSettingsStats(); renderPanel(); } return autoSaveOn(); }, csv: list => exportCsv(list, true), itemsCsv: list => exportItemsCsv(list, true), photo: id => photoRecord(id),
     recurring: { list: recList, run: recRun, open: openRecurring, dateOf: recDate },
     duplicates: () => { computeDups(); return DUPS.clusters.map(c => ({ ids: c.ids, level: c.level, reasons: c.reasons })); },
     all: () => receipts,
@@ -20293,7 +20362,57 @@ function bgChoice() {                                                  // what y
 function bgMode() { var c = bgChoice(); return isAuto(c) ? resolve(c) : c; }   // what is on screen
 function setNow(k) { rotPick = k; try { sessionStorage.setItem('incator:bgNow', k); localStorage.setItem('incator:bgLast', k); } catch (e) { /* ignore */ } }
 function bgName(k) { var b = BG.get(k); return b ? b.name : 'Current'; }
-var sky = null, skyKind = '';
+var sky = null, skyKind = '', wantFx = false;                       // no animation for the very first background
+/* ---------- changing from one background to the next, with an animation ---------- */
+var FX = ['fade', 'zoom', 'slide', 'circle', 'wipe'];
+var FXA = { fade: 'skyFade 1.5s cubic-bezier(.25,.8,.25,1) both', zoom: 'skyZoom 1.7s cubic-bezier(.25,.8,.25,1) both', slide: 'skySlide 1.2s cubic-bezier(.25,.8,.25,1) both', circle: 'skyCircle 1.6s cubic-bezier(.5,0,.3,1) both', wipe: 'skyWipe 1.3s cubic-bezier(.6,0,.3,1) both' };
+function fxStyle() { var v = S('bgRotFx', 'mix'); return v === 'mix' || FX.indexOf(v) >= 0 ? v : 'mix'; }
+function reducedNow() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches && S('motionAlways', false) !== true; } catch (e) { return false; } }
+var lastFx = '', swapT = 0;
+function swapSky(m) {
+    var old = sky, fx = fxStyle();
+    if (fx === 'mix') { var c = FX.filter(function (x) { return x !== lastFx; }); fx = c[Math.floor(Math.random() * c.length)]; }
+    lastFx = fx;
+    Array.prototype.forEach.call(document.querySelectorAll('.sky-old'), function (o) { if (o.parentNode) o.parentNode.removeChild(o); });   // a change still running: finish it now
+    old.removeAttribute('id'); old.classList.add('sky-old');
+    var n = document.createElement('div'); n.id = 'inc-sky'; n.setAttribute('aria-hidden', 'true');
+    n.className = 'bgx bgx-' + m; n.innerHTML = BG.html(m);
+    n.style.willChange = 'transform, opacity, clip-path';
+    n.style.animation = FXA[fx];                                                                   // kept on the element itself, so its class name stays plain
+    if (old.style.display) n.style.display = old.style.display;
+    old.parentNode.insertBefore(n, old.nextSibling);
+    sky = n;
+    var done = function () { clearTimeout(swapT); if (old.parentNode) old.parentNode.removeChild(old); n.style.animation = ''; n.style.willChange = ''; };
+    n.addEventListener('animationend', function (e) { if (e.target === n) done(); });
+    clearTimeout(swapT); swapT = setTimeout(done, 2600);                                           // in case the animation never reports back
+}
+/* ---------- when the backgrounds you ticked take turns ---------- */
+function rotWhen() { var v = S('bgRotWhen', 'open'); return v === 'timer' || v === 'page' ? v : 'open'; }
+function rotEvery() { var v = parseInt(S('bgRotEvery', 30), 10); return isFinite(v) && v >= 5 ? v : 30; }
+function nextRot() {                                                   // the next one: any ticked one except the one on screen
+    if (!rotOn()) return false;
+    var l = rotList(), cur = bgMode(), c = l.filter(function (k) { return k !== cur && resolve(k) !== cur; });
+    if (!c.length) return false;
+    setNow(c[Math.floor(Math.random() * c.length)]); applyBg(); return true;
+}
+var rotTimer = 0, lastScroll = 0;
+window.addEventListener('scroll', function () { lastScroll = Date.now(); }, { passive: true });
+function rotTick() {
+    rotTimer = 0;
+    if (!(rotOn() && rotWhen() === 'timer')) return;
+    var busy = document.hidden || pvKey || document.documentElement.classList.contains('bgpv-open') || Date.now() - lastScroll < 900;   // never in the middle of a scroll or a preview
+    if (!busy) nextRot();
+    rotTimer = setTimeout(rotTick, busy ? 1500 : rotEvery() * 1000);
+}
+function armRot() { clearTimeout(rotTimer); rotTimer = 0; if (rotOn() && rotWhen() === 'timer') rotTimer = setTimeout(rotTick, rotEvery() * 1000); }
+var lastPg = null;
+function onPage() {                                                    // a new page was opened
+    var pg = document.body ? document.body.getAttribute('data-pg') : null;
+    if (pg === lastPg) return; var first = lastPg === null; lastPg = pg;
+    if (first || !(rotOn() && rotWhen() === 'page')) return;
+    setTimeout(nextRot, 60);
+}
+document.addEventListener('visibilitychange', function () { if (!document.hidden) armRot(); });
 function applyBg() {
     var m = bgMode(), on = m !== 'theme', r = document.documentElement;
     r.classList.toggle('inc-sky-on', on);
@@ -20301,7 +20420,12 @@ function applyBg() {
         sky = document.createElement('div'); sky.id = 'inc-sky'; sky.setAttribute('aria-hidden', 'true');
         document.body.insertBefore(sky, document.body.firstChild);
     }
-    if (on && sky && skyKind !== m) { sky.className = 'bgx bgx-' + m; sky.innerHTML = BG.html(m); skyKind = m; }
+    if (on && sky && skyKind !== m) {
+        if (skyKind && skyKind !== 'theme' && wantFx && !reducedNow()) swapSky(m);                 // a nice change from one background to the next
+        else { sky.className = 'bgx bgx-' + m; sky.innerHTML = BG.html(m); }
+        skyKind = m;
+    }
+    wantFx = true;
     if (on) { var b = BG.get(m); r.style.setProperty('--sky-base', b && b.base ? b.base : 'rgb(var(--bg2))'); } else r.style.removeProperty('--sky-base');
     if (sky) sky.style.display = on ? '' : 'none';
     applyGlow();
@@ -20437,7 +20561,13 @@ function paintSet() {
     var rt = document.getElementById('rot-toggle'); if (rt) { rt.classList.toggle('active', ro); rt.setAttribute('aria-checked', String(ro)); }
     Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-bgrot]'), function (b) { var on = rl.indexOf(b.getAttribute('data-bgrot')) >= 0; b.setAttribute('aria-pressed', String(on)); b.closest('.sky-cell').classList.toggle('in-rot', ro && on); });
     var rn = document.getElementById('rot-note');
-    if (rn) rn.textContent = !ro ? 'Each time you open IncAtor, show one of the backgrounds you tick (a different one each time).' : rl.length < 2 ? 'Tick at least 2 backgrounds below (the round tick on each picture).' : rl.length + ' ticked. Each time you open IncAtor you get one of them, never the same twice in a row. Now showing: ' + bgName(bgMode()) + '.';
+    var when = rotWhen();
+    if (rn) rn.textContent = !ro ? 'Take turns between the backgrounds you tick: each time you open IncAtor, every few seconds, or on every page.' : rl.length < 2 ? 'Tick at least 2 backgrounds below (the round tick on each picture).' : rl.length + ' ticked. ' + (when === 'timer' ? 'A new one every ' + everyText() + ', with an animation.' : when === 'page' ? 'A new one each time you open a page, with an animation.' : 'Each time you open IncAtor you get one of them, never the same twice in a row.') + ' Now showing: ' + bgName(bgMode()) + '.';
+    var ro2 = document.getElementById('rot-opts'); if (ro2) ro2.style.display = ro ? '' : 'none';
+    Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-rotwhen]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-rotwhen') === when)); });
+    Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-rotfx]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-rotfx') === fxStyle())); });
+    var er = document.getElementById('rot-every-row'); if (er) er.style.display = when === 'timer' ? '' : 'none';
+    var es = document.getElementById('rot-every'); if (es && document.activeElement !== es) { es.value = String(rotEvery()); if (es.value !== String(rotEvery())) { var o = document.createElement('option'); o.value = rotEvery(); o.textContent = everyText(); es.appendChild(o); es.value = String(rotEvery()); } }
     Array.prototype.forEach.call(document.querySelectorAll('#sky-block [data-glow]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-glow') === glowMode())); });
     var gc = document.getElementById('glow-custom'); if (gc) gc.style.display = glowMode() === 'custom' ? '' : 'none';
     var gi = document.getElementById('glow-color'); if (gi && document.activeElement !== gi) gi.value = glowHex();
@@ -20454,13 +20584,14 @@ function toggleRot(k) {
     var l = rotList(), i = l.indexOf(k); if (i >= 0) l.splice(i, 1); else l.push(k);
     save('bgRotateList', l);
     if (rotOn() && l.indexOf(bgMode()) < 0) { setNow(l[0]); }
-    applyBg();
+    applyBg(); armRot();
 }
+function everyText() { var v = rotEvery(); return v < 60 ? v + ' seconds' : v < 3600 ? (v / 60) + (v === 60 ? ' minute' : ' minutes') : (v / 3600) + (v === 3600 ? ' hour' : ' hours'); }
 function setRotate(on) {
     var l = rotList();
     if (on && l.indexOf(bgMode()) < 0) { l.unshift(bgMode()); save('bgRotateList', l); }   // start with the one you have now
     if (on) setNow(bgMode()); else { save('appBg', bgMode()); rotPick = null; }               // turning it off keeps the one on screen
-    save('bgRotate', !!on); applyBg();
+    save('bgRotate', !!on); applyBg(); armRot();
 }
 /* why the background, bubbles or stars might not be moving, with a one-tap fix for each */
 function whyStill() {
@@ -20576,7 +20707,11 @@ function inject() {
             '<div class="glow-custom" id="glow-custom"><div class="gsw-row"><button type="button" class="gsw" data-gsw="#7c3aed" style="background:#7c3aed" aria-label="Colour #7c3aed"></button><button type="button" class="gsw" data-gsw="#2563eb" style="background:#2563eb" aria-label="Colour #2563eb"></button><button type="button" class="gsw" data-gsw="#0891b2" style="background:#0891b2" aria-label="Colour #0891b2"></button><button type="button" class="gsw" data-gsw="#059669" style="background:#059669" aria-label="Colour #059669"></button><button type="button" class="gsw" data-gsw="#65a30d" style="background:#65a30d" aria-label="Colour #65a30d"></button><button type="button" class="gsw" data-gsw="#d97706" style="background:#d97706" aria-label="Colour #d97706"></button><button type="button" class="gsw" data-gsw="#ea580c" style="background:#ea580c" aria-label="Colour #ea580c"></button><button type="button" class="gsw" data-gsw="#dc2626" style="background:#dc2626" aria-label="Colour #dc2626"></button><button type="button" class="gsw" data-gsw="#db2777" style="background:#db2777" aria-label="Colour #db2777"></button><button type="button" class="gsw" data-gsw="#9333ea" style="background:#9333ea" aria-label="Colour #9333ea"></button></div><label class="gpick"><input type="color" id="glow-color" aria-label="Pick any colour"><span>Any colour</span></label></div></div>' +
         '<div class="motion-why" id="motion-why" role="status"></div>' +
         '<div class="setting-item" id="rot-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sync-alt"></i></div><div class="setting-content"><h4 class="setting-title">A different one each time</h4><p class="setting-description" id="rot-note"></p></div></div>' +
-        '<div class="setting-control"><div class="magic-toggle" id="rot-toggle" role="switch" tabindex="0" aria-label="A different background each time you open IncAtor"><div class="toggle-orb"></div></div></div></div>' +
+        '<div class="setting-control"><div class="magic-toggle" id="rot-toggle" role="switch" tabindex="0" aria-label="A different background each time you open IncAtor"><div class="toggle-orb"></div></div></div>' +
+        '<div class="rot-opts" id="rot-opts"><div class="rot-row"><span class="rot-l">Change it</span><span class="nm-seg rot-seg" role="group" aria-label="When it changes"><button type="button" data-rotwhen="open">When I open IncAtor</button><button type="button" data-rotwhen="timer">Every few seconds</button><button type="button" data-rotwhen="page">On every page</button></span></div>' +
+            '<div class="rot-row" id="rot-every-row"><span class="rot-l">Every</span><select class="inv-input" id="rot-every" aria-label="How often">' + [[10, '10 seconds'], [20, '20 seconds'], [30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1800, '30 minutes'], [3600, '1 hour']].map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('') + '</select></div>' +
+            '<div class="rot-row"><span class="rot-l">Animation</span><span class="nm-seg rot-seg" role="group" aria-label="Animation">' + [['fade', 'Fade'], ['zoom', 'Zoom'], ['slide', 'Slide'], ['circle', 'Circle'], ['wipe', 'Wipe'], ['mix', 'Mix']].map(function (o) { return '<button type="button" data-rotfx="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</span></div>' +
+            '<button type="button" class="app-btn" id="rot-try"><i class="fas fa-magic mr-2"></i> Show the next one now</button></div></div>' +
         '<h4 class="sky-gh"><i class="fas fa-magic"></i> Automatic</h4><div class="sky-opts sky-auto">' +
         AUTO.map(function (a) { var r = resolve(a.k);
             return '<div class="sky-cell"><button type="button" class="sky-opt" data-appbg="' + a.k + '"><span class="sky-pv bgx bgx-' + r + '" data-r="' + r + '">' + BG.html(r) + '</span><span class="sky-auto-ic"><i class="fas fa-' + a.icon + '"></i></span><b>' + a.name + '</b><small>' + a.desc + '</small><em class="sky-now" data-autonow="' + a.k + '"></em></button>' +
@@ -20619,13 +20754,16 @@ function inject() {
         var mw = e.target.closest('[data-mwfix]'); if (mw) { fixWhy(mw.getAttribute('data-mwfix')); return; }
         var pvb = e.target.closest('[data-bgpv]'); if (pvb) { preview(pvb.getAttribute('data-bgpv')); return; }
         var rb = e.target.closest('[data-bgrot]'); if (rb) { toggleRot(rb.getAttribute('data-bgrot')); return; }
+        var rw = e.target.closest('[data-rotwhen]'); if (rw) { save('bgRotWhen', rw.getAttribute('data-rotwhen')); armRot(); paintSet(); if (window.showToast) showToast({ open: 'A new one each time you open IncAtor', timer: 'A new one every ' + everyText(), page: 'A new one each time you open a page' }[rotWhen()], 'success'); return; }
+        var rf = e.target.closest('[data-rotfx]'); if (rf) { save('bgRotFx', rf.getAttribute('data-rotfx')); paintSet(); nextRot(); return; }
+        if (e.target.closest('#rot-try')) { if (!nextRot() && window.showToast) showToast('Tick at least 2 backgrounds first', 'info'); return; }
         if (e.target.closest('#rot-toggle')) { setRotate(!(S('bgRotate', false) === true)); if (window.showToast) showToast(S('bgRotate', false) === true ? 'Tick the backgrounds you like: one of them each time you open IncAtor' : 'One background again: ' + bgName(bgMode()), 'success'); return; }
         var g = e.target.closest('[data-glow]'); if (g) { var gm = g.getAttribute('data-glow'); setGlow(gm); if (window.showToast) showToast(gm === 'custom' ? 'Pick your colour below' : gm === 'match' ? 'Glows now match the background' : 'Glows use your theme colours', 'success'); return; }
         var sw = e.target.closest('[data-gsw]'); if (sw) { save('glowColor', sw.getAttribute('data-gsw')); setGlow('custom'); return; }
         var b = e.target.closest('[data-appbg]'); if (!b) return; choose(b.getAttribute('data-appbg'));
     });
     bx.addEventListener('input', function (e) { if (e.target.id === 'glow-color') { try { appSettings.glowColor = e.target.value; appSettings.glowMode = 'custom'; } catch (er) { /* ignore */ } applyGlow(); } });
-    bx.addEventListener('change', function (e) { if (e.target.id === 'glow-color') { save('glowColor', e.target.value); setGlow('custom'); } });
+    bx.addEventListener('change', function (e) { if (e.target.id === 'rot-every') { save('bgRotEvery', +e.target.value); armRot(); paintSet(); return; } if (e.target.id === 'glow-color') { save('glowColor', e.target.value); setGlow('custom'); } });
     bx.addEventListener('keydown', function (e) { if (e.target.id === 'rot-toggle' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
     sb.addEventListener('click', function (e) { if (e.target.closest('#shoot-toggle')) { save('shootOn', !shootOn()); applyShoot(); if (shootOn()) spawn(); if (window.showToast) showToast(shootOn() ? 'Shooting stars on' : 'Shooting stars off', 'info'); } });
     sb.addEventListener('keydown', function (e) { if (e.target.id === 'shoot-toggle' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
@@ -20635,7 +20773,17 @@ function inject() {
 }
 var css = document.createElement('style'); css.id = 'sky-css';
 css.textContent = [
-    '#inc-sky { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }',
+    '#inc-sky, .sky-old { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }',
+    '.sky-old.bgx-sky { background: radial-gradient(120% 80% at 50% 110%, #1e0b4b 0%, #0b0420 55%, #05010d 100%); }',
+    '@keyframes skyFade { from { opacity: 0; } to { opacity: 1; } }',
+    '@keyframes skyZoom { from { opacity: 0; transform: scale(1.18); } to { opacity: 1; transform: scale(1); } }',
+    '@keyframes skySlide { from { transform: translate3d(100%, 0, 0); } to { transform: translate3d(0, 0, 0); } }',
+    '@keyframes skyCircle { from { clip-path: circle(0% at 50% 45%); } to { clip-path: circle(150% at 50% 45%); } }',
+    '@keyframes skyWipe { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }',
+    '.rot-opts { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,.14); width: 100%; }',
+    '.rot-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; } .rot-l { font-size: .8rem; font-weight: 700; opacity: .8; }',
+    '.rot-seg { display: flex !important; flex-wrap: wrap; width: 100%; max-width: 100%; box-sizing: border-box; height: auto !important; } .rot-seg button { flex: 1 1 auto; white-space: normal !important; min-width: 0; } .rot-row select { max-width: 220px; }',
+    '#rot-item { flex-wrap: wrap; }',
     '#inc-sky.bgx-sky, .sky-pv.bgx-sky { background: radial-gradient(120% 80% at 50% 110%, #1e0b4b 0%, #0b0420 55%, #05010d 100%); }',
     'html.inc-sky-on, html.inc-sky-on body { background: var(--sky-base, #0b0420) !important; }',
     '.sky-pv.bgx { position: relative; }',
@@ -20737,7 +20885,11 @@ css.textContent = [
     '@media (max-width: 700px) { html.hdr-set body[data-pg] #main-header { padding-top: max(0px, var(--hdr-top, 14px)) !important; margin-top: min(0px, var(--hdr-top, 14px)) !important; } }'
 ].join('\n');
 document.head.appendChild(css);
-window.IncSky = { header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) || isAuto(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, choice: bgChoice, resolve: resolve, whyStill: whyStill, motionAlways: function (v) { if (v !== undefined) { save('motionAlways', !!v); applyMotion(); applyBg(); } return S('motionAlways', false) === true; }, timeBg: timeBg, seasonBg: seasonBg, weatherBg: weatherBg, glow: function (v) { if (v !== undefined) setGlow(v ? 'match' : 'theme'); return glowOn(); }, glowMode: function (m, hx) { if (hx) save('glowColor', hx); if (m) setGlow(m); return glowMode(); }, customPalette: customPalette, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
+(function rotBoot() {
+    var go = function () { armRot(); try { new MutationObserver(onPage).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ } onPage(); };
+    if (document.body) go(); else document.addEventListener('DOMContentLoaded', go);
+})();
+window.IncSky = { next: nextRot, rotWhen: function (v, every, fx) { if (v) save('bgRotWhen', v); if (every) save('bgRotEvery', +every); if (fx) save('bgRotFx', fx); armRot(); paintSet(); return { when: rotWhen(), every: rotEvery(), fx: fxStyle() }; }, header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) || isAuto(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, choice: bgChoice, resolve: resolve, whyStill: whyStill, motionAlways: function (v) { if (v !== undefined) { save('motionAlways', !!v); applyMotion(); applyBg(); } return S('motionAlways', false) === true; }, timeBg: timeBg, seasonBg: seasonBg, weatherBg: weatherBg, glow: function (v) { if (v !== undefined) setGlow(v ? 'match' : 'theme'); return glowOn(); }, glowMode: function (m, hx) { if (hx) save('glowColor', hx); if (m) setGlow(m); return glowMode(); }, customPalette: customPalette, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
 function boot() {
     document.documentElement.classList.toggle('motion-ok', S('motionAlways', false) === true);
     applyBg(); applyShoot(); applyHdr();
@@ -23716,7 +23868,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.10.24 (v16)';
+var VERSION = '2026.10.24 (v17)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
