@@ -16949,6 +16949,7 @@ const QUAL = { small: { max: 1100, minW: 800, q: 0.6, label: 'Small (about 60 KB
 function sget(k, d) { const v = appSettings[k]; return v === undefined || v === null ? d : v; }
 function sset(k, v) { appSettings[k] = v; try { appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ } }
 const savePhotosOn = () => sget('receiptSavePhotos', true) !== false;
+const autoSaveOn = () => sget('receiptAutoSave', false) === true;          // scan or upload one receipt: save it straight away (no review screen)
 const backupPhotosOn = () => sget('receiptBackupPhotos', true) !== false;
 let receipts = [];
 try { receipts = JSON.parse(appStore.getItem('incomeReceipts') || '[]') || []; } catch (e) { receipts = []; }
@@ -17649,7 +17650,7 @@ function injectPage() {
             <div class="rc-filters" id="rc-filters">
                 <div class="rc-search"><i class="fas fa-search"></i><input type="text" id="rc-q" class="inv-input" placeholder="Search receipts..." autocomplete="off"><button type="button" class="rc-ftog" id="rc-ftog" aria-expanded="false" aria-controls="rc-filters"><i class="fas fa-sliders-h"></i><span>Filters</span><em id="rc-fn"></em></button></div>
                 <select id="rc-cat" class="inv-input"><option value="">All categories</option>${syncCats().map(c => `<option value="${h(c)}">${h(c)}</option>`).join('')}</select>
-                <select id="rc-status" class="inv-input"><option value="">All receipts</option><option value="check">Needs review</option><option value="claim">Claimable</option><option value="partial">Partly claimable</option><option value="personal">Personal</option><option value="nophoto">No photo saved</option><option value="reviewed">Reviewed</option><option value="unreviewed">Not reviewed yet</option></select>
+                <select id="rc-status" class="inv-input"><option value="">All receipts</option><option value="check">Needs attention</option><option value="claim">Claimable</option><option value="partial">Partly claimable</option><option value="personal">Personal</option><option value="nophoto">No photo saved</option><option value="reviewed">Reviewed</option><option value="unreviewed">Not reviewed yet</option></select>
                 <select id="rc-year" class="inv-input"><option value="">All years</option></select>
                 <select id="rc-group" class="inv-input"><option value="store">By store</option><option value="category">By category</option><option value="month">By month</option><option value="none">No groups</option></select>
             </div>
@@ -17691,7 +17692,7 @@ function renderPanel() {
             ${pg.length ? `<div class="rc-sact"><button type="button" class="app-btn rc-big" data-rc="read-capture"><i class="fas fa-magic mr-2"></i> Read (${pg.length})</button><button type="button" class="app-btn rc-big" data-rc="cam"><i class="fas fa-plus mr-2"></i> Add</button></div>`
                 : `<button type="button" class="app-btn rc-big" data-rc="cam"><i class="fas fa-camera mr-2"></i> Open camera</button>`}</div>
             ${pagesStrip('capture')}
-            <div class="rc-sfoot">${keep}<span class="rc-sl"><button type="button" class="rc-link" data-rc="camfile">Phone camera app</button>${dflt}<button type="button" class="rc-link" data-rc="settings" id="rc-ailink">AI reader: ${aiOn() ? 'on' : 'off'}</button></span></div></div>`;
+            <div class="rc-sfoot">${keep}<span class="rc-sl"><button type="button" class="rc-link" data-rc="camfile">Phone camera app</button>${dflt}<button type="button" class="rc-link" data-rc="settings" id="rc-ailink">AI reader: ${aiOn() ? 'on' : 'off'}</button><button type="button" class="rc-link" data-rc="settings" id="rc-autolink">Auto save: ${autoSaveOn() ? 'on' : 'off'}</button></span></div></div>`;
     } else if (UI.mode === 'upload') {
         const pg = UI.pages.upload;
         el.innerHTML = `<div class="rc-scan rc-drop" id="rc-drop"><div class="rc-srow rc-center"><div class="rc-ic"><i class="fas fa-upload"></i></div><div class="rc-stx"><h3>Upload receipt photos</h3><p>Choose photos or drop them here. Add every part of a long receipt.</p></div>
@@ -17699,7 +17700,7 @@ function renderPanel() {
             ${pg.length ? `<button type="button" class="app-btn rc-big" data-rc="read-upload"><i class="fas fa-magic mr-2"></i> Read ${UI.batch ? pg.length + ' receipt' + (pg.length === 1 ? '' : 's') : 'receipt'}</button>` : ''}</div></div>
             ${pagesStrip('upload')}
             <div class="rc-sfoot"><label class="bz-check"><input type="checkbox" id="rc-batch"${UI.batch ? ' checked' : ''}> Each photo is a separate receipt</label>${keep}</div>
-            <div class="rc-sfoot"><span class="bz-help" style="margin:0;">Leave unticked when the photos are parts of ONE long receipt.</span>${dflt}</div></div>`;
+            <div class="rc-sfoot"><span class="bz-help" style="margin:0;">Leave unticked when the photos are parts of ONE long receipt.</span>${dflt}<button type="button" class="rc-link" data-rc="settings" id="rc-autolink">Auto save: ${autoSaveOn() ? 'on' : 'off'}</button></div></div>`;
     } else {
         el.innerHTML = `<div class="rc-scan"><div class="rc-srow rc-center"><div class="rc-ic"><i class="fas fa-edit"></i></div><div class="rc-stx"><h3>Add the details yourself</h3><p>Type the store, date, items and amounts. Photos are optional.</p></div>
             <button type="button" class="app-btn rc-big" data-rc="manual"><i class="fas fa-plus mr-2"></i> New receipt</button></div></div>`;
@@ -17720,14 +17721,15 @@ function openCamera() {
     const key = UI.mode === 'upload' ? 'upload' : 'capture';
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { showToast('This browser cannot open the camera here. Using your camera app instead.', 'info'); document.getElementById('rc-file-cam').click(); return; }
     const ov = document.createElement('div'); ov.className = 'rc-cam';
-    ov.innerHTML = `<video playsinline autoplay muted></video><div class="rc-frame"></div><div class="rc-cam-tip">Fit the receipt in the frame. Long receipt? Take more photos, top to bottom.</div>
+    ov.innerHTML = `<video playsinline autoplay muted></video><div class="rc-frame"></div><div class="rc-cam-tip">Fit the receipt in the frame, then tap Read receipt. Long receipt? Take more photos, top to bottom.</div>
         <button type="button" class="rc-cam-x" data-cam="close" title="Close">&times;</button><div class="rc-flash"></div>
         <div class="rc-cam-bar"><div class="rc-cam-strip"></div><div class="rc-cam-ctl"><button type="button" class="rc-cam-btn" data-cam="torch" style="visibility:hidden"><i class="fas fa-bolt mr-2"></i>Light</button><button type="button" class="rc-shutter" data-cam="shot" aria-label="Take photo"></button><button type="button" class="rc-cam-btn go" data-cam="done">Done</button></div></div>`;
+    ov.querySelector('[data-cam="done"]').setAttribute('aria-label', 'Read receipt');
     document.body.appendChild(ov);
     const video = ov.querySelector('video'), strip = ov.querySelector('.rc-cam-strip'), flash = ov.querySelector('.rc-flash');
     let stream = null, closed = false, torchOn = false;
     const stop = () => { closed = true; if (stream) stream.getTracks().forEach(t => t.stop()); if (ov.parentNode) ov.parentNode.removeChild(ov); };
-    const sync = () => { strip.innerHTML = UI.pages[key].map(p => `<img src="${p.thumb}" alt="">`).join(''); ov.querySelector('[data-cam="done"]').textContent = UI.pages[key].length ? `Done (${UI.pages[key].length})` : 'Done'; strip.scrollLeft = strip.scrollWidth; };
+    const sync = () => { strip.innerHTML = UI.pages[key].map(p => `<img src="${p.thumb}" alt="">`).join(''); const db = ov.querySelector('[data-cam="done"]'), n = UI.pages[key].length; db.innerHTML = n ? `<i class="fas fa-magic mr-2"></i>Read receipt${n > 1 ? ` (${n})` : ''}` : 'Close'; db.classList.toggle('ready', !!n); strip.scrollLeft = strip.scrollWidth; };
     sync();
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(s => {
         if (closed) { s.getTracks().forEach(t => t.stop()); return; }
@@ -17741,7 +17743,7 @@ function openCamera() {
     ov.addEventListener('click', ev => {
         const b = ev.target.closest('[data-cam]'); if (!b) return; const a = b.getAttribute('data-cam');
         if (a === 'close') { stop(); renderPanel(); }
-        else if (a === 'done') { stop(); renderPanel(); if (UI.pages[key].length && key === 'capture') readPages('capture'); else if (UI.pages[key].length) renderPanel(); }
+        else if (a === 'done') { stop(); renderPanel(); if (UI.pages[key].length) readPages(key); }   // Read receipt: straight to reading (and saving, with Auto save on)
         else if (a === 'torch') { try { torchOn = !torchOn; stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }); } catch (e) { /* ignore */ } }
         else if (a === 'shot') {
             if (!video.videoWidth) return;
@@ -17956,13 +17958,18 @@ async function readPages(key) {
                     const d = draftFromParse(parsed, [pages[i]], 'upload');
                     if (!d.date) d.date = today();
                     d.savePhoto = savePhotoNow();
-                    const res = await commit(d, null, { quiet: true });
+                    if (autoSaveOn() && !(N(parsed.total) > 0)) { d.attention = 'unread'; d.savePhoto = true; }
+                    const res = await commit(d, null, { quiet: true, keepDup: autoSaveOn() });
                     if (res === 'dup') dup++; else if (res) { saved++; if (needsLook(res)) check++; if (res.autoMode) autoN++; if (toolAlert(res)) toolN++; } else fail++;
-                } catch (e) { fail++; }
+                } catch (e) {
+                    let kept = false;
+                    if (autoSaveOn()) { try { const d = blankDraft(); d.pending = [pages[i]]; d.source = 'upload'; d.attention = 'unread'; d.savePhoto = true; d.date = today(); const res = await commit(d, null, { quiet: true, keepDup: true }); if (res && res !== 'dup') { saved++; check++; kept = true; } } catch (er) { /* counted below */ } }
+                    if (!kept) fail++;
+                }
             }
             pm.close(); UI.pages[key] = []; renderPanel(); renderAll();
             if (aiFail) showToast(aiFail + ' The on-phone reader was used instead.', 'info');
-            showToast(`${saved} receipt${saved === 1 ? '' : 's'} saved${autoN ? `, ${autoN} added to claimable` : ''}${toolN ? `, tools found on ${toolN} (claim them when you review)` : ''}${check ? `, ${check} need a look` : ''}${dup ? `, ${dup} duplicate skipped` : ''}${fail ? `, ${fail} could not be read` : ''}`, fail && !saved ? 'error' : 'success');
+            showToast(`${saved} receipt${saved === 1 ? '' : 's'} saved${autoN ? `, ${autoN} added to claimable` : ''}${toolN ? `, tools found on ${toolN} (claim them when you review)` : ''}${check ? `, ${check} in Needs attention` : ''}${dup ? `, ${dup} duplicate skipped` : ''}${fail ? `, ${fail} could not be read` : ''}`, fail && !saved ? 'error' : 'success');
             return;
         }
         let parsed = null, aiFail = '';
@@ -17973,14 +17980,60 @@ async function readPages(key) {
         if (!parsed.total && !parsed.store && !(parsed.items || []).length) showToast('The photo was hard to read. Please check or fill in the details.', 'info');
         const d = draftFromParse(parsed, pages, key === 'upload' ? 'upload' : 'capture');
         d.savePhoto = (document.getElementById('rc-savephoto') ? document.getElementById('rc-savephoto').checked : savePhotoNow());
+        if (autoSaveOn()) {                                              // Auto save: always save; anything doubtful waits under Needs attention
+            if (!(N(parsed.total) > 0)) { d.attention = 'unread'; d.savePhoto = true; }     // keep the photo, it is all there is
+            if (!d.date) d.date = today();
+            const res = await commit(d, null, { quiet: true, keepDup: true });
+            if (res && res !== 'dup') { UI.pages[key] = []; renderPanel(); renderAll(); autoSaved(res); return; }
+            showToast('This receipt could not be saved by itself. Please check it.', 'info');
+        }
         openEditor(d, { fromPanel: key });
     } catch (e) {
         pm.close();
-        showToast('The receipt reader could not start (it needs internet the first time). You can type the details in.', 'error');
         const d = blankDraft(); d.pending = pages; d.source = key; d.note = 'The photo is attached. Please type in the details.';
+        if (autoSaveOn()) {                                              // the reader could not start: keep the photo under Needs attention
+            d.attention = 'unread'; d.savePhoto = true; d.date = today();
+            try { const res = await commit(d, null, { quiet: true, keepDup: true }); if (res && res !== 'dup') { UI.pages[key] = []; renderPanel(); renderAll(); autoSaved(res); return; } } catch (er) { /* open it instead */ }
+        }
+        showToast('The receipt reader could not start (it needs internet the first time). You can type the details in.', 'error');
         openEditor(d, { fromPanel: key });
     }
 }
+
+/* ---- Auto save: a short message with Review and Undo after a receipt is saved by itself ---- */
+let snackT = 0;
+function autoSaved(rec) {
+    const old = document.getElementById('rc-snack'); if (old) old.remove(); clearTimeout(snackT);
+    const look = needsLook(rec), why = rec.attention === 'unread' ? 'could not read it' : rec.attention === 'dup' ? 'possible duplicate' : 'please check it', el = document.createElement('div'); el.id = 'rc-snack'; el.className = 'rc-snack' + (look ? ' look' : ''); el.setAttribute('role', 'status');
+    el.innerHTML = `<i class="fas fa-${look ? 'exclamation-circle' : 'check-circle'}"></i><div class="rc-snack-t"><b>${look ? 'Saved to Needs attention' : 'Receipt saved'}</b><small>${look ? h(why) + ' · ' : ''}${h(rec.store)} · ${money(rec.total)}${look ? '' : ' · ' + h(rec.category)}${rec.autoMode && !look ? ' · claimable' : ''}</small></div>
+        <button type="button" class="rc-snack-b" data-snack="review">Review</button><button type="button" class="rc-snack-b" data-snack="undo">Undo</button>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('on'));
+    const close = () => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); clearTimeout(snackT); };
+    el.addEventListener('click', async ev => {
+        const b = ev.target.closest('[data-snack]'); if (!b) return;
+        close();
+        const r = receipts.find(x => x.id === rec.id); if (!r) return;
+        if (b.getAttribute('data-snack') === 'review') { openEditor(editDraft(r), { existing: r }); return; }
+        const ids = (r.photos || []).map(x => x.id);                       // Undo: as if it was never saved (photos too, no Trash)
+        receipts = receipts.filter(x => x !== r);
+        if (r.projectUid) syncProjectExpense(Object.assign({}, r, { projectUid: null }), r.projectUid);
+        if (ids.length) { try { await PH.del(ids); } catch (e) { /* ignore */ } Remote.forget(ids); }
+        saveReceipts(); Remote.schedule(); renderAll(); showToast('Receipt not saved', 'info');
+    });
+    snackT = setTimeout(close, look ? 12000 : 9000);
+}
+(function snackCss() {
+    const st = document.createElement('style'); st.id = 'rc-snack-css';
+    st.textContent = '.rc-snack { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 10200; width: min(520px, calc(100% - 24px)); transform: translate(-50%, 24px); opacity: 0; transition: transform .28s ease, opacity .28s ease; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 18px; color: #fff; background: rgba(15, 23, 42, .92); border: 1px solid rgba(52, 211, 153, .5); box-shadow: 0 12px 30px rgba(0,0,0,.45); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }' +
+        '.rc-snack.on { transform: translate(-50%, 0); opacity: 1; } .rc-snack > i { color: #34d399; font-size: 20px; flex: none; } .rc-snack.look { border-color: rgba(251, 191, 36, .6); } .rc-snack.look > i { color: #fbbf24; }' +
+        '.rc-snack-t { flex: 1; min-width: 0; } .rc-snack-t b { display: block; font-size: .92rem; } .rc-snack-t small { display: block; font-size: .76rem; color: rgba(255,255,255,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+        '.rc-snack-b { flex: none; padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: #fff; font: 700 .82rem var(--font, inherit); cursor: pointer; }' +
+        '.rc-snack-b[data-snack="undo"] { background: transparent; border-color: transparent; color: #fcd34d; padding: 8px 6px; }' +
+        '.rc-chip.att { background: rgba(251, 191, 36, .16) !important; color: #fcd34d !important; border-color: rgba(251, 191, 36, .45) !important; } .rc-chip.att i { margin-right: 4px; } html.lm .rc-chip.att { color: #92400e !important; }' +
+        '.rc-cam-btn.go.ready { background: linear-gradient(135deg, #22c55e, #0ea5e9) !important; color: #fff !important; border-color: transparent !important; font-weight: 800; padding-left: 14px; padding-right: 14px; }';
+    document.head.appendChild(st);
+})();
 
 /* ------------------------------------------------------------------ saving ------------------------------------------------------------------ */
 function expCategory(c) { return { 'Materials': 'Materials', 'Fuel': 'Fuel', 'Dump fees': 'Disposal / Dump fees', 'Equipment rental': 'Equipment rental', 'Subcontractor': 'Labour / Subcontractor', 'Insurance & licences': 'Insurance' }[c] || 'Other'; }
@@ -18028,10 +18081,12 @@ async function commit(d, existing, opts) {
     if (existing && existing.dupOk) rec.dupOk = existing.dupOk;
     const refs = (d.refs || (existing && existing.refs) || []).filter(x => x && x.value); if (refs.length) rec.refs = refs.slice(0, 12);
     if (d.readBy || (existing && existing.readBy)) rec.readBy = d.readBy || existing.readBy;
+    if (d.attention) rec.attention = d.attention;                       // saved without you looking: it waits under Needs attention (saving it from the editor clears this)
     const dups = existing ? [] : dupFind(rec, receipts);
     if (dups.length) {
         const top = dups[0], tr = top.r;
-        if (opts.quiet) { if (top.m.level === 'exact') return 'dup'; }
+        if (opts.keepDup) rec.attention = rec.attention || 'dup';
+        else if (opts.quiet) { if (top.m.level === 'exact') return 'dup'; }
         else {
             const ok = await showConfirmation({ title: top.m.level === 'exact' ? 'This looks like a duplicate' : 'This might be a duplicate', type: 'warning', confirmText: 'Save anyway', cancelText: 'Cancel',
                 message: `You already saved a receipt from ${tr.store} on ${formatDate(tr.date)} for ${money(tr.total)}${tr.receiptNo ? ' (no. ' + tr.receiptNo + ')' : ''}. Why it matches: ${top.m.reasons.join(', ')}. Save this one too?` });
@@ -18247,7 +18302,7 @@ function openEditor(d, o) {
         renderPanel(); renderAll();
         const ci = claimInfo(rec);
         const ta = existing ? null : toolAlert(rec);
-        if (ta) showToast(`Saved. Tools found: ${ta.names.slice(0, 3).join(', ')}${ta.names.length > 3 ? '...' : ''} (${money(ta.amt)}). Open Needs review to claim only the tools.`, 'info');
+        if (ta) showToast(`Saved. Tools found: ${ta.names.slice(0, 3).join(', ')}${ta.names.length > 3 ? '...' : ''} (${money(ta.amt)}). Open Needs attention to claim only the tools.`, 'info');
         else showToast(existing ? (rec.reviewedAt ? 'Receipt updated and marked Reviewed' : 'Receipt updated') : `Receipt saved${rec.photos.length ? ' with photo' + (rec.photos.length === 1 ? '' : 's') : ''}${rec.autoMode ? (rec.autoMode === 'half' ? ', 50% claimable' : ' and added to claimable') : ''}${ci.status !== 'ok' ? ' (needs a look)' : ''}`, 'success');
     }
 }
@@ -18288,7 +18343,7 @@ function toolAlert(r, o) {                                   // a receipt that i
     if (paid.every(i => i.claim === (isToolItem(i) ? 'claim' : 'personal'))) return null;          // already set to tools only
     return { names: t.map(i => String(i.desc || 'Item').trim() || 'Item'), base: r2(t.reduce((s, i) => s + N(i.amount), 0)), amt: claimInfo(toolsOnlyCopy(r)).claimable };
 }
-const needsLook = r => { if (r.reviewedAt) return false; const a = claimInfo(r); return a.status !== 'ok' || a.verdict === 'review' || !!toolAlert(r); };
+const needsLook = r => { if (r.reviewedAt) return false; if (r.attention) return true; const a = claimInfo(r); return a.status !== 'ok' || a.verdict === 'review' || !!toolAlert(r); };
 const RV_WORD = { claim: 'Claim', half: '50%', personal: 'Personal', no: 'Personal', tools: 'Tools only', checked: 'Checked' };
 function reviewAs(ids, how) {
     const set = new Set((ids || []).map(String)), L = receipts.filter(r => set.has(String(r.id))); if (!L.length) return;
@@ -18368,7 +18423,7 @@ const VIEWS = {
     store:  { chip: 'By store', t: 'By store',           card: 'View by store',      ic: 'store',                c: ['#0ea5e9', '#2563eb'], group: 'store',    f: () => true },
     recur:  { chip: 'Recurring', t: 'Recurring expenses', card: 'Recurring expenses', ic: 'sync-alt', c: ['#14b8a6', '#0ea5e9'], group: 'none', f: r => r.source === 'recurring' },
     dups:   { chip: 'Duplicates', t: 'Possible duplicates', card: 'Possible duplicates', ic: 'copy', c: ['#f97316', '#ef4444'], group: 'dup', f: r => DUPS.map.has(String(r.id)) },
-    review: { chip: 'Needs review', t: 'Needs review',       card: 'Needs review',       ic: 'exclamation-triangle', c: ['#f97316', '#ef4444'], group: 'none',     f: needsLook }
+    review: { chip: 'Needs attention', t: 'Needs attention',    card: 'Needs attention',       ic: 'exclamation-triangle', c: ['#f97316', '#ef4444'], group: 'none',     f: needsLook }
 };
 const HUB_ORDER = ['all', 'cats', 'claim', 'tools', 'meals', 'store', 'recur', 'review', 'dups'];
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
@@ -18456,6 +18511,7 @@ function rowHtml(r, o) {
         + (ta ? `<span class="rc-chip tool" title="${h(ta.names.join(', '))}"><i class="fas fa-wrench"></i>Tools ${h(money(ta.base))}</span>` : '')
         + (r.source === 'recurring' ? '<span class="rc-chip" title="Added automatically">Auto</span>' : '')
         + (UI.view !== 'dups' && DUPS.map.has(String(r.id)) ? '<span class="rc-chip dup" title="Looks like another saved receipt">Duplicate?</span>' : '')
+        + (r.attention && !r.reviewedAt ? `<span class="rc-chip att"><i class="fas fa-exclamation-circle"></i>${r.attention === 'dup' ? 'Possible duplicate' : 'Could not read it'}</span>` : '')
         + (a.status !== 'ok' && !r.reviewedAt ? '<i class="fas fa-exclamation-triangle rc-ti warn" title="Needs a look"></i>' : '')
         + ((r.photos || []).length ? '<i class="fas fa-camera rc-ti" title="Photo saved"></i>' : '')
         + (proj ? '<i class="fas fa-briefcase rc-ti" title="' + h(proj.projectId || '') + '"></i>' : '');
@@ -18768,6 +18824,7 @@ function editDraft(r) {
     Object.assign(d, { id: r.id, store: r.store, vendorKey: r.vendorKey, date: r.date, category: r.category, subtotal: r.subtotal, gst: r.gst, pst: r.pst, total: r.total, payment: r.payment, receiptNo: r.receiptNo, refs: r.refs || [], gstNumber: r.gstNumber, projectUid: r.projectUid || '', notes: r.notes, claimMode: r.claimMode || '',
         items: (r.items || []).map(i => Object.assign({}, i)), photos: r.photos || [], savePhoto: true, autoSub: false, autoTotal: false, catTouched: true, catChanged: false, aiCategory: r.category, source: r.source, pending: [] });
     d.items.forEach(i => { i.aiCat = i.cat; });
+    if (r.attention && !r.reviewedAt) d.note = r.attention === 'unread' ? 'IncAtor could not read this receipt by itself. The photo is attached: please fill in the store, date and total.' : 'This looks like a receipt you already saved. Check it, then save it, or delete it if it is the same one.';
     return d;
 }
 
@@ -18886,6 +18943,7 @@ function renderSettingsStats() {
     const withPhotos = receipts.filter(r => (r.photos || []).length).length;
     PH.stats().then(s => { el.textContent = `${receipts.length} receipt${receipts.length === 1 ? '' : 's'} saved, ${s.n} photo${s.n === 1 ? '' : 's'} using about ${(s.bytes / 1048576).toFixed(1)} MB in this browser.`; }, () => { el.textContent = `${receipts.length} receipts saved. Photo storage is not available in this browser, so photos cannot be kept here.`; });
     const t = document.getElementById('rcs-toggle'); if (t) t.classList.toggle('active', savePhotosOn());
+    const ta = document.getElementById('rcs-autosave'); if (ta) { ta.classList.toggle('active', autoSaveOn()); ta.setAttribute('aria-checked', String(autoSaveOn())); }
     const bt = document.getElementById('rcs-bk-toggle'); if (bt) bt.classList.toggle('active', backupPhotosOn());
     Remote.paint();
     const q = document.getElementById('rcs-quality'); if (q) q.value = sget('receiptPhotoQuality', 'standard');
@@ -18963,6 +19021,7 @@ function injectSettings() {
             <div id="rcs-catlist" class="rc-catlist"></div>
             <div class="rc-catadd"><input id="rcs-catname" class="inv-input" maxlength="40" placeholder="New category, e.g. Training" autocomplete="off"><select id="rcs-catclaim" class="inv-input" aria-label="Tax claim"><option value="1">Claimable</option><option value="0.5">50% claimable</option><option value="0">Not claimable</option><option value="">Ask me</option></select><button type="button" class="app-btn" id="rcs-catadd"><i class="fas fa-plus mr-2"></i>Add</button></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-camera"></i></div><div class="setting-content"><h4 class="setting-title">Save receipt photos by default</h4><p class="setting-description">When this is on, every receipt you scan or upload keeps its photo inside IncAtor (never in your phone's gallery). You can still switch it off for a single scan on the Receipts page.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-toggle"><div class="toggle-orb"></div></div></div></div>
+        <div class="setting-item" id="rcs-autosave-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-save"></i></div><div class="setting-content"><h4 class="setting-title">Auto save receipts</h4><p class="setting-description">When this is on, a receipt you scan or upload is read and saved straight away, without stopping on the review screen. You get a short message with Review and Undo. Receipts it can't read well, or that look like one you already saved, are saved too, under <b>Needs attention</b>, so you can put your phone away and check them later.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-autosave" role="switch" tabindex="0" aria-label="Auto save receipts"><div class="toggle-orb"></div></div></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-cloud"></i></div><div class="setting-content"><h4 class="setting-title">Back up photos to Google Drive</h4><p class="setting-description">Each photo is copied to your IncAtor folder in Google Drive and restored on any device you sign in to. Photos are not part of the numbered backup versions, so they never slow them down.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-bk-toggle"><div class="toggle-orb"></div></div></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-image"></i></div><div class="setting-content"><h4 class="setting-title">Photo size</h4><p class="setting-description">Smaller photos use less space. Standard is clear enough to read every line.</p></div></div><div class="setting-control"><select id="rcs-quality" class="inv-input" style="max-width:240px;">${Object.keys(QUAL).map(k => `<option value="${k}">${QUAL[k].label}</option>`).join('')}</select></div></div>
         <div class="setting-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-database"></i></div><div class="setting-content"><h4 class="setting-title">Storage and backup</h4><p class="setting-description" id="rcs-stats">Checking...</p><p class="setting-description" id="rcs-sync"></p><p class="setting-description">Photos are also included in the backup file you export from the Data page. On iPhone, add IncAtor to the Home Screen so Safari does not clear unused website data.</p></div></div>
@@ -19004,6 +19063,7 @@ function injectSettings() {
         refreshCatSelects(); renderAll(); showToast(c.id + ' deleted', 'success');
     });
     sec.addEventListener('click', async ev => {
+        if (ev.target.closest('#rcs-autosave')) { sset('receiptAutoSave', !autoSaveOn()); renderSettingsStats(); renderPanel(); showToast(autoSaveOn() ? 'Receipts will be saved as soon as they are read' : 'Receipts will open for you to check before saving', 'success'); return; }
         if (ev.target.closest('#rcs-toggle')) { sset('receiptSavePhotos', !savePhotosOn()); UI.saveOverride = null; renderSettingsStats(); renderPanel(); showToast(savePhotosOn() ? 'Receipt photos will be saved by default' : 'Receipt photos will not be saved by default', 'success'); }
         else if (ev.target.closest('#rcs-bk-toggle')) { sset('receiptBackupPhotos', !backupPhotosOn()); renderSettingsStats(); showToast(backupPhotosOn() ? 'Photos will be backed up to Google Drive' : 'Photo backup to Google Drive is off', 'success'); if (backupPhotosOn()) Remote.schedule(300); }
         else if (ev.target.closest('#rcs-sync-now')) { if (!(window.IncAtorCloud && IncAtorCloud.photos && IncAtorCloud.photos.ready())) { showToast('Sign in with Google (and go online) to back up photos', 'info'); renderSettingsStats(); return; } Remote.run({ manual: true }).then(st => showToast(st.error ? 'Photo sync did not finish: ' + st.error : 'Photos are in sync', st.error ? 'error' : 'success')); }
@@ -19186,7 +19246,7 @@ function editRecurring(t, done) {
 window.RcptStore = {
     count: () => receipts.length,
     photoStats: () => PH.stats(),
-    claim: r => claimInfo(r), csv: list => exportCsv(list, true), itemsCsv: list => exportItemsCsv(list, true), photo: id => photoRecord(id),
+    claim: r => claimInfo(r), autoSave: v => { if (v !== undefined) { sset('receiptAutoSave', !!v); renderSettingsStats(); renderPanel(); } return autoSaveOn(); }, csv: list => exportCsv(list, true), itemsCsv: list => exportItemsCsv(list, true), photo: id => photoRecord(id),
     recurring: { list: recList, run: recRun, open: openRecurring, dateOf: recDate },
     duplicates: () => { computeDups(); return DUPS.clusters.map(c => ({ ids: c.ids, level: c.level, reasons: c.reasons })); },
     all: () => receipts,
@@ -21938,10 +21998,22 @@ var TOP = '.stunning-form-container, .mh-tile, .home-card, .mh-cta-wrap';
 var INNER = '.iconic-entry-card, .summary-ledger, .magic-calc-display, .financial-item, .chart-container, .monthly-tile, .gf-box, .rc-hero, .rc-scan, .rc-row, .rc-recbar, .rc-modes, .ins-card, .bz-card, .bz-row, .acc-section, .setting-item, .ap-item, .sky-opt, .live-calc-display';
 function sel(list, pre) { return list.split(',').map(function (x) { return pre + ' ' + x.trim(); }).join(', '); }
 function cardStyle() { var v = S('cardStyle', 'glass'); return v === 'solid' || v === 'outline' ? v : 'glass'; }
+function glassOp() { var v = S('glassOpacity', null); v = v == null ? null : parseFloat(v); return v == null || !isFinite(v) ? null : Math.max(0, Math.min(100, Math.round(v))); }   // null = the theme's own glass
+var GLASS_DEF = 15;
+function applyGlass(live) {
+    var r = document.documentElement, g = live != null ? live : glassOp(), on = cardStyle() === 'glass' && g != null;
+    r.classList.toggle('glass-op', on);
+    if (on) { r.style.setProperty('--gop', (g / 100).toFixed(3)); } else r.style.removeProperty('--gop');
+    var row = document.getElementById('look-glass-row'); if (row) row.hidden = cardStyle() !== 'glass';
+    var rg = document.getElementById('glass-op'), val = document.getElementById('glass-op-val'), shown = g == null ? GLASS_DEF : g;
+    if (rg && document.activeElement !== rg) rg.value = shown;
+    if (val) val.textContent = g == null ? 'Default' : g + '%';
+    var rs = document.getElementById('glass-reset'); if (rs) rs.disabled = glassOp() == null && live == null;
+}
 function applyCards() {
     var r = document.documentElement, v = cardStyle();
     r.classList.toggle('cards-solid', v === 'solid'); r.classList.toggle('cards-outline', v === 'outline');
-    pressSeg('data-cards', v);
+    pressSeg('data-cards', v); applyGlass();
     var n = document.getElementById('look-cards-note'); if (n) n.textContent = v === 'solid' ? 'Solid dark cards: the easiest to read in bright sunlight on site.' : v === 'outline' ? 'Outline: just a thin line around each card, nothing else.' : 'Glass: see-through frosted cards over the background.';
     refreshMenu();
 }
@@ -22091,8 +22163,11 @@ function inject() {
     if (document.getElementById('looks-cards')) return true;
     if (!window.IncApMenu || !document.getElementById('ap-menu')) return false;
     var a = document.createElement('div'); a.id = 'looks-cards'; a.className = 'space-y-6';
-    a.innerHTML = item('border-style', 'Card style', 'How the cards look on every page.', seg('Card style', [['data-cards', 'glass', 'Glass'], ['data-cards', 'solid', 'Solid dark'], ['data-cards', 'outline', 'Outline']]), 'look-cards');
-    IncApMenu.add(['cards', 'Card style', 'border-style', function () { return { glass: 'Glass', solid: 'Solid dark', outline: 'Outline' }[cardStyle()]; }], a);
+    a.innerHTML = item('border-style', 'Card style', 'How the cards look on every page.', seg('Card style', [['data-cards', 'glass', 'Glass'], ['data-cards', 'solid', 'Solid dark'], ['data-cards', 'outline', 'Outline']]), 'look-cards') +
+        '<div id="look-glass-row">' + item('tint', 'Glass opacity', 'Left: clearer glass, more of the background shows through. Right: more solid, easier to read in sunlight.',
+            '<div class="bub-ctl"><button type="button" class="bub-step" data-gop="-5" aria-label="Clearer">&minus;</button><input type="range" id="glass-op" min="0" max="100" step="5" aria-label="Glass opacity"><button type="button" class="bub-step" data-gop="5" aria-label="More solid">+</button><output class="bub-val" id="glass-op-val"></output></div>' +
+            '<button type="button" class="app-btn glass-reset" id="glass-reset"><i class="fas fa-undo-alt mr-2"></i> Back to the theme\'s glass</button>') + '</div>';
+    IncApMenu.add(['cards', 'Card style', 'border-style', function () { var c = cardStyle(), g = glassOp(); return { glass: 'Glass', solid: 'Solid dark', outline: 'Outline' }[c] + (c === 'glass' && g != null ? ' · ' + g + '% opacity' : ''); }], a);
     var b = document.createElement('div'); b.id = 'looks-big'; b.className = 'space-y-6';
     b.innerHTML = item('search-plus', 'Big numbers', 'Larger totals and bigger buttons. Good for checking amounts outdoors or with gloves on.', toggle('look-big', 'Big numbers')) +
         '<div id="look-bigcalm-row">' + item('pause-circle', 'Also rest the moving effects', 'Bubbles, rising stars and the moving background stay still while Big numbers is on. Off: they keep moving as usual.', toggle('look-bigcalm', 'Also rest the moving effects')) + '</div>';
@@ -22133,7 +22208,13 @@ function paintCel() {
 }
 function keyToggle(box, id) { box.addEventListener('keydown', function (ev) { if (ev.target.id === id && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); ev.target.click(); } }); }
 function wire(a, b, c, d, e, f) {
-    a.addEventListener('click', function (ev) { var x = ev.target.closest('[data-cards]'); if (x) { save('cardStyle', x.getAttribute('data-cards')); applyCards(); } });
+    a.addEventListener('click', function (ev) {
+        var x = ev.target.closest('[data-cards]'); if (x) { save('cardStyle', x.getAttribute('data-cards')); applyCards(); return; }
+        var st = ev.target.closest('[data-gop]'); if (st) { var cur = glassOp() == null ? GLASS_DEF : glassOp(); save('glassOpacity', Math.max(0, Math.min(100, cur + +st.getAttribute('data-gop')))); applyGlass(); refreshMenu(); return; }
+        if (ev.target.closest('#glass-reset')) { save('glassOpacity', null); applyGlass(); refreshMenu(); toast('Back to the theme\'s glass', 'info'); }
+    });
+    a.addEventListener('input', function (ev) { if (ev.target.id === 'glass-op') applyGlass(+ev.target.value); });            // live while you slide
+    a.addEventListener('change', function (ev) { if (ev.target.id === 'glass-op') { save('glassOpacity', +ev.target.value); applyGlass(); refreshMenu(); } });
     b.addEventListener('click', function (ev) {
         if (ev.target.closest('#look-big')) { save('bigNumbers', !bigOn()); applyBig(); toast(bigOn() ? 'Big numbers on' : 'Big numbers off', 'info'); return; }
         if (ev.target.closest('#look-bigcalm')) { save('bigCalm', !bigCalm()); applyBig(); toast(bigCalm() ? 'The moving effects rest while Big numbers is on' : 'The moving effects keep moving', 'info'); }
@@ -22174,6 +22255,10 @@ var css = [
     'html.cards-outline ' + TOP.split(',').join(', html.cards-outline ') + ' { background: transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1.5px solid rgba(var(--pr), .55) !important; box-shadow: none !important; }',
     sel(INNER, 'html.cards-outline') + ' { background: transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border: 1px solid rgba(255,255,255,.2) !important; box-shadow: none !important; }',
     'html.cards-solid .stunning-form-container::before, html.cards-solid .stunning-form-container::after, html.cards-outline .stunning-form-container::before, html.cards-outline .stunning-form-container::after { display: none !important; }',
+    /* glass opacity (only when you move the slider; otherwise each theme keeps its own glass) */
+    'html.glass-op ' + TOP.split(',').join(', html.glass-op ') + ', ' + sel(INNER, 'html.glass-op') + ' { background: linear-gradient(145deg, rgba(var(--deep2, 76, 29, 149), calc(var(--gop) * .8)), rgba(var(--panel, 28, 18, 58), calc(var(--gop) * .95))) !important; }',
+    'html.lm.glass-op ' + TOP.split(',').join(', html.lm.glass-op ') + ', ' + sel(INNER, 'html.lm.glass-op') + ' { background: linear-gradient(145deg, rgba(255, 255, 255, calc(var(--gop) * .95)), rgba(245, 243, 255, calc(var(--gop) * .85))) !important; }',
+    '#look-glass-row[hidden] { display: none; } .glass-reset { margin-top: 10px; } .glass-reset:disabled { opacity: .45; cursor: default; }',
     /* big numbers */
     sel(NUMS, 'html.big-num') + ' { font-size: 1.3em !important; font-weight: 800 !important; letter-spacing: .2px; }',
     'html.big-num body { font-size: 1.06em; } html.big-num .app-btn, html.big-num .rc-rvb, html.big-num .bz-btn { min-height: 48px; font-size: 1.02rem !important; }',
@@ -22229,7 +22314,7 @@ function boot() {
     try { new MutationObserver(function () { if (!document.getElementById('wx-greet')) applyWx(); }).observe(document.getElementById('main-header') || document.body, { childList: true, subtree: true }); } catch (e) { /* ignore */ }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncLooks = { cards: function (v) { if (v) { save('cardStyle', v); applyCards(); } return cardStyle(); }, big: function (v, calm) { if (v !== undefined) save('bigNumbers', !!v); if (calm !== undefined) save('bigCalm', !!calm); applyBig(); return bigOn(); }, bigCalm: bigCalm,
+window.IncLooks = { cards: function (v) { if (v) { save('cardStyle', v); applyCards(); } return cardStyle(); }, glass: function (v) { if (v !== undefined) { save('glassOpacity', v); applyGlass(); refreshMenu(); } return glassOp(); }, big: function (v, calm) { if (v !== undefined) save('bigNumbers', !!v); if (calm !== undefined) save('bigCalm', !!calm); applyBig(); return bigOn(); }, bigCalm: bigCalm,
     logo: function (v, name) { if (v !== undefined) save('homeLogo', v || null); if (name !== undefined) save('homeLogoName', name); applyLogo(); return logo(); }, readLogo: readLogo,
     celebrate: party, checkCelebrate: checkCelebrate, goal: function (v) { if (v !== undefined) { save('goalMonthly', v || null); paintCel(); } return goal(); },
     weather: function (v) { if (v !== undefined) { save('wxGreet', !!v); applyWx(); if (v && window.IncWx) IncWx.refresh(false); } return wxOn(); }, applyWx: applyWx, empty: function (v) { if (v !== undefined) { save('emptyAnim', !!v); applyEmpty(); } return emptyAnim(); } };
@@ -22446,7 +22531,7 @@ function mapColors(val, fn) { var changed = false; var v = val.replace(COL, func
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm/;
+var SKIP = /\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
 function declFor(st) {
     var out1 = [], seen = {}, clipText = /text/.test(st.getPropertyValue('-webkit-background-clip') + st.getPropertyValue('background-clip'));
@@ -23437,7 +23522,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.10.24 (v12)';
+var VERSION = '2026.10.24 (v15)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
