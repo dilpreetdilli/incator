@@ -5065,6 +5065,7 @@ html.inc-enter #home-page .home-card:nth-child(6), html.inc-enter #home-page .mh
 .ic-pill { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 12px); z-index: 2147481000; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 9px 16px 9px 10px; border-radius: 999px;
   color: #fff; font: 600 .9rem var(--font, -apple-system, sans-serif); background: rgba(24, 20, 48, .72); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255,255,255,.18); box-shadow: 0 12px 34px rgba(0,0,0,.35); transform: translate(-50%, -140%); opacity: 0; transition: transform .38s cubic-bezier(.2,.9,.25,1.2), opacity .25s; }
+.ic-pill { pointer-events: none; } .ic-pill-b { pointer-events: auto; }
 .ic-pill.show { transform: translate(-50%, 0); opacity: 1; }
 .ic-pill-ic { flex: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #22c55e, #14b8a6); }
 .ic-pill.warn .ic-pill-ic { background: linear-gradient(135deg, #f59e0b, #f97316); } .ic-pill.info .ic-pill-ic { background: linear-gradient(135deg, #6366f1, #a855f7); }
@@ -7723,7 +7724,7 @@ function cachedToken() {
     } catch (e) { /* ignore */ }
     return null;
 }
-var renewTimer = 0;
+var renewTimer = 0, renewTries = 0;
 function storeToken(t) { Cloud.token = t; try { LS.setItem(TOKEN_KEY, JSON.stringify(t)); } catch (e) { /* ignore */ } armRenew(); }
 function armRenew() {                                                 // quietly fetch a new key a few minutes before this one runs out
     clearTimeout(renewTimer); renewTimer = 0;
@@ -7738,28 +7739,20 @@ function quietRenew() {
     if (document.hidden) { renewTimer = setTimeout(quietRenew, 30000); return; }   // wait until the app is on screen again
     var t = Cloud.token;
     if (t && t.exp > Date.now() + 6 * 60000) { armRenew(); return; }
-    armTapRenew();                                                    // let the next touch do it, so the little Google window is allowed to open and close
+    try { if (window.IncWait) IncWait.show('drive', 'Keeping Google Drive connected...'); } catch (e) { /* ignore */ }
+    getToken({ interactive: false }).then(function () {               // quiet: no window, no interruption
+        renewTries = 0;
+        if (Cloud.status.kind === 'needs-auth') { setStatus('ok', ''); runBackup({ auto: true }); }
+        armRenew();
+    }).catch(function () {
+        renewTries = Math.min(renewTries + 1, 4);                     // try again soon, then less often
+        renewTimer = setTimeout(quietRenew, Math.min(180000, 8000 * Math.pow(2, renewTries - 1)));
+        offerReconnect();
+    }).then(function () {
+        try { if (window.IncWait) IncWait.hide('drive'); } catch (e) { /* ignore */ }
+    });
 }
-var tapRenew = null;
-function armTapRenew() {
-    if (tapRenew || setupMode) return;
-    if (Cloud.status.kind === 'needs-auth') return;                   // already waiting to reconnect: the Connect button owns that, not a stray tap
-    function go(ev) {
-        var t = ev && ev.target;
-        if (t && t.closest && t.closest('#ic-acct, .ic-overlay, #nm-acct, .nav-acct, .nav-more, #nm-sheet [data-go="account"]')) return;   // the account menu behaves normally
-        document.removeEventListener('click', go, true); document.removeEventListener('keydown', go, true); tapRenew = null;
-        if (Cloud.connecting || !readSession() || Cloud.status.kind === 'needs-auth') return;      // already asking you to reconnect: leave that to the Connect button
-        var t = Cloud.token; if (t && t.exp > Date.now() + 6 * 60000) { armRenew(); return; }
-        try { if (window.IncWait) IncWait.show('drive', 'Keeping Google Drive connected...'); } catch (e) { /* ignore */ }
-        getToken({ interactive: false }).then(function () {
-            if (Cloud.status.kind === 'needs-auth') { setStatus('ok', ''); runBackup({ auto: true }); }
-        }).catch(function () { armRenew(); }).then(function () {      // either way, put the orb away
-            try { if (window.IncWait) IncWait.hide('drive'); } catch (e) { /* ignore */ }
-        });
-    }
-    tapRenew = go;
-    document.addEventListener('click', go, true); document.addEventListener('keydown', go, true);
-}
+
 function clearToken() { Cloud.token = null; try { LS.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } }
 function requestToken(interactive) {
     return new Promise(function (resolve, reject) {
@@ -7982,7 +7975,7 @@ async function runBackup(o) {
             Cloud.timer = setTimeout(function () { runBackup({ auto: true }); }, wait);
             if (o.manual) toast('No connection - the backup will retry automatically', 'info');
         } else if (is(e, 'AuthError') || is(e, 'WrongAccountError')) {
-            setStatus('needs-auth', 'Google Drive reconnects on your next tap');
+            setStatus('needs-auth', 'Google Drive is reconnecting in the background');
             armAutoConnect('resume'); setTimeout(quietRenew, 300);
             if (o.manual) toast('Google Drive needs to be reconnected', 'error');
         } else if (is(e, 'ConflictError')) {
@@ -8278,7 +8271,7 @@ async function bootstrap() {
     if (out.kind === 'paused') Cloud.paused = true;
     var mode = out.mode;
     if (mode === 'offline') setStatus('offline', 'Offline - changes back up when you reconnect');
-    else if (mode === 'needs-auth') { setStatus('needs-auth', 'Google Drive is reconnecting in the background'); armAutoConnect('boot'); setTimeout(quietRenew, 400); }
+    else if (mode === 'needs-auth') { setStatus('needs-auth', 'Google Drive is reconnecting in the background'); setTimeout(quietRenew, 400); armAutoConnect('boot'); }
     else if (out.kind === 'paused') setStatus('conflict', 'Backup paused - conflict not resolved yet');
     else if (out.kind === 'offline-local') setStatus('offline', 'Offline - will retry automatically');
     else setStatus('ok', '');
@@ -8379,7 +8372,8 @@ function syncPill(text, kind, opt) {
     if (opt.action) el.querySelector('.ic-pill-b').addEventListener('click', function () { hide(); if (opt.run) opt.run(); });
     requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('show'); }); });
     function hide() { el.classList.remove('show'); setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 400); }
-    if (!opt.stay) pillTimer = setTimeout(hide, 1000 + 300);        // about one second on screen (plus the slide-in)
+    if (opt.hold) pillTimer = setTimeout(hide, opt.hold);           // stays a while, then gets out of the way
+    else if (!opt.stay) pillTimer = setTimeout(hide, 1000 + 300);   // about one second on screen (plus the slide-in)
     window.__icPill = { text: text, kind: kind || 'ok', at: Date.now() };
 }
 function toggleSyncScreen() {
@@ -8414,18 +8408,25 @@ async function connectInPlace(sess, how) {
         else setStatus('needs-auth', 'Reconnect Google Drive to keep backing up');
     } finally { Cloud.connecting = false; try { if (window.IncWait) IncWait.hide('drive'); } catch (e) { /* ignore */ } }
 }
+/* IncAtor never opens Google's window by itself. It keeps trying quietly in the background, and only if that
+   cannot work does it offer a Reconnect button, so a page you open never turns into a white Google screen. */
 function armAutoConnect(how) {
-    if (autoArm || setupMode) return;
-    function off() { ['click', 'keydown'].forEach(function (k) { document.removeEventListener(k, onTap, true); }); autoArm = null; }
-    function onTap(ev) {
-        if (ev.isTrusted === false) return;                   // only a real tap (the app reopening a section for you is not one)
-        var t = ev.target;
-        if (t && t.closest && t.closest('#ic-acct, .ic-overlay, #nm-acct, .nav-acct, .nav-more, #nm-sheet [data-go="account"]')) return;    // the account menu and dialogs behave normally
-        off();
-        var sess = readSession(); if (sess && Cloud.status.kind === 'needs-auth') connectInPlace(sess, how);
-    }
-    autoArm = onTap;
-    ['click', 'keydown'].forEach(function (k) { document.addEventListener(k, onTap, true); });
+    if (setupMode) return;
+    autoArm = how || 'boot';
+    offerReconnect();
+}
+var offerT = 0;
+function offerReconnect() {
+    clearTimeout(offerT);
+    offerT = setTimeout(function () {
+        if (setupMode || Cloud.connecting || !readSession() || Cloud.status.kind !== 'needs-auth') return;
+        if (document.querySelector('#nm-acct, #ic-acct, .ic-overlay')) { offerReconnect(); return; }   // the account panel has its own Connect button
+        var how = autoArm || 'boot';
+        syncPill('Google Drive needs one tap to reconnect', 'info', { action: 'Reconnect', hold: 9000, run: function () {
+            var sess = readSession(); if (sess) connectInPlace(sess, how);
+        } });
+        offerT = setTimeout(offerReconnect, 25000);               // ask again before long, rather than sitting there
+    }, 2500);                                                     // give the quiet attempt a moment first
 }
 
 /* ------------------------------ user actions ------------------------------ */
@@ -20080,7 +20081,7 @@ var CSS = [
     '.bgx-arctic .w2 { width: 25%; animation-duration: 19s; animation-delay: -7s; }',
     '@keyframes bxSweep { from { transform: translateX(-160%) rotate(25deg); } to { transform: translateX(380%) rotate(25deg); } }',
     '.bgx-arctic .sn { top: -2%; aspect-ratio: 1; min-width: 2px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 4px rgba(255,255,255,.6); animation: bxFall 15s linear infinite; will-change: transform; }',
-    '@keyframes bxFall { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-2vw, 106vh, 0); } }',
+    '@keyframes bxFall { 0% { transform: translate3d(0, 0, 0); } 25% { transform: translate3d(2.2vw, 26vh, 0); } 52% { transform: translate3d(-2vw, 54vh, 0); } 78% { transform: translate3d(1.6vw, 80vh, 0); } 100% { transform: translate3d(-1vw, 106vh, 0); } }',
     /* desert night */
     '.bgx-dunes { background: linear-gradient(180deg, #070b1f 0%, #1a1a46 40%, #4a2c55 66%, #8a4b3c 82%, #3a1d17 100%); }',
     '.bgx-dunes .bx-st { -webkit-mask: linear-gradient(#000 25%, transparent 65%); mask: linear-gradient(#000 25%, transparent 65%); }',
@@ -20207,14 +20208,21 @@ var CSS = [
     '.bgx-rain .fog { inset: 0; background: linear-gradient(180deg, rgba(148,163,184,.10), rgba(15,23,42,.35)); }',
     /* falling rain: little drops with a bright head, each on its own path (plain numbers in the keyframes, so the phone runs them on its own thread) */
     '.bgx .rd { top: -6%; width: 3.6px; height: 6.4px; border-radius: 52% 52% 60% 60% / 42% 42% 58% 58%; background: radial-gradient(circle at 38% 32%, rgba(255,255,255,.92) 0 14%, rgba(224,240,255,.5) 40%, rgba(186,214,245,.3) 68%, rgba(255,255,255,.1) 86%, transparent 95%); box-shadow: inset 0 -1px 1.5px rgba(255,255,255,.4), 0 0 4px rgba(191,219,254,.45); opacity: .9; will-change: transform; backface-visibility: hidden; animation: bxRd1 1.5s linear infinite; }',
-    '.bgx .rd.far { width: 2.4px; height: 4.2px; opacity: .5; }',
+    '.bgx .rd.far { width: 2.4px; height: 4.2px; opacity: .42; animation-duration: 2.1s; }',
+    '.bgx .rd::after { content: ""; position: absolute; left: 50%; bottom: 55%; width: 34%; height: 420%; transform: translateX(-50%);'
+        + ' background: linear-gradient(180deg, rgba(226,240,255,0) 0%, rgba(226,240,255,.16) 70%, rgba(226,240,255,.34) 100%); border-radius: 50%; }',
+    '.bgx .rd.far::after { height: 300%; opacity: .6; }',
+    '.bgx .rd.r2 { animation-duration: 1.32s; } .bgx .rd.r3 { animation-duration: 1.68s; } .bgx .rd.r4 { animation-duration: 1.44s; }',
     '@keyframes bxRd1 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(2.5vw, 118vh, 0); } }',
     '@keyframes bxRd2 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(4vw, 118vh, 0); } }',
     '@keyframes bxRd3 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(1.2vw, 118vh, 0); } }',
     '@keyframes bxRd4 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(3.2vw, 118vh, 0); } }',
     '.bgx-rain .rn, .bgx-storm .rn { display: none; }',
     '.bgx-rain .dp { aspect-ratio: .8; border-radius: 50% 50% 46% 46% / 40% 40% 60% 60%; background: radial-gradient(circle at 38% 30%, rgba(255,255,255,.85) 0 9%, rgba(226,232,240,.3) 32%, rgba(148,163,184,.14) 60%, rgba(255,255,255,.08) 70%, transparent 74%); box-shadow: inset 0 -1px 2px rgba(255,255,255,.25), 0 2px 3px rgba(0,0,0,.25); animation: bxDrop 9s cubic-bezier(.6,0,.9,.6) infinite; will-change: transform; }',
-    '@keyframes bxDrop { 0%, 30% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(1vw, 115vh, 0); } }',
+    '@keyframes bxDrop { 0%, 18% { transform: translate3d(0, 0, 0); } 26% { transform: translate3d(0.1vw, 9vh, 0); } 34%, 44% { transform: translate3d(0.15vw, 11vh, 0); }'
+        + ' 56% { transform: translate3d(0.5vw, 34vh, 0); } 62%, 68% { transform: translate3d(0.55vw, 37vh, 0); } 100% { transform: translate3d(1vw, 115vh, 0); } }',
+    '.bgx-rain .dp::after { content: ""; position: absolute; left: 50%; bottom: 72%; width: 32%; height: 420%; transform: translateX(-50%); border-radius: 50%;'
+        + ' background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(226,240,255,.1) 55%, rgba(226,240,255,.22) 100%); pointer-events: none; }',
     /* thunderstorm */
     /* one soft lens of light with a shaded underside: no hard edges where the puffs meet, and it takes the sky's own colour */
     '.bgx .cd { --cc: 255,255,255; --cs: 148,176,210; left: -52%; width: 52%; aspect-ratio: 3.2; opacity: .92; will-change: transform; backface-visibility: hidden; background:'
@@ -20297,10 +20305,10 @@ var CSS = [
     '.bgx-blossom .pt { top: -4%; aspect-ratio: 1.3; border-radius: 150% 0 150% 0; background: linear-gradient(135deg, #fce7f3, #f9a8d4); opacity: .85; animation: bxLeaf 16s linear infinite; will-change: transform; }',
     '@keyframes bxLeaf { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 50% { transform: translate3d(-4vw, 55vh, 0) rotate(200deg); } 100% { transform: translate3d(6vw, 110vh, 0) rotate(400deg); } }',
     /* moving pieces: a few fixed paths (no custom values inside the animation, which iPhone does not always run) */
-    '@keyframes bxFall1 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-7vw, 106vh, 0); } }',
-    '@keyframes bxFall2 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-2vw, 106vh, 0); } }',
-    '@keyframes bxFall3 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(3vw, 106vh, 0); } }',
-    '@keyframes bxFall4 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(7vw, 106vh, 0); } }',
+    '@keyframes bxFall1 { 0% { transform: translate3d(0, 0, 0); } 22% { transform: translate3d(-2.4vw, 24vh, 0); } 47% { transform: translate3d(1.8vw, 50vh, 0); } 73% { transform: translate3d(-3vw, 77vh, 0); } 100% { transform: translate3d(-6vw, 106vh, 0); } }',
+    '@keyframes bxFall2 { 0% { transform: translate3d(0, 0, 0); } 26% { transform: translate3d(1.9vw, 27vh, 0); } 54% { transform: translate3d(-2.6vw, 55vh, 0); } 79% { transform: translate3d(0.8vw, 80vh, 0); } 100% { transform: translate3d(-2vw, 106vh, 0); } }',
+    '@keyframes bxFall3 { 0% { transform: translate3d(0, 0, 0); } 19% { transform: translate3d(1.4vw, 21vh, 0); } 45% { transform: translate3d(-1.2vw, 48vh, 0); } 72% { transform: translate3d(2.8vw, 75vh, 0); } 100% { transform: translate3d(3vw, 106vh, 0); } }',
+    '@keyframes bxFall4 { 0% { transform: translate3d(0, 0, 0); } 24% { transform: translate3d(3.4vw, 25vh, 0); } 51% { transform: translate3d(0.6vw, 52vh, 0); } 76% { transform: translate3d(4.6vw, 78vh, 0); } 100% { transform: translate3d(7vw, 106vh, 0); } }',
     '@keyframes bxEmber1 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(-8vw, -100vh, 0) scale(.4); opacity: 0; } }',
     '@keyframes bxEmber2 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(-3vw, -100vh, 0) scale(.4); opacity: 0; } }',
     '@keyframes bxEmber3 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(3vw, -100vh, 0) scale(.4); opacity: 0; } }',
@@ -20352,6 +20360,7 @@ var cv = null, stars = [], running = false, H = 0, PH = null;
 function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
 function save(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ } }
 function on() { return S('starsOn', true) !== false; }
+function held() { return S('starsStill', false) === true; }           // stay where they are and just twinkle
 function level() { var v = S('starsAmount', DEF); return LEVELS[v] ? v : DEF; }
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
 function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
@@ -20365,7 +20374,9 @@ function make() {                                                        // one 
     var o = document.createElement('i'), c = TINT[(Math.random() * TINT.length) | 0];
     o.className = 'rs w' + (1 + ((Math.random() * 3) | 0)) + ' a' + (1 + ((Math.random() * 3) | 0)) + (big ? ' big' : '');   // how far it sways, how bright it gets
     o.style.cssText = 'left:' + rnd(0, 100).toFixed(2) + '%;width:' + (r * 2).toFixed(2) + 'px;height:' + (r * 2).toFixed(2) + 'px;--c:' + c + ';--L:' + (r * 4.5).toFixed(1) + 'px;--y:' + Math.round(rnd(0, H)) + 'px;' +
-        'animation-duration:' + dur.toFixed(1) + 's,' + (6.2832 / tw / 2).toFixed(2) + 's;animation-delay:-' + rnd(0, dur).toFixed(1) + 's,-' + rnd(0, 5).toFixed(1) + 's;';
+        'animation-duration:' + dur.toFixed(1) + 's,' + (6.2832 / tw / 2).toFixed(2) + 's;animation-delay:-' + rnd(0, dur).toFixed(1) + 's,-' + rnd(0, 5).toFixed(1) + 's;' +
+        '--tw:' + rnd(0.9, 4.2).toFixed(2) + 's;--twd:-' + rnd(0, 6).toFixed(2) + 's;';
+    o.classList.add('e' + (1 + ((Math.random() * 3) | 0)));          // a different rhythm each, so the twinkling looks random
     return o;
 }
 function size() { H = window.innerHeight || 800; if (cv) cv.style.setProperty('--rsH', H + 'px'); }
@@ -20387,6 +20398,7 @@ function apply() {
     }
     cv.style.display = ''; fill();
     cv.classList.toggle('still', reduced());                               // still stars, no movement
+    cv.classList.toggle('rs-hold', held() && !reduced());                  // held where they are, still twinkling
     if (reduced()) stop(); else if (!document.hidden) start(); else stop();
     paint();
 }
@@ -20411,6 +20423,9 @@ rcss.textContent = [
     '@keyframes rsTw2 { from { opacity: .09; } to { opacity: .75; } }',
     '@keyframes rsTw3 { from { opacity: .11; } to { opacity: .95; } }',
     '#inc-stars.rs-pause .rs { animation-play-state: paused; }',
+    '#inc-stars.rs-hold .rs { transform: translate3d(0, var(--y), 0); animation-name: rsTw2; animation-duration: var(--tw, 2s); animation-delay: var(--twd, 0s); animation-direction: alternate; animation-iteration-count: infinite; }',
+    '#inc-stars.rs-hold .rs.a1 { animation-name: rsTw1; } #inc-stars.rs-hold .rs.a3 { animation-name: rsTw3; }',
+    '#inc-stars.rs-hold .rs.e1 { animation-timing-function: ease-in-out; } #inc-stars.rs-hold .rs.e2 { animation-timing-function: cubic-bezier(.9,0,.1,1); } #inc-stars.rs-hold .rs.e3 { animation-timing-function: cubic-bezier(.3,0,.7,1); }',
     '#inc-stars.still .rs { animation: none; transform: translate3d(0, var(--y), 0); opacity: .7; }',
     'body.battery-saver #inc-stars { display: none !important; }'
 ].join('\n');
@@ -20419,6 +20434,7 @@ document.head.appendChild(rcss);
 /* ---------- Settings > Appearance > Rising stars ---------- */
 function paint() {
     var t = document.getElementById('stars-toggle'); if (t) { t.classList.toggle('active', on()); t.setAttribute('aria-checked', String(on())); }
+    var hs = document.getElementById('stars-still'); if (hs) { hs.classList.toggle('active', held()); hs.setAttribute('aria-checked', String(held())); hs.classList.toggle('off', !on()); }
     Array.prototype.forEach.call(document.querySelectorAll('#stars-block [data-stars]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-stars') === level())); b.disabled = !on(); });
     var n = document.getElementById('stars-note'); if (n) n.textContent = saver() ? 'Battery Saver is on, so the stars rest for now.' : hiddenTheme() ? 'This theme keeps the background plain, so the stars are hidden.' : '';
     try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* ignore */ }
@@ -20430,22 +20446,25 @@ function inject() {
     box.innerHTML = '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-star"></i></div><div class="setting-content"><h4 class="setting-title">Rising stars</h4><p class="setting-description">Tiny stars drift up behind every page and twinkle.</p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="stars-toggle" role="switch" tabindex="0" aria-label="Rising stars"><div class="toggle-orb"></div></div></div></div>' +
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">How many stars</h4><p class="setting-description" id="stars-note"></p></div></div>' +
-        '<div class="setting-control"><span class="nm-seg" role="group" aria-label="How many stars"><button type="button" data-stars="few">Few</button><button type="button" data-stars="some">Some</button><button type="button" data-stars="lots">Lots</button></span></div></div>';
+        '<div class="setting-control"><span class="nm-seg" role="group" aria-label="How many stars"><button type="button" data-stars="few">Few</button><button type="button" data-stars="some">Some</button><button type="button" data-stars="lots">Lots</button></span></div></div>' +
+        '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-snowflake"></i></div><div class="setting-content"><h4 class="setting-title">Hold them still</h4><p class="setting-description">The stars stay where they are and only twinkle, each at its own pace.</p></div></div>' +
+        '<div class="setting-control"><div class="magic-toggle" id="stars-still" role="switch" tabindex="0" aria-label="Hold the stars still"><div class="toggle-orb"></div></div></div></div>';
     IncApMenu.add(['stars', 'Rising stars', 'star', function () { return on() ? ({ few: 'Few', some: 'Some', lots: 'Lots' })[level()] + ' stars' : 'Off'; }], box);
     var item = document.querySelector('#ap-menu .ap-item[data-ap="stars"]'), bub = document.querySelector('#ap-menu .ap-item[data-ap="bubbles"]');
     if (item && bub && bub.nextSibling !== item) bub.parentNode.insertBefore(item, bub.nextSibling);   // right under Bubbles
     box.addEventListener('click', function (e) {
         if (e.target.closest('#stars-toggle')) { save('starsOn', !on()); apply(); if (window.showToast) showToast(on() ? 'Rising stars on' : 'Rising stars off', 'info'); return; }
+        if (e.target.closest('#stars-still')) { save('starsStill', !held()); apply(); if (window.showToast) showToast(held() ? 'The stars stay still and twinkle' : 'The stars drift up again', 'info'); return; }
         var b = e.target.closest('[data-stars]'); if (b && !b.disabled) { save('starsAmount', b.getAttribute('data-stars')); apply(); }   // fill() adds or takes away stars to match (the old ones are never left behind)
     });
-    box.addEventListener('keydown', function (e) { if (e.target.id === 'stars-toggle' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
+    box.addEventListener('keydown', function (e) { if ((e.target.id === 'stars-toggle' || e.target.id === 'stars-still') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); } });
     paint(); return true;
 }
 var css = document.createElement('style'); css.id = 'stars-css';
 css.textContent = ".fa-star { --ic: url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%202l3.1%206.3%206.9%201-5%204.9%201.2%206.8L12%2017.8%205.8%2021l1.2-6.8-5-4.9%206.9-1z'/%3E%3C/svg%3E\"); }" +
     '#stars-block [data-stars]:disabled { opacity: .45; cursor: default; }';
 document.head.appendChild(css);
-window.IncStars = { on: on, set: function (v) { save('starsOn', !!v); apply(); }, amount: function (v) { if (v) { save('starsAmount', v); apply(); } return level(); }, apply: apply, count: function () { return cv && cv.style.display !== 'none' ? stars.length : 0; }, running: function () { return running; } };
+window.IncStars = { on: on, held: held, hold: function (v) { if (v !== undefined) { save('starsStill', !!v); apply(); } return held(); }, set: function (v) { save('starsOn', !!v); apply(); }, amount: function (v) { if (v) { save('starsAmount', v); apply(); } return level(); }, apply: apply, count: function () { return cv && cv.style.display !== 'none' ? stars.length : 0; }, running: function () { return running; } };
 function boot() {
     apply();
     var n = 0, tm = setInterval(function () { if (inject() || ++n > 80) clearInterval(tm); }, 250);
@@ -21945,6 +21964,7 @@ function shown() { try { return appSettings.bubblesOn !== false; } catch (e) { r
 function bgCount() { return saver() || !shown() ? 0 : num('bubblesBg', BG_DEF, BG_MAX); }
 function cardCount() { return saver() || !shown() ? 0 : num('bubblesCard', CARD_DEF, CARD_MAX); }
 function look() { try { return appSettings.bubblesLook === 'glass' ? 'glass' : 'flat'; } catch (e) { return 'flat'; } }     // flat colour, or 3D glass like the sign-in screen
+function orbitOn() { try { return appSettings.bubblesOrbit !== false; } catch (e) { return true; } }
 function motion() { try { return appSettings.bubblesMotion === 'rise' ? 'rise' : 'roam'; } catch (e) { return 'roam'; } }   // drift and bounce, or rise from the bottom like the sign-in screen
 function applyLook() { var r = document.documentElement; r.classList.toggle('bub-glass', look() === 'glass'); r.classList.toggle('bub-rise', motion() === 'rise'); }
 function speedPct() { return num('bubblesSpeed', SPD_DEF, SPD_MAX); }
@@ -22071,8 +22091,56 @@ function rise(items, dt, w, h) {                              // up from the bot
         put(it);
     }
 }
+var skyT = 0, skyAt = null;
+function skyBody() {                                          // the sun or moon in the background, if there is one
+    if (Date.now() - skyT < 700) return skyAt;
+    skyT = Date.now(); skyAt = null;
+    try {
+        var e = document.querySelector('#inc-sky .moon, #inc-sky .sun');
+        if (e && e.offsetParent !== null) { var r = e.getBoundingClientRect(); if (r.width > 2) skyAt = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 }; }
+    } catch (err) { /* ignore */ }
+    return skyAt;
+}
+/* When the sky has a sun or a moon, the bubbles go round it like planets: each one keeps to its own ring at its
+   own speed, nearer ones going faster, the way real orbits do. They are steered rather than teleported, so they
+   still bump into each other and squash the way they always did. */
+function orbit(items, dt, w, h, body) {
+    var sdt = dt * spd(), box = null;
+    try { var c = items.length && items[0].el && items[0].el.parentNode; if (c) box = c.getBoundingClientRect(); } catch (e) { /* ignore */ }
+    if (!box) return false;
+    var cx = body.x - box.left, cy = body.y - box.top;
+    var maxR = Math.max(60, Math.min(Math.min(w, h) * 0.78, Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy))));   // keep the rings on screen
+    for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (!it.ob) {
+            var f = (i + 0.7) / Math.max(1, items.length);
+            it.ob = { r: (0.2 + 0.78 * f) * maxR, a: rnd(0, 6.2832), e: rnd(0.86, 1.12), tilt: rnd(-0.5, 0.5), dir: Math.random() < 0.5 ? -1 : 1 };
+            it.rs = null; it.enter = false;
+        }
+        var o = it.ob, rr = Math.max(body.r * 1.25 + it.s * 0.6, Math.min(o.r, maxR));
+        o.a += o.dir * (0.016 / Math.sqrt(rr / 70)) * sdt;            // closer rings go round quicker
+        var tx = cx + Math.cos(o.a) * rr - it.s / 2, ty = cy + Math.sin(o.a) * rr * o.e * (1 - Math.abs(o.tilt) * 0.22) - it.s / 2;
+        var dx = tx - it.x, dy = ty - it.y, pull = Math.min(0.26, 0.09 * sdt);
+        it.vx = dx * pull; it.vy = dy * pull;                          // steered, so knocks still work
+        it.x += it.vx; it.y += it.vy;
+    }
+    return true;
+}
 function run(items, dt, w, h) {
     if (motion() === 'rise') { rise(items, dt, w, h); return; }
+    var body = orbitOn() ? skyBody() : null;
+    if (body && orbit(items, dt, w, h, body)) {
+        var sd = dt * spd();
+        for (var z = 0; z < items.length; z++) {
+            var b = items[z], om = b.om * 1.6;
+            b.cv += (-b.c * om * om - b.cv * 0.16 * om) * sd; b.c += b.cv * sd;     // any wobble left over dies away
+            b.wv += (-b.w * om * om * 2.6 - b.wv * 0.14 * om) * sd; b.w += b.wv * sd;
+            b.c = clamp(b.c, -0.3, 0.45); b.w = clamp(b.w, -0.3, 0.3); b.inC = b.wasC = false;
+            put(b);
+        }
+        return;
+    }
+    for (var z2 = 0; z2 < items.length; z2++) if (items[z2].ob) { items[z2].ob = null; items[z2].vx = rnd(-0.5, 0.5) * items[z2].vmax; items[z2].vy = rnd(-0.5, 0.5) * items[z2].vmax; }
     for (var q = 0; q < items.length; q++) if (items[q].rs) { items[q].rs = null; items[q].vx = rnd(-0.5, 0.5) * items[q].vmax; items[q].vy = rnd(-0.5, 0.5) * items[q].vmax; if (items[q].y > h || items[q].y < -items[q].s) items[q].y = rnd(0, Math.max(1, h - items[q].s)); }
     var i, it, sdt = dt * spd();
     if (sdt > 0) {
@@ -23333,15 +23401,16 @@ function coverLabel(it) {
 // Example prices only (BC, 2026-ish): set your own in Settings > Roof calculator.
 const DEF_MAT = [
     { id: 'm-shingle', name: 'Architectural shingles', unit: 'bundle', basis: 'area', cover: 33.3, price: 45, on: true },
-    { id: 'm-under', name: 'Synthetic underlayment', unit: 'roll', basis: 'area', cover: 1000, price: 165, on: true },
-    { id: 'm-ice', name: 'Ice & water shield', unit: 'roll', basis: 'eavesValleys', cover: 65, price: 130, on: true },
-    { id: 'm-starter', name: 'Starter strip', unit: 'bundle', basis: 'eavesRakes', cover: 105, price: 60, on: true },
+    { id: 'm-under', name: 'Synthetic underlayment', unit: 'roll', basis: 'area', cover: 2800, price: 165, on: true, note: '1 roll covers 28 squares (2,800 sq ft)' },
+    { id: 'm-ice', name: 'Ice & water shield', unit: 'roll', basis: 'eavesValleys', cover: 63.3, price: 130, on: true, note: '1 roll covers 1.90 squares (190 sq ft) - about 63 ft at 3 ft wide' },
+    { id: 'm-starter', name: 'Starter bundles', unit: 'bundle', basis: 'eavesRakes', cover: 105, price: 60, on: true, note: 'Worked out from the eaves plus the rakes' },
     { id: 'm-cap', name: 'Hip & ridge cap', unit: 'bundle', basis: 'ridgeHips', cover: 33, price: 80, on: true },
     { id: 'm-drip', name: 'Drip edge', unit: '10 ft piece', basis: 'eavesRakes', cover: 10, price: 14, on: true },
     { id: 'm-nails', name: 'Roofing nails (coil)', unit: 'box', basis: 'area', cover: 1500, price: 60, on: true },
     { id: 'm-capnail', name: 'Cap nails', unit: 'box', basis: 'area', cover: 2000, price: 35, on: true },
-    { id: 'm-pipe', name: 'Pipe flashing', unit: 'piece', basis: 'count', cover: 1, price: 20, on: true, count: 'Pipe flashings' },
-    { id: 'm-vent', name: 'Roof vent', unit: 'piece', basis: 'count', cover: 1, price: 35, on: true, count: 'Roof vents' },
+    { id: 'm-pipe', name: 'Plumbing jacks', unit: 'piece', basis: 'count', cover: 1, price: 20, on: true, count: 'Plumbing jacks' },
+    { id: 'm-vent', name: 'Attic vents', unit: 'piece', basis: 'count', cover: 1, price: 35, on: true, count: 'Attic vents' },
+    { id: 'm-fanvent', name: 'Fan vents', unit: 'piece', basis: 'count', cover: 1, price: 45, on: true, count: 'Fan vents' },
     { id: 'm-ridgevent', name: 'Ridge vent', unit: '4 ft piece', basis: 'ridge', cover: 4, price: 22, on: false },
     { id: 'm-step', name: 'Step flashing', unit: 'bundle of 100', basis: 'walls', cover: 40, price: 55, on: true },
     { id: 'm-valley', name: 'Valley metal', unit: '10 ft piece', basis: 'valleys', cover: 10, price: 30, on: false },
@@ -23355,8 +23424,9 @@ const DEF_LAB = [
     { id: 'l-steep', name: 'Steep roof extra', unit: 'square', basis: 'steep', cover: 1, price: 30, on: false },
     { id: 'l-vsteep', name: 'Very steep roof extra', unit: 'square', basis: 'vsteep', cover: 1, price: 30, on: false },
     { id: 'l-storey', name: 'Extra storey', unit: 'square', basis: 'storey', cover: 1, price: 15, on: true },
-    { id: 'l-pipe', name: 'Install pipe flashings', unit: 'each', basis: 'count', cover: 1, price: 25, on: true, count: 'Pipe flashings' },
-    { id: 'l-vent', name: 'Install roof vents', unit: 'each', basis: 'count', cover: 1, price: 25, on: true, count: 'Roof vents' },
+    { id: 'l-pipe', name: 'Install plumbing jacks', unit: 'each', basis: 'count', cover: 1, price: 25, on: true, count: 'Plumbing jacks' },
+    { id: 'l-vent', name: 'Install attic vents', unit: 'each', basis: 'count', cover: 1, price: 25, on: true, count: 'Attic vents' },
+    { id: 'l-fanvent', name: 'Install fan vents', unit: 'each', basis: 'count', cover: 1, price: 35, on: true, count: 'Fan vents' },
     { id: 'l-chim', name: 'Chimney flashing', unit: 'each', basis: 'count', cover: 1, price: 275, on: true, count: 'Chimneys' },
     { id: 'l-sky', name: 'Skylight flashing', unit: 'each', basis: 'count', cover: 1, price: 225, on: false, count: 'Skylights' },
     { id: 'l-osb', name: 'Replace sheathing', unit: 'sheet', basis: 'count', cover: 1, price: 30, on: false, count: 'Sheathing sheets' },
@@ -23369,16 +23439,54 @@ function fixItem(it, kind) {
     o.unit = String(o.unit || (kind === 'lab' ? 'each' : 'piece')).slice(0, 30); if (!BASE[o.basis]) o.basis = 'area';
     o.cover = N(o.cover) > 0 ? N(o.cover) : 1; o.price = Math.max(0, N(o.price)); o.on = o.on !== false;
     if (o.basis === 'count') o.count = String(o.count || o.name).slice(0, 40); else delete o.count;
+    if (o.note) o.note = String(o.note).slice(0, 120); else delete o.note;
     if (o.basis === 'pitch') { const t = Array.isArray(o.tiers) ? o.tiers : []; o.tiers = TIERS.map((x, i) => t[i] === undefined || t[i] === null || t[i] === '' ? o.price : Math.max(0, N(t[i]))); }
     return o;
 }
-function matList() { const v = sget('roofMat', null); return (Array.isArray(v) ? v : DEF_MAT).map(x => fixItem(x, 'mat')); }
+/* Your own prices are kept exactly as they are. This only brings in items that did not exist before
+   (fan vents) and puts the new names and coverages on the ones that did. It runs once. */
+const RENAME = {
+    'm-pipe': { name: 'Plumbing jacks', count: 'Plumbing jacks', was: 'Pipe flashings' },
+    'm-vent': { name: 'Attic vents', count: 'Attic vents', was: 'Roof vents' },
+    'm-starter': { name: 'Starter bundles', note: 'Worked out from the eaves plus the rakes' },
+    'm-under': { cover: 2800, note: '1 roll covers 28 squares (2,800 sq ft)' },
+    'm-ice': { cover: 63.3, note: '1 roll covers 1.90 squares (190 sq ft) - about 63 ft at 3 ft wide' },
+    'l-pipe': { name: 'Install plumbing jacks', count: 'Plumbing jacks' },
+    'l-vent': { name: 'Install attic vents', count: 'Attic vents' }
+};
+const NEWITEMS = { mat: ['m-fanvent'], lab: ['l-fanvent'] };
+function migrate(v, kind) {
+    if (!Array.isArray(v)) return v;
+    const defs = kind === 'mat' ? DEF_MAT : DEF_LAB, out = v.map(x => {
+        const r = x && RENAME[x.id]; if (!r) return x;
+        const y = Object.assign({}, x);
+        if (r.name) y.name = r.name;
+        if (r.count) y.count = r.count;
+        if (r.note) y.note = r.note;
+        if (r.cover !== undefined) y.cover = r.cover;                 // the coverage is a fact about the product, not a price
+        return y;
+    });
+    const have = {}; out.forEach(x => { if (x && x.id) have[x.id] = 1; });
+    NEWITEMS[kind].forEach(id => { if (!have[id]) { const d = defs.filter(z => z.id === id)[0]; if (d) out.push(clone(d)); } });
+    return out;
+}
+function migrateCounts(c) {                                           // "Pipe flashings" you already typed become "Plumbing jacks"
+    if (!c || typeof c !== 'object') return c;
+    Object.keys(RENAME).forEach(id => { const r = RENAME[id]; if (r.was && c[r.was] !== undefined && c[r.count] === undefined) { c[r.count] = c[r.was]; delete c[r.was]; } });
+    return c;
+}
+function matList() {
+    let v = sget('roofMat', null);
+    if (Array.isArray(v) && !sget('roofItemsV', 0)) { v = migrate(v, 'mat'); sset('roofMat', v); sset('roofItemsV', 1); }
+    return (Array.isArray(v) ? v : DEF_MAT).map(x => fixItem(x, 'mat'));
+}
 function labList() {
     let v = sget('roofLab', null);
     if (Array.isArray(v) && !sget('roofPitchV', 0)) {
         v = v.map(x => x && x.id === 'l-install' && x.basis === 'squares' ? Object.assign({}, x, { basis: 'pitch', tiers: TIERS.map(() => N(x.price)) }) : x);
         sset('roofLab', v); sset('roofPitchV', 1);
     }
+    if (Array.isArray(v) && !sget('roofLabItemsV', 0)) { v = migrate(v, 'lab'); sset('roofLab', v); sset('roofLabItemsV', 1); }
     return (Array.isArray(v) ? v : DEF_LAB).map(x => fixItem(x, 'lab'));
 }
 function opts() { return Object.assign({}, DEF_OPTS, sget('roofOpts', {}) || {}); }
@@ -23390,22 +23498,32 @@ function newSection(n) { return { id: uid('s'), name: 'Section ' + n, shape: 're
 function newJob() { return { v: 1, id: null, name: '', customer: '', address: '', sections: [], lines: {}, counts: {}, layers: 1, storeys: 1, waste: '', use: {}, qty: {}, extra: [], snap: null, notes: '' }; }
 let job = null;
 function loadDraft() {
-    try { const j = JSON.parse(appStore.getItem(DRAFT) || 'null'); if (j && Array.isArray(j.sections)) { job = Object.assign(newJob(), j); return; } } catch (e) { /* new one */ }
+    try { const j = JSON.parse(appStore.getItem(DRAFT) || 'null'); if (j && Array.isArray(j.sections)) { job = Object.assign(newJob(), j); migrateCounts(job.counts); return; } } catch (e) { /* new one */ }
     job = newJob();
 }
 let saveT = 0;
 function keep() { clearTimeout(saveT); saveT = setTimeout(() => { try { appStore.setItem(DRAFT, JSON.stringify(job)); } catch (e) { /* storage full */ } }, 250); }
 
 // Lengths: 32, 32.5, 32'6, 32' 6", 32 6, 32ft 6in
-function len(v) {
-    const s = String(v == null ? '' : v).trim().toLowerCase().replace(/,/g, '');
-    if (!s) return 0;
-    if (/^\d*\.?\d+$/.test(s)) return parseFloat(s);
-    const m = s.match(/^(\d*\.?\d+)\s*(?:'|’|ft|feet|foot)?\s*(?:(\d*\.?\d+)\s*(?:"|”|in|inch|inches)?)?$/);
-    if (m) return parseFloat(m[1]) + (m[2] ? parseFloat(m[2]) / 12 : 0);
-    const k = s.match(/^(\d*\.?\d+)\s*(?:"|in|inch|inches)$/); if (k) return parseFloat(k[1]) / 12;
-    return N(s);
+/* Measurements are read the way a roofer writes them: the digits after the dot are INCHES.
+   So 1.6 is one foot six inches (one and a half feet), 32.11 is 32 ft 11 in, and 32'6, 32' 6" or 32 6 all work too.
+   Inches only go from 0 to 11, so something like 32.75 is flagged rather than quietly turned into a wrong number. */
+function lenInfo(v) {
+    const s = String(v == null ? '' : v).trim().toLowerCase().replace(/,/g, '').replace(/[\u2019\u00b4]/g, "'").replace(/[\u201d\u2033]/g, '"');
+    if (!s) return { ft: 0, txt: '', bad: false, empty: true };
+    const mk = (f, i) => i > 11
+        ? { ft: f, txt: f + ' ft', bad: true, empty: false, why: 'Inches go from 0 to 11. For ' + f + ' and a half feet type ' + f + '.6' }
+        : { ft: f + i / 12, txt: f + ' ft' + (i ? ' ' + i + ' in' : ''), bad: false, empty: false };
+    let m;
+    if ((m = s.match(/^(\d+)\s*(?:'|ft|feet|foot)\s*(\d{1,2})?\s*(?:"|in|inch|inches)?$/))) return mk(+m[1], m[2] ? +m[2] : 0);
+    if ((m = s.match(/^(\d+)\s+(\d{1,2})$/))) return mk(+m[1], +m[2]);                     // 32 6
+    if ((m = s.match(/^(\d+)\.(\d{1,2})$/))) return mk(+m[1], +m[2]);                      // 32.6 = 32 ft 6 in
+    if ((m = s.match(/^\.(\d{1,2})$/))) return mk(0, +m[1]);                                // .6 = 6 in
+    if ((m = s.match(/^(\d+)\s*(?:'|ft|feet|foot)?$/))) return mk(+m[1], 0);                // 32
+    if ((m = s.match(/^(\d+)\s*(?:"|in|inch|inches)$/))) return mk(0, +m[1]);               // 9"
+    return { ft: 0, txt: '', bad: true, empty: false, why: 'Type it like 32, 32.6 (32 ft 6 in) or 32\'6' };
 }
+function len(v) { return lenInfo(v).ft; }
 const pitchF = p => Math.sqrt(1 + Math.pow(N(p) / 12, 2));
 // [name, field labels..., whole roof from the building footprint?, short help]
 const SHAPES = {
@@ -23445,6 +23563,81 @@ function secEdges(s) {                                                  // edges
     else if (s.shape === 'cone') { e.eaves = Math.PI * a; }
     Object.keys(e).forEach(k => { e[k] *= n; });
     return e;
+}
+/* ============ the drawing ============
+   Every section is drawn to scale, side by side, the way it really sits: a gable gets its ridge down the
+   middle, a hip gets its four hip lines, a turret is round. The edges a shape brings with it are drawn in
+   the same colours as the Edges card, so you can see at a glance where each length comes from. */
+const EDGE_C = { eaves: '#38bdf8', rakes: '#f472b6', ridge: '#fbbf24', hips: '#c084fc', valleys: '#34d399', walls: '#94a3b8' };
+function secPlan(s) {                                                 // outline + coloured edges, measured in feet
+    const a = len(s.a), b = len(s.b), c = len(s.c), p = N(s.pitch), k = s.shape;
+    const seg = (k2, x1, y1, x2, y2) => ({ k: k2, p: [x1, y1, x2, y2] });
+    if (k === 'area') { const side = Math.sqrt(Math.max(1, N(s.a))); return { w: side, h: side, poly: [[0, 0], [side, 0], [side, side], [0, side]], edges: [], dash: true }; }
+    if (k === 'cone') { if (!(a > 0)) return null; return { w: a, h: a, round: true, poly: [], edges: [{ k: 'eaves', circle: [a / 2, a / 2, a / 2] }] }; }
+    if (!(a > 0)) return null;
+    const box = (w, h) => [[0, 0], [w, 0], [w, h], [0, h]];
+    if (k === 'gable' && b > 0) return { w: a, h: b, poly: box(a, b), ridge: [[0, b / 2], [a, b / 2]],
+        edges: [seg('eaves', 0, 0, a, 0), seg('eaves', 0, b, a, b), seg('rakes', 0, 0, 0, b), seg('rakes', a, 0, a, b), seg('ridge', 0, b / 2, a, b / 2)] };
+    if (k === 'hip' && b > 0) {
+        const L = Math.max(a, b), W = Math.min(a, b), run = W / 2, flip = a < b;
+        const w = flip ? W : L, h = flip ? L : W, r = run, rid = L - W;
+        const x1 = flip ? w / 2 : r, y1 = flip ? r : h / 2, x2 = flip ? w / 2 : r + rid, y2 = flip ? r + rid : h / 2;
+        return { w: w, h: h, poly: box(w, h), ridge: [[x1, y1], [x2, y2]],
+            edges: [seg('eaves', 0, 0, w, 0), seg('eaves', 0, h, w, h), seg('eaves', 0, 0, 0, h), seg('eaves', w, 0, w, h),
+                seg('hips', 0, 0, x1, y1), seg('hips', w, 0, x2, y2), seg('hips', 0, h, x1, y1), seg('hips', w, h, x2, y2), seg('ridge', x1, y1, x2, y2)] };
+    }
+    if (k === 'shed' && b > 0) return { w: a, h: b, poly: box(a, b),
+        edges: [seg('eaves', 0, b, a, b), seg('walls', 0, 0, a, 0), seg('rakes', 0, 0, 0, b), seg('rakes', a, 0, a, b)] };
+    if (k === 'dormer' && b > 0) return { w: a, h: b, poly: box(a, b), ridge: [[a / 2, 0], [a / 2, b]],
+        edges: [seg('rakes', 0, 0, a / 2, 0), seg('rakes', a, 0, a / 2, 0), seg('ridge', a / 2, 0, a / 2, b)] };
+    if (k === 'tri' && b > 0) return { w: a, h: b, poly: [[0, b], [a / 2, 0], [a, b]], edges: [] };
+    if (k === 'trap' && b > 0 && c > 0) { const w = Math.max(a, b); return { w: w, h: c, poly: [[(w - a) / 2, 0], [(w + a) / 2, 0], [(w + b) / 2, c], [(w - b) / 2, c]], edges: [] }; }
+    if (k === 'para' && b > 0) { const sk = Math.min(a * 0.3, b * 0.6); return { w: a + sk, h: b, poly: [[sk, 0], [a + sk, 0], [a, b], [0, b]], edges: [] }; }
+    if (b > 0) return { w: a, h: b, poly: box(a, b), edges: [] };     // rectangle
+    return null;
+}
+function roofSvg(c) {
+    const plans = [];
+    job.sections.forEach((s, i) => { const pl = secPlan(s); if (pl && pl.w > 0 && pl.h > 0) plans.push({ pl: pl, s: s, i: i, a: c.secs[i] }); });
+    if (!plans.length) return '<div class="rf-view-empty"><i class="fas fa-ruler-combined"></i><span>Add a section and its sizes to see your roof here</span></div>';
+    const VW = 560, PAD = 14, GAP = 16, LAB = 17;                     // one scale for everything, so the sizes compare honestly
+    const maxW = plans.reduce((m, q) => Math.max(m, q.pl.w), 1);
+    let scale = (VW - PAD * 2) / maxW, rows = [], best = null;        // start with the widest section filling the drawing
+    for (let tries = 0; tries < 26; tries++) {                        // shrink until every section fits across the width
+        rows = []; let row = { items: [], w: 0, h: 0 };
+        plans.forEach(q => {
+            const w = q.pl.w * scale, h = q.pl.h * scale;
+            if (row.items.length && row.w + GAP + w > VW - PAD * 2) { rows.push(row); row = { items: [], w: 0, h: 0 }; }
+            row.items.push({ q: q, w: w, h: h }); row.w += (row.items.length > 1 ? GAP : 0) + w; row.h = Math.max(row.h, h);
+        });
+        if (row.items.length) rows.push(row);
+        const tot = rows.reduce((t, r) => t + r.h + LAB + GAP, PAD * 2);
+        best = { rows: rows, scale: scale, h: tot };
+        if (tot <= 340 && rows.every(r => r.w <= VW - PAD * 2 + 0.5)) break;
+        scale *= 0.86;
+    }
+    const H = Math.max(120, Math.min(340, best.h));
+    let out = '', y = PAD;
+    best.rows.forEach(r => {
+        let x = (VW - r.w) / 2;
+        r.items.forEach(it => {
+            const q = it.q, pl = q.pl, sc = best.scale, oy = y + (r.h - it.h);
+            const P = pt => (x + pt[0] * sc).toFixed(1) + ',' + (oy + pt[1] * sc).toFixed(1);
+            out += '<g>';
+            if (pl.round) out += `<circle cx="${(x + pl.w * sc / 2).toFixed(1)}" cy="${(oy + pl.h * sc / 2).toFixed(1)}" r="${(pl.w * sc / 2).toFixed(1)}" class="rfp-face"/>`;
+            else out += `<polygon points="${pl.poly.map(P).join(' ')}" class="rfp-face${pl.dash ? ' dash' : ''}"/>`;
+            if (pl.ridge) out += `<line x1="${P(pl.ridge[0]).split(',')[0]}" y1="${P(pl.ridge[0]).split(',')[1]}" x2="${P(pl.ridge[1]).split(',')[0]}" y2="${P(pl.ridge[1]).split(',')[1]}" class="rfp-fold"/>`;
+            pl.edges.forEach(e => {
+                if (e.circle) { out += `<circle cx="${(x + e.circle[0] * sc).toFixed(1)}" cy="${(oy + e.circle[1] * sc).toFixed(1)}" r="${(e.circle[2] * sc).toFixed(1)}" class="rfp-edge" stroke="${EDGE_C[e.k]}" fill="none"/>`; return; }
+                out += `<line x1="${(x + e.p[0] * sc).toFixed(1)}" y1="${(oy + e.p[1] * sc).toFixed(1)}" x2="${(x + e.p[2] * sc).toFixed(1)}" y2="${(oy + e.p[3] * sc).toFixed(1)}" class="rfp-edge" stroke="${EDGE_C[e.k]}"/>`;
+            });
+            out += `<text x="${(x + it.w / 2).toFixed(1)}" y="${(oy + it.h + 13).toFixed(1)}" class="rfp-lab">${h(q.s.name)} · ${num1(q.a)} sq ft</text>`;
+            out += '</g>';
+            x += it.w + GAP;
+        });
+        y += r.h + LAB + GAP;
+    });
+    return `<svg viewBox="0 0 ${VW} ${H}" class="rf-plan" role="img" aria-label="Plan of the roof sections">${out}</svg>`;
 }
 const isWhole = s => !!WHOLE[s.shape];
 function secArea(s) { return shapeArea(s) * (s.meas === 'plan' && !isWhole(s) ? pitchF(s.pitch) : 1) * Math.max(1, Math.round(N(s.n)) || 1); }
@@ -23510,9 +23703,9 @@ function injectPage() {
     const inner = tabs + `<div id="rf-banner"></div>` +
         card('rf-job', 'clipboard-list', '#a78bfa', 'Job', 'Optional: shows on the saved estimate and the quote',
             `<div class="rf-g3"><label class="rf-f"><span>Job name</span><input class="inv-input" data-j="name" maxlength="80" placeholder="e.g. Main house re-roof"></label><label class="rf-f"><span>Customer</span><input class="inv-input" data-j="customer" maxlength="80" placeholder="Name"></label><label class="rf-f"><span>Job address</span><input class="inv-input" data-j="address" maxlength="120" placeholder="Street, city"></label></div><div id="rf-from"></div>`) +
-        card('rf-secs', 'home', '#38bdf8', 'Roof sections', 'Add every roof plane or area. Lengths in feet: 32.5 or 32\'6 both work.',
-            `<div id="rf-seclist"></div><div class="rf-btns"><button type="button" class="app-btn rf-addsec" data-rf="addsec"><i class="fas fa-plus mr-2"></i>Add a section</button></div><details class="rf-help"><summary>How to measure</summary><p><b>On the roof (slope):</b> measure the real roof surface, from eave to ridge. The pitch is then only used for steep-roof labour.</p><p><b>From a plan or the ground:</b> measure the flat footprint (from a drawing, satellite photo or the ground). IncAtor multiplies by the pitch to get the real roof area (for example, 6/12 adds about 12%).</p><p>A hip roof is usually 2 trapezoids (front and back) and 2 triangles (the ends). Use "x 2" for identical sides.</p></details>`) +
-        card('rf-lines', 'border-style', '#f472b6', 'Edges', 'Total length of each, in feet. Leave empty if there are none.', `<div class="rf-g3" id="rf-linegrid"></div>`) +
+        card('rf-secs', 'home', '#38bdf8', 'Roof sections', 'Add every roof plane or area. Lengths in feet and inches: type 32.6 for 32 ft 6 in.',
+            `<div class="rf-view" id="rf-view"></div><div id="rf-seclist"></div><div class="rf-btns"><button type="button" class="app-btn rf-addsec" data-rf="addsec"><i class="fas fa-plus mr-2"></i>Add a section</button></div><details class="rf-help"><summary>How to measure</summary><p><b>On the roof (slope):</b> measure the real roof surface, from eave to ridge. The pitch is then only used for steep-roof labour.</p><p><b>From a plan or the ground:</b> measure the flat footprint (from a drawing, satellite photo or the ground). IncAtor multiplies by the pitch to get the real roof area (for example, 6/12 adds about 12%).</p><p>A hip roof is usually 2 trapezoids (front and back) and 2 triangles (the ends). Use "x 2" for identical sides.</p></details>`) +
+        card('rf-lines', 'border-style', '#f472b6', 'Edges', 'Whole-roof shapes fill these in for you. Add anything the shapes do not cover.', `<div class="rf-lines" id="rf-linegrid"></div>`) +
         card('rf-det', 'sliders-h', '#fbbf24', 'Job details', '', `<div class="rf-g3" id="rf-detgrid"></div><div id="rf-counts"></div>`) +
         card('rf-est', 'calculator', '#34d399', 'Estimate', 'Tap a checkbox to leave an item out. Tap a quantity to change it.', `<div id="rf-out"></div>`) +
         `<div class="rf-actions"><button type="button" class="app-btn" data-rf="save"><i class="fas fa-save mr-2"></i>Save estimate</button><button type="button" class="app-btn rf-main" data-rf="quote"><i class="fas fa-file-alt mr-2"></i>Make a quote</button><button type="button" class="app-btn" data-rf="share"><i class="fas fa-share mr-2"></i>Share</button><button type="button" class="app-btn" data-rf="new"><i class="fas fa-plus mr-2"></i>New estimate</button></div>` +
@@ -23568,6 +23761,7 @@ function paintJob() {
         (job.snap ? `<div class="rf-warn soft"><i class="fas fa-tag"></i><span>Using the prices saved with this estimate.</span><button type="button" class="app-btn" data-rf="useprices">Use my current prices</button></div>` : '');
 }
 function paintSections(c) {
+    const v = $('rf-view'); if (v) { const sig = JSON.stringify(job.sections.map(x => [x.shape, x.a, x.b, x.c, x.pitch, x.n, x.name])); if (v.getAttribute('data-sig') !== sig) { v.setAttribute('data-sig', sig); v.innerHTML = roofSvg(c); } }
     const el = $('rf-seclist'); if (!el) return;
     el.innerHTML = job.sections.map((s, i) => {
         const a = c.secs[i], S = SHAPES[s.shape] || SHAPES.rect;
@@ -23677,12 +23871,36 @@ function onSecClick(e) {
         setTimeout(() => openSecEditor(-1), 180);
     }
 }
+const EDGE_FOR = {
+    eaves: ['Drip edge', 'Starter bundles', 'Ice & water shield'],
+    rakes: ['Drip edge', 'Starter bundles'],
+    ridge: ['Hip & ridge cap', 'Ridge vent'],
+    hips: ['Hip & ridge cap'],
+    valleys: ['Ice & water shield', 'Valley metal'],
+    walls: ['Step flashing']
+};
 function paintLines(c) {
     const el = $('rf-linegrid'); if (!el) return;
-    if (!el.childElementCount) el.innerHTML = LINES.map(l => `<label class="rf-f"><span>${l[1]} (ft)<small>${l[2]}</small></span><input class="inv-input" data-l="${l[0]}" inputmode="text" placeholder="0" value="${h(job.lines[l[0]] || '')}"><em class="rf-auto" id="rf-auto-${l[0]}"></em></label>`).join('');
+    c = c || calc();
+    if (!el.childElementCount) el.innerHTML = LINES.map(l => `<div class="rf-ln" data-ln="${l[0]}">
+        <span class="rf-ln-dot" style="background:${EDGE_C[l[0]]}"></span>
+        <span class="rf-ln-t"><b>${l[1]}</b><small>${l[2]}</small></span>
+        <span class="rf-ln-auto" id="rf-auto-${l[0]}"></span>
+        <input class="inv-input rf-ln-in" data-l="${l[0]}" inputmode="text" placeholder="0" aria-label="${l[1]} you are adding, in feet" value="${h(job.lines[l[0]] || '')}">
+        <b class="rf-ln-tot" id="rf-tot-${l[0]}"></b>
+        <small class="rf-ln-pays">Pays for ${EDGE_FOR[l[0]].join(', ')}</small></div>`).join('');
     document.querySelectorAll('#rf-linegrid [data-l]').forEach(i => { if (document.activeElement !== i) i.value = job.lines[i.getAttribute('data-l')] || ''; });
-    const A = (c || calc()).autoL;
-    LINES.forEach(l => { const e = $('rf-auto-' + l[0]); if (e) e.textContent = A[l[0]] > 0.05 ? '+ ' + num1(A[l[0]]) + ' ft from your roof shapes' + (len(job.lines[l[0]]) > 0 ? '' : '') : ''; });
+    const A = c.autoL;
+    LINES.forEach(l => {
+        const k = l[0], e = $('rf-auto-' + k), t = $('rf-tot-' + k), inp = el.querySelector('[data-l="' + k + '"]'), info = lenInfo(job.lines[k]);
+        if (e) { const has = A[k] > 0.05; e.textContent = has ? num1(A[k]) + ' ft from your shapes' : ''; e.classList.toggle('on', has); }
+        if (inp) { inp.classList.toggle('bad', info.bad); inp.title = info.bad ? (info.why || '') : (info.txt || ''); }
+        if (t) { t.textContent = c.L[k] > 0.05 ? num1(c.L[k]) + ' ft' : ''; t.className = 'rf-ln-tot' + (info.bad ? ' bad' : ''); }
+        const row = el.querySelector('.rf-ln[data-ln="' + k + '"]');
+        if (row) { let w = row.querySelector('.rf-ln-why'); 
+            if (info.bad) { if (!w) { w = document.createElement('small'); w.className = 'rf-ln-why'; row.appendChild(w); } w.textContent = info.why || 'Check this measurement'; }
+            else if (w) w.remove(); }
+    });
 }
 function paintDetails(c) {
     const el = $('rf-detgrid'); if (!el) return;
@@ -23970,6 +24188,43 @@ html.rf-ed-open, html.rf-ed-open body { overflow: hidden !important; }
 .rf-ed-area { color: #7dd3fc; white-space: nowrap; font-size: 1rem; } .rf-ed-area small { font-size: .68rem; opacity: .85; }
 .rf-ed-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
 .rf-ed-foot { flex: none; display: flex; gap: 8px; padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px); border-top: 1px solid rgba(255,255,255,.1); }
+/* the drawing */
+.rf-view { margin: 0 0 12px; padding: 10px 6px 4px; border-radius: 16px; background: linear-gradient(170deg, rgba(56,189,248,.07), rgba(167,139,250,.07)); border: 1px solid rgba(255,255,255,.09); }
+.rf-plan { display: block; width: 100%; height: auto; overflow: visible; }
+.rfp-face { fill: rgba(148,187,233,.17); stroke: rgba(226,240,255,.5); stroke-width: 1.1; stroke-linejoin: round; }
+.rfp-face.dash { stroke-dasharray: 5 4; fill: rgba(148,187,233,.1); }
+.rfp-fold { stroke: rgba(255,255,255,.4); stroke-width: 1; stroke-dasharray: 4 3; }
+.rfp-edge { stroke-width: 2.6; stroke-linecap: round; opacity: .95; }
+.rfp-lab { fill: rgba(226,232,240,.78); font: 600 9.5px var(--font, inherit); text-anchor: middle; }
+.rf-view-empty { display: flex; align-items: center; justify-content: center; gap: 9px; padding: 22px 12px; color: rgba(226,232,240,.6); font-size: .86rem; text-align: center; }
+.rf-view-empty i { font-size: 1.2rem; opacity: .7; }
+html.lm .rf-view { background: linear-gradient(170deg, rgba(14,165,233,.09), rgba(139,92,246,.09)); border-color: rgba(30,27,75,.12); }
+html.lm .rfp-face { fill: rgba(59,130,246,.12); stroke: rgba(30,41,59,.45); }
+html.lm .rfp-fold { stroke: rgba(30,41,59,.3); }
+html.lm .rfp-lab { fill: rgba(30,27,75,.75); }
+html.lm .rf-view-empty { color: rgba(30,27,75,.6); }
+/* the edges, one line each */
+.rf-lines { display: flex; flex-direction: column; gap: 8px; }
+.rf-ln { display: grid; grid-template-columns: 10px 1fr auto 96px auto; grid-template-rows: auto auto; align-items: center; gap: 4px 10px; padding: 9px 11px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.rf-ln-dot { grid-row: 1 / 3; width: 10px; height: 10px; border-radius: 50%; align-self: center; }
+.rf-ln-t { display: flex; flex-direction: column; min-width: 0; }
+.rf-ln-t b { font-size: .92rem; } .rf-ln-t small { font-size: .68rem; opacity: .7; }
+.rf-ln-auto { font-size: .7rem; color: #7dd3fc; white-space: nowrap; opacity: 0; }
+.rf-ln-auto.on { opacity: 1; }
+.rf-ln-in { text-align: right; padding: 8px 10px !important; }
+.rf-ln-in.bad { border-color: #f87171 !important; }
+.rf-ln-tot { font-size: .92rem; color: #86efac; white-space: nowrap; min-width: 54px; text-align: right; }
+.rf-ln-tot.bad { color: #f87171; }
+.rf-ln-pays { grid-column: 2 / 6; font-size: .66rem; opacity: .55; }
+.rf-ln-why { grid-column: 2 / 6; font-size: .68rem; color: #fca5a5; }
+html.lm .rf-ln { background: rgba(30,27,75,.04); border-color: rgba(30,27,75,.1); }
+html.lm .rf-ln-auto { color: #0369a1; } html.lm .rf-ln-tot { color: #047857; }
+@media (max-width: 560px) {
+  .rf-ln { grid-template-columns: 10px 1fr 86px auto; }
+  .rf-ln-t { grid-column: 2; } .rf-ln-auto { grid-column: 2; grid-row: 2; font-size: .66rem; }
+  .rf-ln-in { grid-column: 3; grid-row: 1 / 3; } .rf-ln-tot { grid-column: 4; grid-row: 1 / 3; min-width: 46px; }
+  .rf-ln-pays, .rf-ln-why { grid-column: 2 / 5; grid-row: auto; }
+}
 .rf-ed-foot .app-btn { flex: 1 1 0; justify-content: center; min-width: 0; padding: 12px 4px !important; font-size: .8rem; white-space: nowrap; }
 .rf-ed-foot .rf-main { background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))) !important; color: #fff !important; border-color: transparent !important; font-weight: 700; }
 html.lm .rf-ed-card { background: #fff; color: #1e1b4b; } html.lm .rf-ed-name { color: #1e1b4b; } html.lm .rf-ed-area, html.lm .rf-sra, html.lm .rf-sic-w { color: #0369a1; }
@@ -24054,7 +24309,7 @@ function boot() {
     try { new MutationObserver(() => { if (document.body.getAttribute('data-pg') === 'roofcalc') { addTabs(); paintAll(); } if (document.body.getAttribute('data-pg') === 'settings' && !$('roof-settings-section')) injectSettings(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncRoof = { calc: calc, job: () => job, len: len, pitchF: pitchF, scope: () => scope(calc()), text: () => summaryText(calc()), materials: matList, labour: labList, opts: opts,
+window.IncRoof = { calc: calc, job: () => job, len: len, lenInfo: lenInfo, plan: secPlan, pitchF: pitchF, scope: () => scope(calc()), text: () => summaryText(calc()), materials: matList, labour: labList, opts: opts,
     reload: () => { loadDraft(); resetDom(); paintAll(); }, paint: paintAll, settings: paintSettings };
 })();
 
@@ -24340,7 +24595,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.10.29 (v18)';
+var VERSION = '2026.10.30 (v19)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
