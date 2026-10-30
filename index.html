@@ -7723,7 +7723,43 @@ function cachedToken() {
     } catch (e) { /* ignore */ }
     return null;
 }
-function storeToken(t) { Cloud.token = t; try { LS.setItem(TOKEN_KEY, JSON.stringify(t)); } catch (e) { /* ignore */ } }
+var renewTimer = 0;
+function storeToken(t) { Cloud.token = t; try { LS.setItem(TOKEN_KEY, JSON.stringify(t)); } catch (e) { /* ignore */ } armRenew(); }
+function armRenew() {                                                 // quietly fetch a new key a few minutes before this one runs out
+    clearTimeout(renewTimer); renewTimer = 0;
+    var t = Cloud.token; if (!t || !t.exp) return;
+    var wait = Math.max(20000, t.exp - Date.now() - 5 * 60000);
+    if (wait > 25 * 60000) wait = 25 * 60000;                         // and look in now and then anyway
+    renewTimer = setTimeout(quietRenew, wait);
+}
+function quietRenew() {
+    renewTimer = 0;
+    if (setupMode || Cloud.connecting || !readSession()) return;
+    if (document.hidden) { renewTimer = setTimeout(quietRenew, 30000); return; }   // wait until the app is on screen again
+    var t = Cloud.token;
+    if (t && t.exp > Date.now() + 6 * 60000) { armRenew(); return; }
+    armTapRenew();                                                    // let the next touch do it, so the little Google window is allowed to open and close
+}
+var tapRenew = null;
+function armTapRenew() {
+    if (tapRenew || setupMode) return;
+    if (Cloud.status.kind === 'needs-auth') return;                   // already waiting to reconnect: the Connect button owns that, not a stray tap
+    function go(ev) {
+        var t = ev && ev.target;
+        if (t && t.closest && t.closest('#ic-acct, .ic-overlay, #nm-acct, .nav-acct, .nav-more, #nm-sheet [data-go="account"]')) return;   // the account menu behaves normally
+        document.removeEventListener('click', go, true); document.removeEventListener('keydown', go, true); tapRenew = null;
+        if (Cloud.connecting || !readSession() || Cloud.status.kind === 'needs-auth') return;      // already asking you to reconnect: leave that to the Connect button
+        var t = Cloud.token; if (t && t.exp > Date.now() + 6 * 60000) { armRenew(); return; }
+        try { if (window.IncWait) IncWait.show('drive', 'Keeping Google Drive connected...'); } catch (e) { /* ignore */ }
+        getToken({ interactive: false }).then(function () {
+            if (Cloud.status.kind === 'needs-auth') { setStatus('ok', ''); runBackup({ auto: true }); }
+        }).catch(function () { armRenew(); }).then(function () {      // either way, put the orb away
+            try { if (window.IncWait) IncWait.hide('drive'); } catch (e) { /* ignore */ }
+        });
+    }
+    tapRenew = go;
+    document.addEventListener('click', go, true); document.addEventListener('keydown', go, true);
+}
 function clearToken() { Cloud.token = null; try { LS.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } }
 function requestToken(interactive) {
     return new Promise(function (resolve, reject) {
@@ -7947,7 +7983,7 @@ async function runBackup(o) {
             if (o.manual) toast('No connection - the backup will retry automatically', 'info');
         } else if (is(e, 'AuthError') || is(e, 'WrongAccountError')) {
             setStatus('needs-auth', 'Google Drive reconnects on your next tap');
-            armAutoConnect('resume');
+            armAutoConnect('resume'); setTimeout(quietRenew, 300);
             if (o.manual) toast('Google Drive needs to be reconnected', 'error');
         } else if (is(e, 'ConflictError')) {
             Cloud.paused = true;
@@ -8242,7 +8278,7 @@ async function bootstrap() {
     if (out.kind === 'paused') Cloud.paused = true;
     var mode = out.mode;
     if (mode === 'offline') setStatus('offline', 'Offline - changes back up when you reconnect');
-    else if (mode === 'needs-auth') { setStatus('needs-auth', 'Google Drive reconnects on your next tap'); armAutoConnect('boot'); }
+    else if (mode === 'needs-auth') { setStatus('needs-auth', 'Google Drive is reconnecting in the background'); armAutoConnect('boot'); setTimeout(quietRenew, 400); }
     else if (out.kind === 'paused') setStatus('conflict', 'Backup paused - conflict not resolved yet');
     else if (out.kind === 'offline-local') setStatus('offline', 'Offline - will retry automatically');
     else setStatus('ok', '');
@@ -8252,7 +8288,7 @@ async function bootstrap() {
     if (!screenOn) {
         var msg = restored ? [(restored.merged ? 'Merged with Google Drive' : 'Updated from Google Drive') + ' · ' + restored.n + ' job' + (restored.n === 1 ? '' : 's'), 'ok']
             : mode === 'offline' ? ['Offline · using the data on this device', 'warn']
-            : mode === 'needs-auth' ? ['Tap anywhere to reconnect Google Drive', 'info']
+            : mode === 'needs-auth' ? ['Google Drive reconnects by itself in a moment', 'info']
             : out.kind === 'paused' ? ['Backup paused · open the account menu to decide', 'warn']
             : out.kind === 'offline-local' ? ['Saved on this device · will back up soon', 'warn']
             : out.kind === 'uploaded' ? ['Backed up to Google Drive', 'ok']
@@ -8316,6 +8352,7 @@ function quietReload() { try { sessionStorage.setItem('incator:quietBoot', '1');
 // Every automatic restart of the page goes through here: it remembers where you were (page, open section, scroll)
 // so IncAtor comes back to the same place, and keeps a short note of why (Data Management > Data Statistics).
 function icReload(why, delay) {
+    try { if (window.IncWait) IncWait.show('boot', 'One moment...'); } catch (e) { /* ignore */ }
     try {
         var pg = document.body.getAttribute('data-pg') || 'home';
         var open = Array.prototype.map.call(document.querySelectorAll('.page.active .acc-section.acc-open'), function (x) { return x.id; }).filter(Boolean);
@@ -8358,6 +8395,7 @@ var autoArm = null;
 async function connectInPlace(sess, how) {
     if (Cloud.connecting) return; Cloud.connecting = true;
     setStatus('syncing', 'Connecting Google Drive...');
+    try { if (window.IncWait) IncWait.show('drive', 'Connecting Google Drive...'); } catch (e) { /* ignore */ }
     try {
         var token = await getTokenFromTap();                         // starts inside the tap, so the Google window may open
         if (how === 'boot') {
@@ -8374,19 +8412,20 @@ async function connectInPlace(sess, how) {
         if (is(e, 'WrongAccountError')) { toast('Please use the Google account ' + (e.expected || 'you signed in with'), 'error'); setStatus('needs-auth', 'Wrong Google account for Drive'); }
         else if (is(e, 'NetError')) setStatus('offline', 'Offline - will retry automatically');
         else setStatus('needs-auth', 'Reconnect Google Drive to keep backing up');
-    } finally { Cloud.connecting = false; }
+    } finally { Cloud.connecting = false; try { if (window.IncWait) IncWait.hide('drive'); } catch (e) { /* ignore */ } }
 }
 function armAutoConnect(how) {
     if (autoArm || setupMode) return;
+    function off() { ['click', 'keydown'].forEach(function (k) { document.removeEventListener(k, onTap, true); }); autoArm = null; }
     function onTap(ev) {
         if (ev.isTrusted === false) return;                   // only a real tap (the app reopening a section for you is not one)
         var t = ev.target;
         if (t && t.closest && t.closest('#ic-acct, .ic-overlay, #nm-acct, .nav-acct, .nav-more, #nm-sheet [data-go="account"]')) return;    // the account menu and dialogs behave normally
-        document.removeEventListener('click', onTap, true); autoArm = null;
+        off();
         var sess = readSession(); if (sess && Cloud.status.kind === 'needs-auth') connectInPlace(sess, how);
     }
     autoArm = onTap;
-    document.addEventListener('click', onTap, true);
+    ['click', 'keydown'].forEach(function (k) { document.addEventListener(k, onTap, true); });
 }
 
 /* ------------------------------ user actions ------------------------------ */
@@ -16968,7 +17007,8 @@ const QUAL = { small: { max: 1100, minW: 800, q: 0.6, label: 'Small (about 60 KB
 function sget(k, d) { const v = appSettings[k]; return v === undefined || v === null ? d : v; }
 function sset(k, v) { appSettings[k] = v; try { appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ } }
 const savePhotosOn = () => sget('receiptSavePhotos', true) !== false;
-const autoSaveOn = () => sget('receiptAutoSave', false) === true;          // scan or upload one receipt: save it straight away (no review screen)
+const autoSaveOn = () => sget('receiptAutoSave', false) === true;
+const quietReadOn = () => sget('receiptQuietRead', false) === true;      // read it in the background: no window, just a small line at the bottom          // scan or upload one receipt: save it straight away (no review screen)
 const backupPhotosOn = () => sget('receiptBackupPhotos', true) !== false;
 let receipts = [];
 try { receipts = JSON.parse(appStore.getItem('incomeReceipts') || '[]') || []; } catch (e) { receipts = []; }
@@ -17290,7 +17330,7 @@ st.textContent = `
 .rc-flag i { margin-top: 2px; flex: 0 0 auto; }
 .rc-tax { margin: 12px 0; padding: 12px 14px; border-radius: 14px; background: rgba(var(--pr3), .15); border: 1px solid rgba(var(--pr), .4); }
 .rc-tax .rc-big-line { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: .88rem; }
-.rc-item { display: grid; grid-template-columns: 1fr 96px 150px 104px 34px; gap: 6px; margin-bottom: 6px; align-items: center; }
+.rc-item { display: grid; grid-template-columns: 28px 1fr 96px 150px 104px 34px; gap: 6px; margin-bottom: 6px; align-items: center; }
 .rc-item .inv-input { width: 100%; padding: 8px 9px; }
 .rc-ph { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
 .rc-ph .rc-pg { cursor: zoom-in; }
@@ -17311,6 +17351,31 @@ st.textContent = `
 .rc-shutter:active { background: #fff; }
 .rc-cam-btn { min-width: 84px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.12); color: #fff; font: 600 .85rem var(--font), sans-serif; cursor: pointer; }
 .rc-cam-btn.go { background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--ind2))); border-color: transparent; }
+.rc-quiet { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 10190; width: min(460px, calc(100% - 24px)); transform: translate(-50%, 20px); opacity: 0; transition: transform .25s ease, opacity .25s ease; display: flex; align-items: center; gap: 11px; padding: 10px 14px; border-radius: 16px; color: #fff; background: rgba(15,23,42,.92); border: 1px solid rgba(var(--pr), .45); box-shadow: 0 10px 26px rgba(0,0,0,.4); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.rc-quiet.on { transform: translate(-50%, 0); opacity: 1; }
+.rc-quiet-spin { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2px solid rgba(255,255,255,.22); border-top-color: rgb(var(--pr2)); animation: rcSpin .85s linear infinite; }
+.rc-quiet-t { flex: 1; min-width: 0; } .rc-quiet-t b { display: block; font-size: .9rem; } .rc-quiet-t small { display: block; font-size: .73rem; color: rgba(255,255,255,.7); }
+.rc-quiet-bar { position: absolute; left: 14px; right: 14px; bottom: 5px; height: 3px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.rc-quiet-bar i { display: block; height: 100%; width: 2%; border-radius: 3px; background: linear-gradient(90deg, rgb(var(--pr4)), rgb(var(--acc2))); transition: width .3s ease; }
+.rc-i-pick { display: flex; align-items: center; justify-content: center; }
+.rc-i-pick input { width: 20px; height: 20px; accent-color: rgb(var(--acc)); cursor: pointer; }
+.rc-item.picked { background: rgba(34,197,94,.08); border-radius: 10px; }
+.rc-pickbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.4); }
+.rc-pickbar[hidden] { display: none; }
+.rc-pb-t { flex: 1 1 150px; min-width: 0; } .rc-pb-t b { display: block; font-size: .88rem; } .rc-pb-t small { display: block; font-size: .74rem; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-pb-go { background: linear-gradient(135deg, #22c55e, #0ea5e9) !important; color: #fff !important; border-color: transparent !important; font-weight: 700; }
+.rc-cam-close { background: rgba(255,255,255,.1) !important; }
+.rc-cam-btn.go:disabled { opacity: .42; cursor: default; }
+.rc-cam-torch { position: absolute; right: 14px; bottom: 190px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.45); color: #fff; font-size: 17px; cursor: pointer; z-index: 2; }
+.rc-cam-torch.on { background: #fde68a; color: #78350f; border-color: transparent; }
+.rc-cam-wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(3,3,12,.82); color: #fff; z-index: 3; padding: 20px; text-align: center; }
+.rc-cam-wait[hidden] { display: none; }
+.rc-cam-wait p { margin: 0; font-size: .95rem; }
+.rc-cam-wb { display: none; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.rc-cam-wait.failed .rc-cam-wb { display: flex; }
+.rc-cam-spin { width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; animation: rcSpin .9s linear infinite; }
+.rc-cam-wait.failed .rc-cam-spin { display: none; }
+@keyframes rcSpin { to { transform: rotate(360deg); } }
 .rc-cam-x { position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 1.1rem; cursor: pointer; }
 .rc-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .25s; }
 .rc-view { position: fixed; inset: 0; z-index: 10200; background: #050508; overflow: auto; padding: calc(env(safe-area-inset-top, 0px) + 14px) 10px calc(env(safe-area-inset-bottom, 0px) + 96px); text-align: center; -webkit-overflow-scrolling: touch; }
@@ -17319,7 +17384,10 @@ st.textContent = `
 .rc-view .rc-vb { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 12px; z-index: 1; padding: 14px 16px calc(env(safe-area-inset-bottom, 0px) + 14px); background: linear-gradient(to top, rgba(0,0,0,.9) 55%, rgba(0,0,0,0)); }
 .rc-view .rc-vb .rc-cam-btn { flex: 0 1 170px; min-height: 48px; font-size: .95rem; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; }
 @media (max-width: 700px) {
-  .rc-item { grid-template-columns: 1fr 90px 34px; } .rc-item .rc-i-cat { grid-column: 1 / 3; } .rc-item .rc-i-claim { grid-column: 3 / 4; } .rc-item .rc-i-claim { grid-column: 1 / 3; }
+  .rc-item { grid-template-columns: 26px 1fr 84px 34px; row-gap: 5px; }
+  .rc-item .rc-i-pick { grid-column: 1; grid-row: 1; align-items: center; }
+  .rc-item .rc-i-desc { grid-column: 2; grid-row: 1; } .rc-item .rc-i-amt { grid-column: 3; grid-row: 1; } .rc-item .bz-del { grid-column: 4; grid-row: 1; }
+  .rc-item .rc-i-cat { grid-column: 2 / 5; grid-row: 2; } .rc-item .rc-i-claim { grid-column: 2 / 5; grid-row: 3; }
 }
 .fa-wrench { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14.7%206.3a1%201%200%200%200%200%201.4l1.6%201.6a1%201%200%200%200%201.4%200l3.77-3.77a6%206%200%200%201-7.94%207.94l-6.91%206.91a2.12%202.12%200%200%201-3-3l6.91-6.91a6%206%200%200%201%207.94-7.94l-3.76%203.76z'/%3E%3C/svg%3E"); }
 .fa-utensils { --ic: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23000'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%202v7c0%201.1.9%202%202%202h4a2%202%200%200%200%202-2V2'/%3E%3Cpath%20d='M7%202v20'/%3E%3Cpath%20d='M21%2015V2a5%205%200%200%200-5%205v6c0%201.1.9%202%202%202h3zm0%200v7'/%3E%3C/svg%3E"); }
@@ -17764,36 +17832,80 @@ function addPagesFromFiles(files, key) {
 }
 
 /* ---- live camera ---- */
+let camLive = null;                                           // the camera that is open right now (only ever one)
+function killCamera() {                                       // every track stopped and let go, so the next scan always gets a fresh camera
+    if (!camLive) return;
+    const c = camLive; camLive = null;
+    try { if (c.stream) c.stream.getTracks().forEach(t => { try { t.stop(); } catch (e) { /* already stopped */ } }); } catch (e) { /* ignore */ }
+    try { if (c.video) { c.video.pause(); c.video.srcObject = null; c.video.removeAttribute('src'); c.video.load(); } } catch (e) { /* ignore */ }
+    if (c.ov && c.ov.parentNode) c.ov.parentNode.removeChild(c.ov);
+    try { document.removeEventListener('visibilitychange', c.onVis); } catch (e) { /* ignore */ }
+}
 function openCamera() {
     const key = UI.mode === 'upload' ? 'upload' : 'capture';
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { showToast('This browser cannot open the camera here. Using your camera app instead.', 'info'); document.getElementById('rc-file-cam').click(); return; }
+    killCamera();                                             // anything left over from last time goes first
     const ov = document.createElement('div'); ov.className = 'rc-cam';
     ov.innerHTML = `<video playsinline autoplay muted></video><div class="rc-frame"></div><div class="rc-cam-tip">Fit the receipt in the frame, then tap Read receipt. Long receipt? Take more photos, top to bottom.</div>
-        <button type="button" class="rc-cam-x" data-cam="close" title="Close">&times;</button><div class="rc-flash"></div>
-        <div class="rc-cam-bar"><div class="rc-cam-strip"></div><div class="rc-cam-ctl"><button type="button" class="rc-cam-btn" data-cam="torch" style="visibility:hidden"><i class="fas fa-bolt mr-2"></i>Light</button><button type="button" class="rc-shutter" data-cam="shot" aria-label="Take photo"></button><button type="button" class="rc-cam-btn go" data-cam="done">Done</button></div></div>`;
-    ov.querySelector('[data-cam="done"]').setAttribute('aria-label', 'Read receipt');
+        <button type="button" class="rc-cam-x" data-cam="close" title="Close" aria-label="Close the camera">&times;</button><div class="rc-flash"></div>
+        <div class="rc-cam-wait" id="rc-cam-wait" hidden><div class="rc-cam-spin"></div><p id="rc-cam-waitx">Starting the camera...</p>
+            <div class="rc-cam-wb"><button type="button" class="app-btn" data-cam="retry"><i class="fas fa-sync-alt mr-2"></i>Try again</button><button type="button" class="app-btn" data-cam="file"><i class="fas fa-camera mr-2"></i>Phone camera app</button></div></div>
+        <button type="button" class="rc-cam-torch" data-cam="torch" hidden aria-label="Light"><i class="fas fa-bolt"></i></button>
+        <div class="rc-cam-bar"><div class="rc-cam-strip"></div><div class="rc-cam-ctl">
+            <button type="button" class="rc-cam-btn rc-cam-close" data-cam="close"><i class="fas fa-times mr-2"></i>Close</button>
+            <button type="button" class="rc-shutter" data-cam="shot" aria-label="Take photo"></button>
+            <button type="button" class="rc-cam-btn go" data-cam="done" aria-label="Read receipt"><i class="fas fa-magic mr-2"></i>Read</button></div></div>`;
     document.body.appendChild(ov);
-    const video = ov.querySelector('video'), strip = ov.querySelector('.rc-cam-strip'), flash = ov.querySelector('.rc-flash');
-    let stream = null, closed = false, torchOn = false;
-    const stop = () => { closed = true; if (stream) stream.getTracks().forEach(t => t.stop()); if (ov.parentNode) ov.parentNode.removeChild(ov); };
-    const sync = () => { strip.innerHTML = UI.pages[key].map(p => `<img src="${p.thumb}" alt="">`).join(''); const db = ov.querySelector('[data-cam="done"]'), n = UI.pages[key].length; db.innerHTML = n ? `<i class="fas fa-magic mr-2"></i>Read receipt${n > 1 ? ` (${n})` : ''}` : 'Close'; db.classList.toggle('ready', !!n); strip.scrollLeft = strip.scrollWidth; };
+    const video = ov.querySelector('video'), strip = ov.querySelector('.rc-cam-strip'), flash = ov.querySelector('.rc-flash'), wait = ov.querySelector('#rc-cam-wait');
+    let torchOn = false, starting = false, waitT = 0;
+    const live = { ov: ov, video: video, stream: null, onVis: null };
+    camLive = live;
+    const gone = () => camLive !== live;
+    const stop = () => killCamera();
+    const sync = () => {
+        strip.innerHTML = UI.pages[key].map(p => `<img src="${p.thumb}" alt="">`).join('');
+        const db = ov.querySelector('[data-cam="done"]'), n = UI.pages[key].length;
+        db.innerHTML = `<i class="fas fa-magic mr-2"></i>Read${n > 1 ? ` (${n})` : ''}`;      // Close always keeps its own place; Read lights up once there is a photo
+        db.classList.toggle('ready', !!n); db.disabled = !n;
+        strip.scrollLeft = strip.scrollWidth;
+    };
     sync();
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(s => {
-        if (closed) { s.getTracks().forEach(t => t.stop()); return; }
-        stream = s; video.srcObject = s; video.play().catch(() => { /* autoplay handled by attribute */ });
-        try { const tr = s.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {}; if (cap && cap.torch) ov.querySelector('[data-cam="torch"]').style.visibility = 'visible'; } catch (e) { /* no torch */ }
-    }).catch(err => {
-        stop();
-        showToast(err && err.name === 'NotAllowedError' ? 'Camera permission was refused. Using your camera app instead.' : 'The camera could not be opened. Using your camera app instead.', 'info');
-        document.getElementById('rc-file-cam').click();
-    });
+    function showWait(txt, failed) { if (gone()) return; wait.hidden = false; ov.querySelector('#rc-cam-waitx').textContent = txt; wait.classList.toggle('failed', !!failed); }
+    function hideWait() { if (!gone()) wait.hidden = true; }
+    function start() {
+        if (starting || gone()) return;
+        starting = true; showWait('Starting the camera...', false);
+        clearTimeout(waitT); waitT = setTimeout(() => { if (!gone() && starting) showWait('The camera is taking a while.', true); }, 6000);
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(s => {
+            starting = false; clearTimeout(waitT);
+            if (gone()) { s.getTracks().forEach(t => t.stop()); return; }
+            live.stream = s; video.srcObject = s;
+            try { localStorage.setItem('incator:camok', '1'); } catch (e) { /* ignore */ }    // you have allowed the camera here before
+            const tr = s.getVideoTracks()[0];
+            if (tr) tr.addEventListener('ended', () => { if (!gone()) { live.stream = null; start(); } });     // the phone took the camera back: fetch it again
+            video.play().catch(() => { /* autoplay handled by the attribute */ });
+            video.addEventListener('loadedmetadata', hideWait, { once: true });
+            setTimeout(() => { if (!gone() && video.videoWidth) hideWait(); }, 900);
+            try { const cap = tr && tr.getCapabilities ? tr.getCapabilities() : {}; if (cap && cap.torch) ov.querySelector('.rc-cam-torch').hidden = false; } catch (e) { /* no torch */ }
+        }).catch(err => {
+            starting = false; clearTimeout(waitT);
+            if (gone()) return;
+            if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) { stop(); camHelp(); return; }
+            showWait('The camera could not start.', true);                                                     // busy, or the phone needs a moment
+        });
+    }
+    live.onVis = () => { if (gone() || document.hidden) return; if (!live.stream || !live.stream.getVideoTracks().some(t => t.readyState === 'live')) { live.stream = null; start(); } };
+    document.addEventListener('visibilitychange', live.onVis);
+    start();
     ov.addEventListener('click', ev => {
         const b = ev.target.closest('[data-cam]'); if (!b) return; const a = b.getAttribute('data-cam');
         if (a === 'close') { stop(); renderPanel(); }
-        else if (a === 'done') { stop(); renderPanel(); if (UI.pages[key].length) readPages(key); }   // Read receipt: straight to reading (and saving, with Auto save on)
-        else if (a === 'torch') { try { torchOn = !torchOn; stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }); } catch (e) { /* ignore */ } }
+        else if (a === 'retry') { try { if (live.stream) live.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* ignore */ } live.stream = null; start(); }
+        else if (a === 'file') { stop(); document.getElementById('rc-file-cam').click(); }
+        else if (a === 'done') { if (!UI.pages[key].length) return; stop(); renderPanel(); readPages(key); }    // Read receipt: straight to reading (and saving, with Auto save on)
+        else if (a === 'torch') { try { torchOn = !torchOn; live.stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }); b.classList.toggle('on', torchOn); } catch (e) { /* ignore */ } }
         else if (a === 'shot') {
-            if (!video.videoWidth) return;
+            if (!video.videoWidth) { showToast('The camera is still starting', 'info'); return; }
             if (UI.pages[key].length >= MAX_PAGES) { showToast(`Up to ${MAX_PAGES} photos per receipt`, 'info'); return; }
             const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight; c.getContext('2d').drawImage(video, 0, 0);
             flash.style.opacity = '.85'; setTimeout(() => { flash.style.opacity = '0'; }, 120);
@@ -17803,7 +17915,40 @@ function openCamera() {
 }
 
 /* ------------------------------------------------------------------ reading ------------------------------------------------------------------ */
-function progressModal(title) {
+function quietProgress(title) {                                          // a thin bar at the bottom instead of a window
+    const old = document.getElementById('rc-quiet'); if (old) old.remove();
+    const el = document.createElement('div'); el.id = 'rc-quiet'; el.className = 'rc-quiet'; el.setAttribute('role', 'status');
+    el.innerHTML = `<div class="rc-quiet-spin"></div><div class="rc-quiet-t"><b id="rc-qt">${h(title)}</b><small id="rc-qs">in the background</small></div><div class="rc-quiet-bar"><i id="rc-qb"></i></div>`;
+    document.body.appendChild(el); requestAnimationFrame(() => el.classList.add('on'));
+    return {
+        el: el, $: sel => el.querySelector(sel),
+        set: (t, pct, sub) => { const a = el.querySelector('#rc-qt'), b = el.querySelector('#rc-qb'), c = el.querySelector('#rc-qs'); if (a && t != null) a.textContent = t; if (b && pct != null) b.style.width = Math.max(2, Math.min(100, pct)) + '%'; if (c && sub != null) c.textContent = sub; },
+        close: () => { el.classList.remove('on'); setTimeout(() => { if (el.parentNode) el.remove(); }, 260); }
+    };
+}
+function camHelp() {                                                     // the phone said no to the camera: show how to let it remember
+    var had = false; try { had = localStorage.getItem('incator:camok') === '1'; } catch (e) { /* ignore */ }
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var m = modal({
+        title: 'Let IncAtor use the camera',
+        html: '<div style="font-size:.93rem;line-height:1.5;">'
+            + '<p style="margin:0 0 10px;">' + (had ? 'Your phone asked again and the camera was not allowed this time.' : 'IncAtor needs the camera to scan a receipt.') + '</p>'
+            + (ios
+                ? '<p style="margin:0 0 6px;"><b>On an iPhone, to stop it asking every time:</b></p>'
+                  + '<ol style="margin:0 0 10px 0;padding:0 0 0 22px;list-style:decimal outside;"><li>Tap <b>aA</b> in the address bar at the top.</li>'
+                  + '<li>Tap <b>Website Settings</b>.</li><li>Set <b>Camera</b> to <b>Allow</b>.</li></ol>'
+                  + '<p style="margin:0 0 10px;">Even better: tap <b>Share</b> &gt; <b>Add to Home Screen</b> and open IncAtor from there. It then keeps the camera permission for good, and opens full screen.</p>'
+                : '<p style="margin:0 0 10px;">Tap the padlock (or camera icon) in the address bar and set <b>Camera</b> to <b>Allow</b>, then try again.</p>')
+            + '<p style="margin:0;">You can always take the photo with your normal camera app instead.</p></div>',
+        actions: [
+            { label: 'Use my camera app', icon: 'camera', run: function (api) { api.close(); document.getElementById('rc-file-cam').click(); } },
+            { label: 'Try again', icon: 'sync-alt', main: true, run: function (api) { api.close(); setTimeout(openCamera, 150); } }
+        ]
+    });
+    return m;
+}
+function progressModal(title, quiet) {
+    if (quiet || quietReadOn()) return quietProgress(title);
     const m = modal({ title: title, sticky: true, html: `<div style="text-align:center;padding:10px 4px;"><div id="rc-pt" style="font-size:.95rem;">Getting ready...</div><div class="rc-prog"><i id="rc-pb"></i></div><div class="bz-help" id="rc-ps">The first time, the reader (about 10 MB) is downloaded once and kept by your browser.</div></div>` });
     m.set = (t, pct, sub) => { const a = m.$('#rc-pt'), b = m.$('#rc-pb'), c = m.$('#rc-ps'); if (a && t != null) a.textContent = t; if (b && pct != null) b.style.width = Math.max(2, Math.min(100, pct)) + '%'; if (c && sub != null) c.textContent = sub; };
     return m;
@@ -18188,7 +18333,7 @@ async function removeReceipt(r) {
 
 /* ------------------------------------------------------------------ editor ------------------------------------------------------------------ */
 function itemRow(it, i) {
-    return `<div class="rc-item" data-i="${i}"><input class="inv-input rc-i-desc" value="${h(it.desc)}" placeholder="Item"><input class="inv-input rc-i-amt" inputmode="decimal" value="${it.amount === '' || it.amount == null ? '' : h(it.amount)}" placeholder="0.00">
+    return `<div class="rc-item${it.claim === 'claim' ? ' picked' : ''}" data-i="${i}"><label class="rc-i-pick" title="Tick to claim this item"><input type="checkbox" class="rc-i-ck"${it.claim === 'claim' ? ' checked' : ''} aria-label="Claim ${h(it.desc || 'this item')}"></label><input class="inv-input rc-i-desc" value="${h(it.desc)}" placeholder="Item"><input class="inv-input rc-i-amt" inputmode="decimal" value="${it.amount === '' || it.amount == null ? '' : h(it.amount)}" placeholder="0.00">
         <select class="inv-input rc-i-cat" data-catsel>${catOptions(it.cat || 'Other', { add: true })}</select>
         <select class="inv-input rc-i-claim"><option value="">Auto</option><option value="claim"${it.claim === 'claim' ? ' selected' : ''}>Claim</option><option value="partial"${it.claim === 'partial' ? ' selected' : ''}>50%</option><option value="personal"${it.claim === 'personal' ? ' selected' : ''}>Personal</option></select>
         <button type="button" class="bz-del" data-rc-delitem title="Remove item">&times;</button></div>`;
@@ -18219,7 +18364,7 @@ function openEditor(d, o) {
         <div class="inv-field"><label>Before tax <small>(worked out)</small></label><input id="rc-sub" class="inv-input rc-auto" inputmode="decimal" readonly tabindex="-1" value="${S.subtotal === '' ? '' : h(S.subtotal)}" placeholder="0.00"></div></div>
         <div class="rc-taxhelp" id="rc-taxhelp"><span>Taxes are already inside the total. Not printed? Work them out:</span><button type="button" class="fin-mini" data-rc-taxin="5">GST 5%</button><button type="button" class="fin-mini" data-rc-taxin="5+7">GST 5% + PST 7%</button><button type="button" class="fin-mini" data-rc-taxin="13">HST 13%</button><button type="button" class="fin-mini" data-rc-taxin="15">HST 15%</button><button type="button" class="fin-mini" data-rc-taxin="0">No tax</button></div>
         <div class="rc-amtnote" id="rc-amtnote"></div>
-        <div class="inv-field"><label style="display:flex;justify-content:space-between;align-items:center;">Items <button type="button" class="fin-mini" id="rc-additem"><i class="fas fa-plus"></i> Add item</button></label><div id="rc-items"></div></div>
+        <div class="inv-field"><label style="display:flex;justify-content:space-between;align-items:center;">Items <button type="button" class="fin-mini" id="rc-additem"><i class="fas fa-plus"></i> Add item</button></label><div id="rc-pickbar" class="rc-pickbar" hidden></div><div id="rc-items"></div></div>
         <div class="rc-tax" id="rc-tax"></div>
         <div class="inv-grid"><div class="inv-field"><label>Paid with</label><select id="rc-pay" class="inv-input"><option value=""></option>${['Visa', 'Mastercard', 'Amex', 'Debit', 'Credit card', 'Cash', 'E-transfer', 'Cheque'].map(p => `<option${S.payment === p ? ' selected' : ''}>${p}</option>`).join('')}</select></div>
         <div class="inv-field"><label>Receipt / invoice / transaction no.</label><input id="rc-no" class="inv-input" value="${h(S.receiptNo)}" placeholder="TID, Trans #, Invoice no..."><div class="rc-refs" id="rc-refs"></div></div></div>
@@ -18232,8 +18377,26 @@ function openEditor(d, o) {
 
     const q = s => m.$(s);
     const numField = id => q(id).value.trim();
+    const pickedSet = new Set();
     function readItems() { S.items = Array.from(m.el.querySelectorAll('.rc-item')).map((row, i) => { const old = S.items[i] || {}; return { desc: row.querySelector('.rc-i-desc').value, qty: old.qty || 1, amount: row.querySelector('.rc-i-amt').value, cat: row.querySelector('.rc-i-cat').value, claim: row.querySelector('.rc-i-claim').value || undefined, aiCat: old.aiCat, manual: old.manual, learned: !!old.learned && (row.querySelector('.rc-i-claim').value || undefined) === old.claim }; }); }
-    function paintItems() { q('#rc-items').innerHTML = S.items.map(itemRow).join('') || '<div class="bz-help">No items. Tap Add item to list what was bought. This lets IncAtor sort personal and business items.</div>'; }
+    function paintItems() { q('#rc-items').innerHTML = S.items.map(itemRow).join('') || '<div class="bz-help">No items. Tap Add item to list what was bought. This lets IncAtor sort personal and business items.</div>'; paintPick(); }
+    function pickedRows() { return Array.from(m.el.querySelectorAll('.rc-item')).filter(r => r.querySelector('.rc-i-ck') && r.querySelector('.rc-i-ck').checked); }
+    function pickClaim() {                                                    // what the ticked items come to, with their share of the taxes
+        readItems();
+        const picked = S.items.map((it, i) => ({ it: it, i: i })).filter(x => pickedSet.has(x.i));
+        if (!picked.length) return null;
+        const test = Object.assign({}, S, { claimMode: '', autoMode: '', items: S.items.map((it, i) => Object.assign({}, it, { amount: N(it.amount), claim: pickedSet.has(i) ? 'claim' : 'personal' })) });
+        return { n: picked.length, amt: claimInfo(test).claimable, names: picked.map(x => String(x.it.desc || 'Item').trim() || 'Item') };
+    }
+    function paintPick() {
+        const bar = q('#rc-pickbar'); if (!bar) return;
+        Array.from(m.el.querySelectorAll('.rc-item')).forEach((row, i) => { const ck = row.querySelector('.rc-i-ck'); if (ck) { ck.checked = pickedSet.has(i); row.classList.toggle('picked', ck.checked); } });
+        const p = pickClaim();
+        bar.hidden = !p;
+        if (p) bar.innerHTML = `<span class="rc-pb-t"><b>${p.n} item${p.n === 1 ? '' : 's'} ticked</b><small>${h(p.names.slice(0, 3).join(', '))}${p.names.length > 3 ? ' +' + (p.names.length - 3) : ''}</small></span>` +
+            `<button type="button" class="app-btn rc-pb-go" data-rc-pickclaim><i class="fas fa-hand-holding-usd mr-2"></i>Add item${p.n === 1 ? '' : 's'} to claimable (${h(money(p.amt))})</button>` +
+            `<button type="button" class="fin-mini" data-rc-pickclear>Clear</button>`;
+    }
     function paintPhotos() {
         const box = q('#rc-ph'), ex = (existing && existing.photos || []).filter(p => !S.removedPhotos.includes(p.id));
         let html = '';
@@ -18314,6 +18477,7 @@ function openEditor(d, o) {
     });
     m.el.addEventListener('change', ev => {
         const t = ev.target;
+        if (t.classList && t.classList.contains('rc-i-ck')) { const rows = Array.from(m.el.querySelectorAll('.rc-item')), i = rows.indexOf(t.closest('.rc-item')); if (i >= 0) { if (t.checked) pickedSet.add(i); else pickedSet.delete(i); } paintPick(); return; }
         if (t.id === 'rc-cat-sel') { S.catTouched = true; S.catChanged = true; autoFill('cat'); }
         else if (t.id === 'rc-store') {
             const mv = AI.matchVendor(t.value, vendorList());
@@ -18330,6 +18494,16 @@ function openEditor(d, o) {
             q('#rc-gst').value = parts.length ? r2(base * parts[0] / 100) : ''; q('#rc-pst').value = parts.length > 1 ? r2(tot - r2(base) - r2(base * parts[0] / 100)) : '';
             if (parts.length === 1 && rate !== 5) q('#rc-gst').value = r2(tot - r2(base));
             autoFill('gst'); paintTax(); paintDup(); return;
+        }
+        if (t.hasAttribute('data-rc-pickclear')) { pickedSet.clear(); paintItems(); return; }
+        if (t.hasAttribute('data-rc-pickclaim')) {
+            readItems();
+            S.items.forEach((it, i) => { it.claim = pickedSet.has(i) ? 'claim' : 'personal'; it.learned = false; });
+            q('#rc-claimmode').value = ''; S.claimMode = '';
+            const was = pickedSet.size; pickedSet.clear();
+            paintItems(); paintTax();
+            showToast(`${was} item${was === 1 ? '' : 's'} added to claimable, with ${was === 1 ? 'its' : 'their'} share of the tax. Tap Save to keep it.`, 'success');
+            return;
         }
         if (t.hasAttribute('data-rc-toolsonly')) { readItems(); S.items.forEach(i => { i.claim = isToolItem(Object.assign({}, i, { amount: N(i.amount) })) ? 'claim' : 'personal'; }); q('#rc-claimmode').value = ''; paintItems(); paintTax(); showToast('Only the tools will be claimed. Save to keep it.', 'info'); return; }
         if (t.hasAttribute('data-rc-unreview')) { S.unreview = true; const l = q('#rc-rvline'); if (l) { l.className = 'rc-rvline'; l.innerHTML = '<i class="fas fa-undo-alt"></i><span>Will be marked Not reviewed when you save.</span>'; } return; }
@@ -19003,6 +19177,7 @@ function renderSettingsStats() {
     const withPhotos = receipts.filter(r => (r.photos || []).length).length;
     PH.stats().then(s => { el.textContent = `${receipts.length} receipt${receipts.length === 1 ? '' : 's'} saved, ${s.n} photo${s.n === 1 ? '' : 's'} using about ${(s.bytes / 1048576).toFixed(1)} MB in this browser.`; }, () => { el.textContent = `${receipts.length} receipts saved. Photo storage is not available in this browser, so photos cannot be kept here.`; });
     const t = document.getElementById('rcs-toggle'); if (t) t.classList.toggle('active', savePhotosOn());
+    const tq = document.getElementById('rcs-quiet'); if (tq) { tq.classList.toggle('active', quietReadOn()); tq.setAttribute('aria-checked', String(quietReadOn())); }
     const tl = document.getElementById('rcs-learn'); if (tl) { tl.classList.toggle('active', learnOn()); tl.setAttribute('aria-checked', String(learnOn())); }
     const ls = document.getElementById('rcs-learn-stats'); if (ls) { const lc = learnCounts(); ls.textContent = lc.stores || lc.items || lc.dates ? `Learned so far: ${plural(lc.stores, 'store')}, ${plural(lc.items, 'kind')} of item, the date style of ${plural(lc.dates, 'store')}.` : 'Nothing learned yet.'; }
     const ta = document.getElementById('rcs-autosave'); if (ta) { ta.classList.toggle('active', autoSaveOn()); ta.setAttribute('aria-checked', String(autoSaveOn())); }
@@ -19083,6 +19258,7 @@ function injectSettings() {
             <div id="rcs-catlist" class="rc-catlist"></div>
             <div class="rc-catadd"><input id="rcs-catname" class="inv-input" maxlength="40" placeholder="New category, e.g. Training" autocomplete="off"><select id="rcs-catclaim" class="inv-input" aria-label="Tax claim"><option value="1">Claimable</option><option value="0.5">50% claimable</option><option value="0">Not claimable</option><option value="">Ask me</option></select><button type="button" class="app-btn" id="rcs-catadd"><i class="fas fa-plus mr-2"></i>Add</button></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-camera"></i></div><div class="setting-content"><h4 class="setting-title">Save receipt photos by default</h4><p class="setting-description">When this is on, every receipt you scan or upload keeps its photo inside IncAtor (never in your phone's gallery). You can still switch it off for a single scan on the Receipts page.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-toggle"><div class="toggle-orb"></div></div></div></div>
+        <div class="setting-item" id="rcs-quiet-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-eye-slash"></i></div><div class="setting-content"><h4 class="setting-title">Read receipts in the background</h4><p class="setting-description">With this on, the "Reading your receipt" window does not open. A thin line at the bottom shows it is working, and you can keep using IncAtor while it reads. Best together with Auto save receipts.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-quiet" role="switch" tabindex="0" aria-label="Read receipts in the background"><div class="toggle-orb"></div></div></div></div>
         <div class="setting-item" id="rcs-learn-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-brain"></i></div><div class="setting-content"><h4 class="setting-title">Learn what I claim</h4><p class="setting-description">After you claim (or mark personal) receipts from the same store, or the same kind of item, a couple of times, IncAtor starts doing it for you on new receipts. They show a <b>Learned</b> tag, and your own choice on a receipt always wins. It also learns how each store prints its dates.</p><p class="setting-description" id="rcs-learn-stats"></p></div><div class="setting-control"><div class="magic-toggle" id="rcs-learn" role="switch" tabindex="0" aria-label="Learn what I claim"><div class="toggle-orb"></div></div></div></div>
             <div><button type="button" class="app-btn" id="rcs-learn-forget"><i class="fas fa-eraser mr-2"></i>Forget what it learned</button></div></div>
         <div class="setting-item" id="rcs-autosave-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-save"></i></div><div class="setting-content"><h4 class="setting-title">Auto save receipts</h4><p class="setting-description">When this is on, a receipt you scan or upload is read and saved straight away, without stopping on the review screen. You get a short message with Review and Undo. Receipts it can't read well, or that look like one you already saved, are saved too, under <b>Needs attention</b>, so you can put your phone away and check them later.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-autosave" role="switch" tabindex="0" aria-label="Auto save receipts"><div class="toggle-orb"></div></div></div></div>
@@ -19127,6 +19303,7 @@ function injectSettings() {
         refreshCatSelects(); renderAll(); showToast(c.id + ' deleted', 'success');
     });
     sec.addEventListener('click', async ev => {
+        if (ev.target.closest('#rcs-quiet')) { sset('receiptQuietRead', !quietReadOn()); renderSettingsStats(); renderPanel(); showToast(quietReadOn() ? 'Receipts are read in the background now' : 'The reading window will open again', 'success'); return; }
         if (ev.target.closest('#rcs-learn')) { sset('rcLearnClaims', !learnOn()); renderSettingsStats(); renderAll(); showToast(learnOn() ? 'IncAtor will learn what you claim' : 'Learning is off. Nothing is claimed for you from now on', 'success'); return; }
         if (ev.target.closest('#rcs-learn-forget')) {
             const ok = await showConfirmation({ title: 'Forget what IncAtor learned?', type: 'warning', confirmText: 'Forget', cancelText: 'Keep', message: 'The stores and items it learned to claim, and how stores print their dates, are forgotten. Receipts you already saved do not change.' });
@@ -19315,7 +19492,7 @@ function editRecurring(t, done) {
 window.RcptStore = {
     count: () => receipts.length,
     photoStats: () => PH.stats(),
-    claim: r => claimInfo(r), learned: () => ({ counts: learnCounts(), rules: JSON.parse(JSON.stringify(rules())) }), learnedMode: r => learnedMode(r), learnedItem: d => learnedItem(d), autoSave: v => { if (v !== undefined) { sset('receiptAutoSave', !!v); renderSettingsStats(); renderPanel(); } return autoSaveOn(); }, csv: list => exportCsv(list, true), itemsCsv: list => exportItemsCsv(list, true), photo: id => photoRecord(id),
+    claim: r => claimInfo(r), quietRead: v => { if (v !== undefined) { sset('receiptQuietRead', !!v); renderSettingsStats(); renderPanel(); } return quietReadOn(); }, learned: () => ({ counts: learnCounts(), rules: JSON.parse(JSON.stringify(rules())) }), learnedMode: r => learnedMode(r), learnedItem: d => learnedItem(d), autoSave: v => { if (v !== undefined) { sset('receiptAutoSave', !!v); renderSettingsStats(); renderPanel(); } return autoSaveOn(); }, csv: list => exportCsv(list, true), itemsCsv: list => exportItemsCsv(list, true), photo: id => photoRecord(id),
     recurring: { list: recList, run: recRun, open: openRecurring, dateOf: recDate },
     duplicates: () => { computeDups(); return DUPS.clusters.map(c => ({ ids: c.ids, level: c.level, reasons: c.reasons })); },
     all: () => receipts,
@@ -19643,6 +19820,18 @@ var STARS = rep(40, function (i) {
 });
 // a fixed "random" spread, the same every time (so the page never jumps when it is drawn again)
 function rnd(i, k) { var x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); }
+function glitter(n, k, w, h, br) {                   // little dashes of light on the water, thickest near the moon
+    var out = [];
+    for (var i = 0; i < n; i++) {
+        var y = Math.pow(rnd(i, k), 1.6) * 100,          // most of them up near the far shore
+            x = 50 + (rnd(i, k + 1) - 0.5) * (26 + y * 0.85),
+            ww = (w * (0.55 + rnd(i, k + 2) * 1.5)).toFixed(2),
+            hh = (h * (0.6 + rnd(i, k + 3) * 0.9)).toFixed(2),
+            a = (br * (0.45 + rnd(i, k + 4) * 0.55) * (1 - y / 140)).toFixed(3);
+        out.push('radial-gradient(' + ww + 'px ' + hh + 'px at ' + x.toFixed(1) + '% ' + y.toFixed(1) + '%, rgba(242,249,255,' + a + ') 0 38%, rgba(191,219,254,0) 100%)');
+    }
+    return out.join(', ');
+}
 // pine tree ridges: a row of pointed tips at slightly different heights
 function pines(n, top, low, k) {
     var pts = ['0 100%', '0 ' + (low + 6) + '%'], w = 100 / n;
@@ -19708,6 +19897,10 @@ function falling(n, cls, k0, extra) {
 }
 // drifting clouds: puffy soft shapes that cross the whole screen slowly, each at its own height, size and speed
 var CLOUDS = '<i class="cd d1" style="top:6%;animation-delay:-14s"></i><i class="cd d2" style="top:17%;animation-delay:-52s"></i><i class="cd d3" style="top:27%;animation-delay:-31s"></i><i class="cd d1 sm" style="top:37%;animation-delay:-63s"></i><i class="cd d2" style="top:2%;animation-delay:-88s"></i>';
+var RAINDROPS = rep(26, function (i) {              // the drops that fall through the air
+    var far = i % 3 === 0;
+    return '<i class="rd r' + (1 + (i % 4)) + (far ? ' far' : '') + '" style="left:' + (rnd(i, 310) * 100).toFixed(1) + '%;animation-duration:' + (0.85 + rnd(i, 311) * 0.75).toFixed(2) + 's;animation-delay:-' + (rnd(i, 312) * 1.6).toFixed(2) + 's"></i>';
+});
 var CLOUDS2 = '<i class="cd d3 lo" style="top:12%;animation-delay:-75s"></i><i class="cd d2 lo" style="top:31%;animation-delay:-9s"></i><i class="cd d1 lo" style="top:44%;animation-delay:-40s"></i>';
 var LIST = [
     { k: 'theme', name: 'Current', desc: 'Your theme\'s own background' },
@@ -19741,7 +19934,7 @@ var LIST = [
     { k: 'dunes', glow: '251,176,110|244,114,94', name: 'Desert night', desc: 'Moonlit sand dunes under a sky full of stars', base: '#0b1026',
       html: STARS + '<i class="moon"></i><i class="dust"></i><i class="d d1"></i><i class="d d2"></i><i class="dust lo"></i><i class="d d3"></i>' },
     { k: 'lake', glow: '147,197,253|196,181,253', name: 'Moonlit lake', desc: 'Mountains and the moon mirrored in still water', base: '#050b1f',
-      html: STARS + '<i class="moon"></i><i class="mt m1"></i><i class="mt m2"></i><i class="wt"></i><i class="rf m1"></i><i class="rf m2"></i><i class="gl"></i><i class="gl g2"></i>' },
+      html: STARS + '<i class="moon"></i><i class="mt m1"></i><i class="mt m2"></i><i class="wt"></i><i class="rf m1"></i><i class="rf m2"></i><i class="rp p1"></i><i class="rp p2"></i><i class="rp p3"></i><i class="mgl"></i><i class="mgl g2"></i><i class="mgl g3"></i>' },
     { k: 'alpine', glow: '251,113,133|251,191,36', name: 'Alpine dawn', desc: 'Snowy peaks glowing pink in the first light', base: '#1e1b4b',
       html: '<i class="sun"></i><i class="pk p1"></i><i class="mist"></i><i class="pk p2"></i><i class="mist lo"></i><i class="pk p3"></i>' },
     { k: 'canyon', glow: '249,115,22|251,191,36', name: 'Red canyon', desc: 'Desert mesas under a blazing orange sunset', base: '#1c0f2e',
@@ -19771,9 +19964,9 @@ var LIST = [
     { k: 'prism', glow: '168,85,247|34,211,238', name: 'Prism', desc: 'A soft rainbow of light turning slowly', base: '#08060f',
       html: '<i class="pz"></i><i class="pz p2"></i><i class="vg"></i>' },
     { k: 'rain', glow: '59,130,246|245,158,11', name: 'Rainy window', desc: 'Raindrops sliding down the glass, city lights behind', base: '#0b1220',
-      html: lights(10, ['245,158,11', '251,191,36', '96,165,250', '244,114,182', '52,211,153'], 120, 10, 24) + '<i class="fog"></i><i class="rn"></i>' + rep(14, function (i) { return '<i class="dp" style="left:' + (rnd(i, 130) * 96).toFixed(1) + '%;top:' + (rnd(i, 131) * 70 - 10).toFixed(1) + '%;width:' + (0.9 + rnd(i, 132) * 1.6).toFixed(2) + '%;animation-duration:' + (6 + rnd(i, 133) * 9).toFixed(1) + 's;animation-delay:-' + (rnd(i, 134) * 12).toFixed(1) + 's"></i>'; }) },
+      html: lights(10, ['245,158,11', '251,191,36', '96,165,250', '244,114,182', '52,211,153'], 120, 10, 24) + '<i class="fog"></i>' + RAINDROPS + rep(14, function (i) { return '<i class="dp" style="left:' + (rnd(i, 130) * 96).toFixed(1) + '%;top:' + (rnd(i, 131) * 70 - 10).toFixed(1) + '%;width:' + (0.9 + rnd(i, 132) * 1.6).toFixed(2) + '%;animation-duration:' + (6 + rnd(i, 133) * 9).toFixed(1) + 's;animation-delay:-' + (rnd(i, 134) * 12).toFixed(1) + 's"></i>'; }) },
     { k: 'storm', glow: '129,140,248|56,189,248', name: 'Thunderstorm', desc: 'Dark clouds and a flash of lightning now and then', base: '#05070d',
-      html: '<i class="cl c1"></i><i class="cl c2"></i><i class="cl c3"></i><i class="bolt"></i><i class="fl"></i><i class="rn"></i><i class="cl c4"></i>' },
+      html: '<i class="cl c1"></i><i class="cl c2"></i><i class="cl c3"></i><i class="bolt"></i><i class="fl"></i>' + RAINDROPS + '<i class="cl c4"></i>' },
     { k: 'partly', glow: '96,165,250|253,224,71', name: 'Partly cloudy', desc: 'Sunshine with white clouds drifting across a blue sky', base: '#0f2a5a',
       html: '<i class="sun"></i>' + CLOUDS + '<i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i>' },
     { k: 'overcast', glow: '148,163,184|125,211,252', name: 'Cloudy day', desc: 'A grey sky full of slow, rolling clouds', base: '#1f2937',
@@ -19815,16 +20008,16 @@ var CSS = [
     '.bgx-nebula .b2 { right: -25%; top: 22%; background: radial-gradient(circle, #4f46e5 0%, transparent 65%); animation: bxD2 30s ease-in-out infinite alternate; }',
     '.bgx-nebula .b3 { left: 5%; bottom: -30%; background: radial-gradient(circle, #db2777 0%, transparent 62%); opacity: .35; animation: bxD3 28s ease-in-out infinite alternate; }',
     '.bgx-nebula .b4 { right: 0; bottom: 4%; width: 50%; background: radial-gradient(circle, #0ea5e9 0%, transparent 65%); opacity: .3; animation: bxD1 34s ease-in-out infinite alternate-reverse; }',
-    '@keyframes bxD1 { to { transform: translate(18%, 12%) scale(1.15); } } @keyframes bxD2 { to { transform: translate(-16%, 10%) scale(.85); } } @keyframes bxD3 { to { transform: translate(-10%, -14%) scale(1.2); } }',
+    '@keyframes bxD1 { to { transform: translate3d(18%, 12%, 0) scale(1.15); } } @keyframes bxD2 { to { transform: translate3d(-16%, 10%, 0) scale(.85); } } @keyframes bxD3 { to { transform: translate3d(-10%, -14%, 0) scale(1.2); } }',
     /* deep ocean */
     '.bgx-ocean { background: linear-gradient(180deg, #0b4064 0%, #062744 32%, #03152b 72%, #020b18 100%); }',
     '.bgx-ocean .ray { top: -12%; height: 95%; width: 13%; transform-origin: 50% 0; background: linear-gradient(180deg, rgba(186,230,253,.3), rgba(186,230,253,0) 85%); border-radius: 0 0 50% 50%; mix-blend-mode: screen; animation: bxRay 9s ease-in-out infinite alternate; will-change: transform, opacity; }',
     '.bgx-ocean .y1 { left: 12%; } .bgx-ocean .y2 { left: 34%; width: 9%; animation-duration: 11s; animation-delay: -4s; } .bgx-ocean .y3 { left: 56%; width: 15%; animation-duration: 13s; animation-delay: -8s; } .bgx-ocean .y4 { left: 78%; width: 8%; animation-duration: 10s; animation-delay: -2s; }',
     '@keyframes bxRay { from { transform: rotate(8deg); opacity: .45; } to { transform: rotate(17deg); opacity: .9; } }',
     '.bgx-ocean .cau { inset: -50% -50% 40% -50%; opacity: .55; background-image: radial-gradient(circle at 20% 30%, rgba(125,211,252,.10) 0 6%, transparent 7%), radial-gradient(circle at 70% 60%, rgba(125,211,252,.08) 0 5%, transparent 6%), radial-gradient(circle at 45% 80%, rgba(186,230,253,.07) 0 4%, transparent 5%); background-size: 180px 140px; animation: bxCau 40s linear infinite; }',
-    '@keyframes bxCau { to { transform: translate(180px, 140px); } }',
+    '@keyframes bxCau { to { transform: translate3d(180px, 140px, 0); } }',
     '.bgx-ocean .pt { bottom: -3%; width: .6%; aspect-ratio: 1; border-radius: 50%; background: rgba(224,242,254,.55); box-shadow: 0 0 6px rgba(186,230,253,.6); animation: bxUp 18s linear infinite; }',
-    '@keyframes bxUp { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: .9; } 100% { transform: translate(2vw, -105vh); opacity: 0; } }',
+    '@keyframes bxUp { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: .9; } 100% { transform: translate3d(2vw, -105vh, 0); opacity: 0; } }',
     /* sunset */
     '.bgx-sunset { background: linear-gradient(180deg, #10061f 0%, #2a0c3a 36%, #571a43 60%, #7a2a2a 80%, #8a3a14 100%); }',
     '.bgx-sunset .st-top { inset: 0 0 55% 0; background-image: radial-gradient(1px 1px at 15% 25%, #fff, transparent), radial-gradient(1.2px 1.2px at 60% 15%, #fff, transparent), radial-gradient(1px 1px at 85% 35%, #fff, transparent), radial-gradient(1px 1px at 35% 45%, #fff, transparent); background-size: 260px 200px; opacity: .45; -webkit-mask: linear-gradient(#000, transparent); mask: linear-gradient(#000, transparent); animation: bxTw 6s ease-in-out infinite alternate; }',
@@ -19842,7 +20035,7 @@ var CSS = [
     /* city lights */
     '.bgx-bokeh { background: linear-gradient(180deg, #0b0f1e 0%, #111633 55%, #1c1036 100%); }',
     '.bgx-bokeh .k { aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(var(--c), .55) 0%, rgba(var(--c), .28) 40%, rgba(var(--c), .08) 62%, transparent 70%); animation: bxFloat 14s ease-in-out infinite alternate; will-change: transform, opacity; }',
-    '@keyframes bxFloat { 0% { transform: translate(0, 0) scale(.9); opacity: .45; } 50% { opacity: 1; } 100% { transform: translate(4%, -8%) scale(1.08); opacity: .6; } }',
+    '@keyframes bxFloat { 0% { transform: translate3d(0, 0, 0) scale(.9); opacity: .45; } 50% { opacity: 1; } 100% { transform: translate3d(4%, -8%, 0) scale(1.08); opacity: .6; } }',
     /* liquid colours (your theme) */
     '.bgx-mesh { background: rgb(var(--bg2, 15, 5, 31)); }',
     '.bgx-mesh .m { width: 85%; height: 60%; border-radius: 50%; mix-blend-mode: screen; opacity: .6; will-change: transform; }',
@@ -19851,7 +20044,7 @@ var CSS = [
     '.bgx-mesh .m3 { left: -10%; bottom: -20%; background: radial-gradient(closest-side, rgba(34,211,238,.6), transparent); animation: bxM3 29s ease-in-out infinite alternate; }',
     '.bgx-mesh .m4 { right: -15%; bottom: -10%; width: 70%; background: radial-gradient(closest-side, rgba(244,114,182,.55), transparent); animation: bxM1 33s ease-in-out infinite alternate-reverse; }',
     '.bgx-mesh .gl { inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 40%, rgba(0,0,0,.35)); }',
-    '@keyframes bxM1 { to { transform: translate(30%, 25%) rotate(40deg) scale(1.2); } } @keyframes bxM2 { to { transform: translate(-30%, 20%) rotate(-35deg) scale(.9); } } @keyframes bxM3 { to { transform: translate(25%, -30%) rotate(25deg) scale(1.15); } }',
+    '@keyframes bxM1 { to { transform: translate3d(30%, 25%, 0) rotate(40deg) scale(1.2); } } @keyframes bxM2 { to { transform: translate3d(-30%, 20%, 0) rotate(-35deg) scale(.9); } } @keyframes bxM3 { to { transform: translate3d(25%, -30%, 0) rotate(25deg) scale(1.15); } }',
     /* twilight peaks */
     '.bgx-peaks { background: linear-gradient(180deg, #0f0c29 0%, #24245a 42%, #4b2a6b 68%, #2a1a3f 100%); }',
     '.bgx-peaks .bx-st { -webkit-mask: linear-gradient(#000 30%, transparent 70%); mask: linear-gradient(#000 30%, transparent 70%); }',
@@ -19866,14 +20059,14 @@ var CSS = [
     '.bgx-embers { background: radial-gradient(130% 80% at 50% 120%, #4a0d02 0%, #1a0503 45%, #070101 100%); }',
     '.bgx-embers .glow { left: -20%; width: 140%; bottom: -30%; height: 65%; border-radius: 50%; background: radial-gradient(closest-side, rgba(249,115,22,.5), rgba(220,38,38,.18) 55%, transparent); animation: bxPulse 4s ease-in-out infinite alternate; }',
     '.bgx-embers .e { bottom: -2%; width: .8%; min-width: 3px; aspect-ratio: 1; border-radius: 50%; background: #fed7aa; box-shadow: 0 0 6px 2px rgba(249,115,22,.85), 0 0 14px 4px rgba(239,68,68,.35); animation: bxEmber 10s linear infinite; will-change: transform, opacity; }',
-    '@keyframes bxEmber { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate(3vw, -100vh) scale(.4); opacity: 0; } }',
+    '@keyframes bxEmber { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(3vw, -100vh, 0) scale(.4); opacity: 0; } }',
     /* emerald mist */
     '.bgx-forest { background: linear-gradient(180deg, #021b14 0%, #04261b 50%, #010d08 100%); }',
     '.bgx-forest .sh { left: 10%; top: -10%; width: 50%; height: 90%; transform: rotate(18deg); transform-origin: top; background: linear-gradient(180deg, rgba(187,247,208,.12), transparent 80%); animation: bxRay 14s ease-in-out infinite alternate; }',
     '.bgx-forest .mi { left: -30%; width: 160%; height: 30%; border-radius: 50%; background: radial-gradient(closest-side, rgba(220,252,231,.12), transparent); animation: bxSlide 30s ease-in-out infinite alternate; }',
     '.bgx-forest .m1 { top: 28%; } .bgx-forest .m2 { top: 52%; animation-duration: 40s; animation-delay: -14s; } .bgx-forest .m3 { top: 74%; opacity: .8; animation-duration: 36s; animation-delay: -22s; }',
     '.bgx-forest .f { width: .7%; min-width: 3px; aspect-ratio: 1; border-radius: 50%; background: #ecfccb; box-shadow: 0 0 8px 3px rgba(190,242,100,.75); animation: bxFly 9s ease-in-out infinite alternate; will-change: transform, opacity; }',
-    '@keyframes bxFly { 0% { transform: translate(0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate(5vw, -4vh); opacity: .3; } }',
+    '@keyframes bxFly { 0% { transform: translate3d(0, 0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate3d(5vw, -4vh, 0); opacity: .3; } }',
     /* rose silk */
     '.bgx-silk { background: linear-gradient(160deg, #1c0b17 0%, #2a0f22 45%, #120610 100%); }',
     '.bgx-silk .s { left: -50%; width: 200%; height: 70%; transform: rotate(-12deg); background: radial-gradient(50% 30% at 50% 50%, rgba(251,113,133,.24), transparent 70%), linear-gradient(170deg, transparent 42%, rgba(253,186,116,.18) 50%, transparent 58%); animation: bxSilk 18s ease-in-out infinite alternate; will-change: transform; }',
@@ -19887,7 +20080,7 @@ var CSS = [
     '.bgx-arctic .w2 { width: 25%; animation-duration: 19s; animation-delay: -7s; }',
     '@keyframes bxSweep { from { transform: translateX(-160%) rotate(25deg); } to { transform: translateX(380%) rotate(25deg); } }',
     '.bgx-arctic .sn { top: -2%; aspect-ratio: 1; min-width: 2px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 4px rgba(255,255,255,.6); animation: bxFall 15s linear infinite; will-change: transform; }',
-    '@keyframes bxFall { from { transform: translate(0, 0); } to { transform: translate(-2vw, 106vh); } }',
+    '@keyframes bxFall { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-2vw, 106vh, 0); } }',
     /* desert night */
     '.bgx-dunes { background: linear-gradient(180deg, #070b1f 0%, #1a1a46 40%, #4a2c55 66%, #8a4b3c 82%, #3a1d17 100%); }',
     '.bgx-dunes .bx-st { -webkit-mask: linear-gradient(#000 25%, transparent 65%); mask: linear-gradient(#000 25%, transparent 65%); }',
@@ -19901,16 +20094,34 @@ var CSS = [
     /* moonlit lake */
     '.bgx-lake { background: linear-gradient(180deg, #040818 0%, #0f1f4a 34%, #23396e 52%, #0c1733 54%, #050b1f 100%); }',
     '.bgx-lake .bx-st { -webkit-mask: linear-gradient(#000 20%, transparent 50%); mask: linear-gradient(#000 20%, transparent 50%); }',
-    '.bgx-lake .moon { left: 43%; top: 9%; width: 14%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 42% 40%, #ffffff 0%, #dbeafe 46%, rgba(219,234,254,0) 72%); box-shadow: 0 0 70px 20px rgba(191,219,254,.16); animation: bxPulse 8s ease-in-out infinite alternate; }',
+    '.bgx-lake .moon { left: 43%; top: 9%; width: 14%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 44% 42%, #ffffff 0%, #f4f8ff 30%, #dbeafe 50%, rgba(219,234,254,.22) 68%, rgba(219,234,254,0) 78%); box-shadow: 0 0 70px 20px rgba(191,219,254,.16); animation: bxPulse 8s ease-in-out infinite alternate; }',
     '.bgx-lake .mt { left: -5%; width: 110%; bottom: 47%; }',
     '.bgx-lake .mt.m1 { height: 30%; background: linear-gradient(180deg, #2c3f78, #18264d); clip-path: polygon(0 70%, 8% 45%, 16% 58%, 27% 16%, 36% 44%, 45% 28%, 55% 52%, 66% 12%, 77% 40%, 88% 26%, 100% 48%, 100% 100%, 0 100%); }',
     '.bgx-lake .mt.m2 { height: 19%; background: linear-gradient(180deg, #152246, #0b1430); clip-path: polygon(0 52%, 11% 70%, 21% 38%, 32% 64%, 43% 44%, 54% 70%, 65% 36%, 76% 62%, 87% 42%, 100% 64%, 100% 100%, 0 100%); }',
     '.bgx-lake .wt { left: 0; right: 0; bottom: 0; height: 47%; background: linear-gradient(180deg, #0d1a3c 0%, #070f26 60%, #040818 100%); }',
-    '.bgx-lake .rf { left: -5%; width: 110%; top: 53%; transform: scaleY(-1); opacity: .42; -webkit-mask: linear-gradient(to top, #000, transparent 90%); mask: linear-gradient(to top, #000, transparent 90%); }',
+    '.bgx-lake .rf { left: -5%; width: 110%; top: 53%; transform: scaleY(-1); opacity: .34; will-change: transform; animation: bxMirror 9s ease-in-out infinite alternate; -webkit-mask: linear-gradient(to top, #000, transparent 90%); mask: linear-gradient(to top, #000, transparent 90%); }',
     '.bgx-lake .rf.m1 { height: 30%; background: #2c3f78; clip-path: polygon(0 70%, 8% 45%, 16% 58%, 27% 16%, 36% 44%, 45% 28%, 55% 52%, 66% 12%, 77% 40%, 88% 26%, 100% 48%, 100% 100%, 0 100%); }',
+    '@keyframes bxMirror { from { transform: scaleY(-1) translate3d(-0.5%, 0, 0); } to { transform: scaleY(-1) translate3d(0.5%, 0, 0); } }',
     '.bgx-lake .rf.m2 { height: 19%; background: #152246; clip-path: polygon(0 52%, 11% 70%, 21% 38%, 32% 64%, 43% 44%, 54% 70%, 65% 36%, 76% 62%, 87% 42%, 100% 64%, 100% 100%, 0 100%); }',
-    '.bgx-lake .gl { left: 47%; width: 6%; top: 56%; height: 40%; background: linear-gradient(180deg, rgba(219,234,254,.55), rgba(219,234,254,0) 90%); -webkit-mask: repeating-linear-gradient(180deg, #000 0 3px, transparent 3px 9px); mask: repeating-linear-gradient(180deg, #000 0 3px, transparent 3px 9px); animation: bxGlint 4s ease-in-out infinite alternate; will-change: transform, opacity; }',
-    '.bgx-lake .gl.g2 { left: 44%; width: 12%; opacity: .5; animation-duration: 5.5s; animation-delay: -2s; }',
+    /* the moon's path on the water: a pool of broken light right under the moon, brightest at the far shore and
+       fading out as it comes towards you, in little bands that keep shifting the way real moonlight does */
+    '.bgx-lake .mgl { left: 22%; width: 56%; top: 52.2%; height: 47.8%; will-change: transform, opacity; backface-visibility: hidden; background-repeat: no-repeat;'
+        + ' background-image: ' + glitter(26, 310, 13, 1.7, .85) + ';'
+        + ' -webkit-mask: radial-gradient(48% 86% at 50% 0%, #000 0%, rgba(0,0,0,.8) 24%, rgba(0,0,0,.42) 54%, rgba(0,0,0,.14) 78%, transparent 96%);'
+        + ' mask: radial-gradient(48% 86% at 50% 0%, #000 0%, rgba(0,0,0,.8) 24%, rgba(0,0,0,.42) 54%, rgba(0,0,0,.14) 78%, transparent 96%);'
+        + ' animation: bxGlint1 5.5s ease-in-out infinite alternate; }',
+    '.bgx-lake .mgl.g2 { left: 28%; width: 44%; opacity: .78; background-image: ' + glitter(20, 460, 9, 1.4, .7) + '; animation-name: bxGlint2; animation-duration: 3.8s; animation-delay: -1.5s; }',
+    '.bgx-lake .mgl.g3 { left: 40%; width: 20%; height: 9%; opacity: .9; background-image: radial-gradient(62% 120% at 50% 0%, rgba(255,255,255,.62) 0%, rgba(226,240,255,.26) 40%, rgba(191,219,254,0) 80%); -webkit-mask: none; mask: none; animation-name: bxGlint3; animation-duration: 4.6s; animation-delay: -2s; }',
+    '@keyframes bxGlint1 { from { transform: translate3d(-0.5%, 0, 0); opacity: .92; } to { transform: translate3d(0.5%, 2.5px, 0); opacity: .66; } }',
+    '@keyframes bxGlint2 { from { transform: translate3d(0.7%, 1.5px, 0); opacity: .72; } to { transform: translate3d(-0.7%, 0, 0); opacity: .4; } }',
+    '@keyframes bxGlint3 { from { transform: scaleX(1); opacity: 1; } to { transform: scaleX(1.12); opacity: .62; } }',
+    /* the water itself keeps moving: fine ripple lines drifting across it */
+    '.bgx-lake .rp { left: -10%; width: 120%; bottom: 0; height: 47%; will-change: transform; backface-visibility: hidden; background: repeating-linear-gradient(180deg, rgba(190,214,255,0) 0 1px, rgba(190,214,255,.07) 2px 3.4px, rgba(190,214,255,0) 5px 16px); -webkit-mask: linear-gradient(to bottom, rgba(0,0,0,.25), #000 55%); mask: linear-gradient(to bottom, rgba(0,0,0,.25), #000 55%); animation: bxRip1 11s ease-in-out infinite alternate; }',
+    '.bgx-lake .rp.p2 { background: repeating-linear-gradient(180deg, rgba(165,196,245,0) 0 1.5px, rgba(165,196,245,.055) 3px 4.6px, rgba(165,196,245,0) 6px 23px); animation-name: bxRip2; animation-duration: 15s; animation-delay: -5s; }',
+    '.bgx-lake .rp.p3 { height: 26%; background: repeating-linear-gradient(180deg, rgba(219,234,254,0) 0 1px, rgba(219,234,254,.085) 2px 3.2px, rgba(219,234,254,0) 4.6px 12px); animation-name: bxRip3; animation-duration: 8.5s; animation-delay: -3s; }',
+    '@keyframes bxRip1 { from { transform: translate3d(-2.2%, 0, 0); } to { transform: translate3d(2.2%, 3px, 0); } }',
+    '@keyframes bxRip2 { from { transform: translate3d(2.6%, 2px, 0); } to { transform: translate3d(-2.6%, 0, 0); } }',
+    '@keyframes bxRip3 { from { transform: translate3d(-3%, 0, 0); } to { transform: translate3d(3%, 2px, 0); } }',
     '@keyframes bxGlint { from { transform: scaleX(.7); opacity: .45; } to { transform: scaleX(1.25); opacity: 1; } }',
     /* alpine dawn */
     '.bgx-alpine { background: linear-gradient(180deg, #1e1b4b 0%, #4c1d65 30%, #9d2a6a 52%, #e8606b 70%, #fb9d5c 84%, #3a2149 100%); }',
@@ -19957,7 +20168,7 @@ var CSS = [
     '.bgx-skyline .win { left: 0; width: 100%; bottom: 0; height: 32%; clip-path: ' + CITY2 + '; background-image: radial-gradient(circle, rgba(253,224,71,.9) 0 1.1px, transparent 1.6px); background-size: 9px 11px; -webkit-mask: linear-gradient(90deg, #000 0 12%, transparent 12% 19%, #000 19% 33%, transparent 33% 41%, #000 41% 60%, transparent 60% 66%, #000 66% 84%, transparent 84% 89%, #000 89%); mask: linear-gradient(90deg, #000 0 12%, transparent 12% 19%, #000 19% 33%, transparent 33% 41%, #000 41% 60%, transparent 60% 66%, #000 66% 84%, transparent 84% 89%, #000 89%); opacity: .42; animation: bxTw 3.5s ease-in-out infinite alternate; }',
     '.bgx-skyline .win.w2 { background-position: 4px 5px; background-image: radial-gradient(circle, rgba(165,243,252,.85) 0 1px, transparent 1.5px); -webkit-mask: linear-gradient(90deg, transparent 0 4%, #000 4% 15%, transparent 15% 27%, #000 27% 45%, transparent 45% 55%, #000 55% 72%, transparent 72% 80%, #000 80% 95%, transparent 95%); mask: linear-gradient(90deg, transparent 0 4%, #000 4% 15%, transparent 15% 27%, #000 27% 45%, transparent 45% 55%, #000 55% 72%, transparent 72% 80%, #000 80% 95%, transparent 95%); animation-duration: 5s; animation-delay: -2s; }',
     '.bgx-skyline .pl { left: 0; top: 16%; width: 1%; min-width: 2px; aspect-ratio: 1; border-radius: 50%; background: #fecaca; box-shadow: 0 0 6px 2px rgba(248,113,113,.7); animation: bxPlane 38s linear infinite; }',
-    '@keyframes bxPlane { 0% { transform: translate(-20px, 0); opacity: 0; } 5% { opacity: 1; } 50% { opacity: .3; } 55% { opacity: 1; } 95% { opacity: 1; } 100% { transform: translate(110vw, -6vh); opacity: 0; } }',
+    '@keyframes bxPlane { 0% { transform: translate3d(-20px, 0, 0); opacity: 0; } 5% { opacity: 1; } 50% { opacity: .3; } 55% { opacity: 1; } 95% { opacity: 1; } 100% { transform: translate3d(110vw, -6vh, 0); opacity: 0; } }',
     /* misty hills */
     '.bgx-hills { background: linear-gradient(180deg, #0b1724 0%, #183447 34%, #3f6a6a 58%, #b4a26a 72%, #1c3a35 100%); }',
     '.bgx-hills .sun { left: 56%; width: 34%; aspect-ratio: 1; bottom: 30%; border-radius: 50%; background: radial-gradient(circle, rgba(254,249,195,.85) 0%, rgba(253,224,71,.35) 25%, rgba(253,224,71,.08) 48%, transparent 66%); animation: bxPulse 9s ease-in-out infinite alternate; }',
@@ -19973,7 +20184,7 @@ var CSS = [
     '.bgx .vg { inset: 0; background: radial-gradient(120% 90% at 50% 40%, transparent 50%, rgba(0,0,0,.45)); }',
     '.bgx .gg { inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 40%, rgba(0,0,0,.35)); }',
     '.bgx-neon .k, .bgx-golden .k { aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(var(--c), .6) 0%, rgba(var(--c), .3) 40%, rgba(var(--c), .08) 62%, transparent 70%); animation: bxFloat 14s ease-in-out infinite alternate; will-change: transform, opacity; }',
-    '@keyframes bxLava { 0% { transform: translate(0, 0) scale(1, 1); } 50% { transform: translate(6%, -35%) scale(.85, 1.15); } 100% { transform: translate(-4%, -70%) scale(1.1, .9); } }',
+    '@keyframes bxLava { 0% { transform: translate3d(0, 0, 0) scale(1, 1); } 50% { transform: translate3d(6%, -35%, 0) scale(.85, 1.15); } 100% { transform: translate3d(-4%, -70%, 0) scale(1.1, .9); } }',
     '.bgx-lava { background: radial-gradient(120% 90% at 50% 100%, #3a0a1c 0%, #12030f 70%); }',
     '.bgx-neon { background: linear-gradient(180deg, #05051a 0%, #0f0a2e 55%, #2a0a35 100%); }',
     '.bgx-neon .rn { inset: -10% 0 0 0; opacity: .35; background-image: repeating-linear-gradient(100deg, transparent 0 18px, rgba(165,243,252,.16) 18px 19px, transparent 19px 41px); background-size: 100% 220px; animation: bxRain 1.6s linear infinite; }',
@@ -19994,28 +20205,42 @@ var CSS = [
     '.bgx-rain { background: linear-gradient(180deg, #0a1020 0%, #121a30 55%, #1a1a2e 100%); }',
     '.bgx-rain .k { aspect-ratio: 1; border-radius: 50%; opacity: .7; background: radial-gradient(circle, rgba(var(--c), .5) 0%, rgba(var(--c), .22) 40%, transparent 70%); animation: bxFloat 16s ease-in-out infinite alternate; will-change: transform, opacity; }',
     '.bgx-rain .fog { inset: 0; background: linear-gradient(180deg, rgba(148,163,184,.10), rgba(15,23,42,.35)); }',
-    '.bgx-rain .rn, .bgx-storm .rn { inset: -10% 0 0 0; opacity: .3; background-image: repeating-linear-gradient(97deg, transparent 0 16px, rgba(203,213,225,.18) 16px 17px, transparent 17px 37px); background-size: 100% 200px; animation: bxRain 1.1s linear infinite; }',
+    /* falling rain: little drops with a bright head, each on its own path (plain numbers in the keyframes, so the phone runs them on its own thread) */
+    '.bgx .rd { top: -6%; width: 3.6px; height: 6.4px; border-radius: 52% 52% 60% 60% / 42% 42% 58% 58%; background: radial-gradient(circle at 38% 32%, rgba(255,255,255,.92) 0 14%, rgba(224,240,255,.5) 40%, rgba(186,214,245,.3) 68%, rgba(255,255,255,.1) 86%, transparent 95%); box-shadow: inset 0 -1px 1.5px rgba(255,255,255,.4), 0 0 4px rgba(191,219,254,.45); opacity: .9; will-change: transform; backface-visibility: hidden; animation: bxRd1 1.5s linear infinite; }',
+    '.bgx .rd.far { width: 2.4px; height: 4.2px; opacity: .5; }',
+    '@keyframes bxRd1 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(2.5vw, 118vh, 0); } }',
+    '@keyframes bxRd2 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(4vw, 118vh, 0); } }',
+    '@keyframes bxRd3 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(1.2vw, 118vh, 0); } }',
+    '@keyframes bxRd4 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(3.2vw, 118vh, 0); } }',
+    '.bgx-rain .rn, .bgx-storm .rn { display: none; }',
     '.bgx-rain .dp { aspect-ratio: .8; border-radius: 50% 50% 46% 46% / 40% 40% 60% 60%; background: radial-gradient(circle at 38% 30%, rgba(255,255,255,.85) 0 9%, rgba(226,232,240,.3) 32%, rgba(148,163,184,.14) 60%, rgba(255,255,255,.08) 70%, transparent 74%); box-shadow: inset 0 -1px 2px rgba(255,255,255,.25), 0 2px 3px rgba(0,0,0,.25); animation: bxDrop 9s cubic-bezier(.6,0,.9,.6) infinite; will-change: transform; }',
-    '@keyframes bxDrop { 0%, 30% { transform: translate(0, 0); } 100% { transform: translate(1vw, 115vh); } }',
+    '@keyframes bxDrop { 0%, 30% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(1vw, 115vh, 0); } }',
     /* thunderstorm */
-    '.bgx .cd { --cc: 255,255,255; left: -46%; width: 46%; aspect-ratio: 2.4; will-change: transform; background: radial-gradient(28% 42% at 28% 62%, rgba(var(--cc),.92) 0%, rgba(var(--cc),.78) 45%, rgba(var(--cc),0) 100%), radial-gradient(26% 50% at 48% 42%, rgba(var(--cc),.95) 0%, rgba(var(--cc),.8) 45%, rgba(var(--cc),0) 100%), radial-gradient(24% 40% at 69% 58%, rgba(var(--cc),.9) 0%, rgba(var(--cc),.74) 45%, rgba(var(--cc),0) 100%), radial-gradient(50% 26% at 50% 76%, rgba(var(--cc),.85) 0%, rgba(var(--cc),.6) 50%, rgba(var(--cc),0) 100%); animation: bxCd1 95s linear infinite; }',
-    '.bgx .cd.d2 { left: -34%; width: 34%; animation-name: bxCd2; animation-duration: 120s; } .bgx .cd.d3 { left: -58%; width: 58%; animation-name: bxCd3; animation-duration: 80s; } .bgx .cd.sm { opacity: .75; animation-duration: 140s; }',
+    /* one soft lens of light with a shaded underside: no hard edges where the puffs meet, and it takes the sky's own colour */
+    '.bgx .cd { --cc: 255,255,255; --cs: 148,176,210; left: -52%; width: 52%; aspect-ratio: 3.2; opacity: .92; will-change: transform; backface-visibility: hidden; background:'
+        + ' radial-gradient(44% 58% at 50% 54%, rgba(var(--cc),.96) 0%, rgba(var(--cc),.72) 40%, rgba(var(--cc),.3) 66%, rgba(var(--cc),0) 85%),'
+        + ' radial-gradient(27% 42% at 25% 60%, rgba(var(--cc),.82) 0%, rgba(var(--cc),.44) 48%, rgba(var(--cc),0) 80%),'
+        + ' radial-gradient(25% 38% at 75% 62%, rgba(var(--cc),.80) 0%, rgba(var(--cc),.42) 50%, rgba(var(--cc),0) 82%),'
+        + ' radial-gradient(18% 30% at 38% 44%, rgba(var(--cc),.70) 0%, rgba(var(--cc),.3) 52%, rgba(var(--cc),0) 80%),'
+        + ' radial-gradient(62% 24% at 50% 79%, rgba(var(--cs),.40) 0%, rgba(var(--cs),.15) 55%, rgba(var(--cs),0) 86%);'
+        + ' animation: bxCd1 95s linear infinite; }',
+    '.bgx .cd.d2 { left: -38%; width: 38%; aspect-ratio: 3.4; opacity: .84; animation-name: bxCd2; animation-duration: 120s; } .bgx .cd.d3 { left: -64%; width: 64%; aspect-ratio: 3.6; opacity: .78; animation-name: bxCd3; animation-duration: 80s; } .bgx .cd.sm { opacity: .6; animation-duration: 140s; }',
     '@keyframes bxCd1 { from { transform: translate3d(0,0,0); } to { transform: translate3d(320%,0,0); } }',
     '@keyframes bxCd2 { from { transform: translate3d(0,0,0); } to { transform: translate3d(400%,0,0); } }',
     '@keyframes bxCd3 { from { transform: translate3d(0,0,0); } to { transform: translate3d(280%,0,0); } }',
     '.bgx-partly { background: linear-gradient(180deg, #0b2148 0%, #17427a 32%, #33699f 56%, #7aa3c4 72%, #1f3d34 100%); }',
     '.bgx-partly .sun { right: 8%; top: 6%; width: 34%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(254,249,195,.95) 0%, rgba(253,224,71,.45) 18%, rgba(253,224,71,.1) 42%, transparent 66%); animation: bxPulse 9s ease-in-out infinite alternate; }',
-    '.bgx-partly .cd { --cc: 248,250,252; }',
+    '.bgx-partly .cd { --cc: 255,255,255; --cs: 142,174,212; }',
     '.bgx-partly .hl, .bgx-overcast .hl, .bgx-cloudnight .hl { border-radius: 50% 50% 0 0 / 100% 100% 0 0; }',
     '.bgx-partly .h1 { left: -25%; width: 90%; height: 30%; bottom: -4%; background: linear-gradient(180deg, #3f7a5e, #24493a); } .bgx-partly .h2 { right: -30%; width: 100%; height: 25%; bottom: -6%; background: linear-gradient(180deg, #2b5e47, #18372b); } .bgx-partly .h3 { left: -15%; width: 80%; height: 16%; bottom: -6%; background: #10261d; }',
     '.bgx-overcast { background: linear-gradient(180deg, #111827 0%, #2b3442 34%, #4b5563 62%, #6b7280 76%, #1f2a2a 100%); }',
     '.bgx-overcast .lt { inset: 0 0 40% 0; background: radial-gradient(70% 60% at 65% 10%, rgba(226,232,240,.22), transparent 70%); animation: bxPulse 12s ease-in-out infinite alternate; }',
-    '.bgx-overcast .cd { --cc: 156,163,175; } .bgx-overcast .cd.lo { --cc: 100,110,124; opacity: .9; }',
+    '.bgx-overcast .cd { --cc: 206,214,225; --cs: 112,126,145; opacity: .8; } .bgx-overcast .cd.lo { --cc: 150,162,178; --cs: 80,92,110; opacity: .72; }',
     '.bgx-overcast .h1 { left: -25%; width: 90%; height: 26%; bottom: -4%; background: linear-gradient(180deg, #34463f, #1f2d28); } .bgx-overcast .h2 { right: -30%; width: 100%; height: 20%; bottom: -6%; background: #141f1b; }',
     '.bgx-cloudnight { background: linear-gradient(180deg, #050816 0%, #0d1530 40%, #1b2440 70%, #0b1020 100%); }',
     '.bgx-cloudnight .bx-st { -webkit-mask: linear-gradient(#000 35%, transparent 75%); mask: linear-gradient(#000 35%, transparent 75%); }',
     '.bgx-cloudnight .moon { right: 16%; top: 9%; width: 12%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 42% 40%, #f8fafc 0%, #e2e8f0 45%, rgba(226,232,240,0) 72%); box-shadow: 0 0 60px 18px rgba(226,232,240,.14); animation: bxPulse 8s ease-in-out infinite alternate; }',
-    '.bgx-cloudnight .cd { --cc: 71,85,105; opacity: .92; }',
+    '.bgx-cloudnight .cd { --cc: 96,112,138; --cs: 22,32,52; opacity: .8; }',
     '.bgx-cloudnight .h1 { left: -25%; width: 90%; height: 24%; bottom: -4%; background: linear-gradient(180deg, #1e293b, #0f172a); } .bgx-cloudnight .h2 { right: -30%; width: 100%; height: 18%; bottom: -6%; background: #080d1a; }',
     '.bgx-storm { background: linear-gradient(180deg, #0b0f1a 0%, #111827 45%, #1f2937 100%); }',
     '.bgx-storm .cl { height: 34%; border-radius: 50%; background: radial-gradient(closest-side, rgba(75,85,99,.9), rgba(55,65,81,.5) 60%, transparent); animation: bxStorm 14s ease-in-out infinite alternate; will-change: transform; }',
@@ -20033,7 +20258,7 @@ var CSS = [
     '.bgx-rooftops .r2 { height: 30%; background: #170a1c; clip-path: ' + ROOF2 + '; }',
     '.bgx-rooftops .smk { left: 20%; bottom: 26%; width: 7%; aspect-ratio: .6; border-radius: 50%; background: radial-gradient(closest-side, rgba(226,232,240,.18), transparent); animation: bxSmoke 7s ease-out infinite; }',
     '.bgx-rooftops .s2 { left: 64%; bottom: 21%; animation-duration: 9s; animation-delay: -4s; }',
-    '@keyframes bxSmoke { 0% { transform: translate(0, 0) scale(.6); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(6%, -180%) scale(2.2); opacity: 0; } }',
+    '@keyframes bxSmoke { 0% { transform: translate3d(0, 0, 0) scale(.6); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate3d(6%, -180%, 0) scale(2.2); opacity: 0; } }',
     /* northern forest */
     '.bgx-snowpines { background: linear-gradient(180deg, #050d1f 0%, #0c2340 45%, #1e3a5f 70%, #cbd5e1 100%); }',
     '.bgx-snowpines .bx-st { -webkit-mask: linear-gradient(#000 20%, transparent 55%); mask: linear-gradient(#000 20%, transparent 55%); }',
@@ -20070,30 +20295,30 @@ var CSS = [
     '.bgx-blossom { background: linear-gradient(180deg, #120716 0%, #1f0c26 55%, #2a1030 100%); }',
     '.bgx-blossom .bl { opacity: .5; }',
     '.bgx-blossom .pt { top: -4%; aspect-ratio: 1.3; border-radius: 150% 0 150% 0; background: linear-gradient(135deg, #fce7f3, #f9a8d4); opacity: .85; animation: bxLeaf 16s linear infinite; will-change: transform; }',
-    '@keyframes bxLeaf { 0% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(-4vw, 55vh) rotate(200deg); } 100% { transform: translate(6vw, 110vh) rotate(400deg); } }',
+    '@keyframes bxLeaf { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 50% { transform: translate3d(-4vw, 55vh, 0) rotate(200deg); } 100% { transform: translate3d(6vw, 110vh, 0) rotate(400deg); } }',
     /* moving pieces: a few fixed paths (no custom values inside the animation, which iPhone does not always run) */
-    '@keyframes bxFall1 { from { transform: translate(0, 0); } to { transform: translate(-7vw, 106vh); } }',
-    '@keyframes bxFall2 { from { transform: translate(0, 0); } to { transform: translate(-2vw, 106vh); } }',
-    '@keyframes bxFall3 { from { transform: translate(0, 0); } to { transform: translate(3vw, 106vh); } }',
-    '@keyframes bxFall4 { from { transform: translate(0, 0); } to { transform: translate(7vw, 106vh); } }',
-    '@keyframes bxEmber1 { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate(-8vw, -100vh) scale(.4); opacity: 0; } }',
-    '@keyframes bxEmber2 { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate(-3vw, -100vh) scale(.4); opacity: 0; } }',
-    '@keyframes bxEmber3 { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate(3vw, -100vh) scale(.4); opacity: 0; } }',
-    '@keyframes bxEmber4 { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate(8vw, -100vh) scale(.4); opacity: 0; } }',
-    '@keyframes bxFly1 { 0% { transform: translate(0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate(6vw, -5vh); opacity: .3; } }',
-    '@keyframes bxFly2 { 0% { transform: translate(0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate(-7vw, 4vh); opacity: .3; } }',
-    '@keyframes bxFly3 { 0% { transform: translate(0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate(4vw, 6vh); opacity: .3; } }',
-    '@keyframes bxFly4 { 0% { transform: translate(0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate(-5vw, -6vh); opacity: .3; } }',
-    '@keyframes bxLeaf1 { 0% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(-6.0vw, 28vh) rotate(105deg); } 50% { transform: translate(2.4vw, 55vh) rotate(210deg); } 75% { transform: translate(-8.4vw, 82vh) rotate(315deg); } 100% { transform: translate(-12vw, 110vh) rotate(420deg); } }',
-    '@keyframes bxLeaf2 { 0% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(4.5vw, 28vh) rotate(-95deg); } 50% { transform: translate(-1.8vw, 55vh) rotate(-190deg); } 75% { transform: translate(6.3vw, 82vh) rotate(-285deg); } 100% { transform: translate(9vw, 110vh) rotate(-380deg); } }',
-    '@keyframes bxLeaf3 { 0% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(-3.0vw, 28vh) rotate(75deg); } 50% { transform: translate(1.2vw, 55vh) rotate(150deg); } 75% { transform: translate(-4.2vw, 82vh) rotate(225deg); } 100% { transform: translate(-6vw, 110vh) rotate(300deg); } }',
-    '@keyframes bxLeaf4 { 0% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(7.0vw, 28vh) rotate(-130deg); } 50% { transform: translate(-2.8vw, 55vh) rotate(-260deg); } 75% { transform: translate(9.8vw, 82vh) rotate(-390deg); } 100% { transform: translate(14vw, 110vh) rotate(-520deg); } }',
+    '@keyframes bxFall1 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-7vw, 106vh, 0); } }',
+    '@keyframes bxFall2 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-2vw, 106vh, 0); } }',
+    '@keyframes bxFall3 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(3vw, 106vh, 0); } }',
+    '@keyframes bxFall4 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(7vw, 106vh, 0); } }',
+    '@keyframes bxEmber1 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(-8vw, -100vh, 0) scale(.4); opacity: 0; } }',
+    '@keyframes bxEmber2 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(-3vw, -100vh, 0) scale(.4); opacity: 0; } }',
+    '@keyframes bxEmber3 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(3vw, -100vh, 0) scale(.4); opacity: 0; } }',
+    '@keyframes bxEmber4 { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; } 8% { opacity: 1; } 70% { opacity: .8; } 100% { transform: translate3d(8vw, -100vh, 0) scale(.4); opacity: 0; } }',
+    '@keyframes bxFly1 { 0% { transform: translate3d(0, 0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate3d(6vw, -5vh, 0); opacity: .3; } }',
+    '@keyframes bxFly2 { 0% { transform: translate3d(0, 0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate3d(-7vw, 4vh, 0); opacity: .3; } }',
+    '@keyframes bxFly3 { 0% { transform: translate3d(0, 0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate3d(4vw, 6vh, 0); opacity: .3; } }',
+    '@keyframes bxFly4 { 0% { transform: translate3d(0, 0, 0); opacity: .1; } 30% { opacity: 1; } 55% { opacity: .2; } 80% { opacity: .95; } 100% { transform: translate3d(-5vw, -6vh, 0); opacity: .3; } }',
+    '@keyframes bxLeaf1 { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 25% { transform: translate3d(-6.0vw, 28vh, 0) rotate(105deg); } 50% { transform: translate3d(2.4vw, 55vh, 0) rotate(210deg); } 75% { transform: translate3d(-8.4vw, 82vh, 0) rotate(315deg); } 100% { transform: translate3d(-12vw, 110vh, 0) rotate(420deg); } }',
+    '@keyframes bxLeaf2 { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 25% { transform: translate3d(4.5vw, 28vh, 0) rotate(-95deg); } 50% { transform: translate3d(-1.8vw, 55vh, 0) rotate(-190deg); } 75% { transform: translate3d(6.3vw, 82vh, 0) rotate(-285deg); } 100% { transform: translate3d(9vw, 110vh, 0) rotate(-380deg); } }',
+    '@keyframes bxLeaf3 { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 25% { transform: translate3d(-3.0vw, 28vh, 0) rotate(75deg); } 50% { transform: translate3d(1.2vw, 55vh, 0) rotate(150deg); } 75% { transform: translate3d(-4.2vw, 82vh, 0) rotate(225deg); } 100% { transform: translate3d(-6vw, 110vh, 0) rotate(300deg); } }',
+    '@keyframes bxLeaf4 { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 25% { transform: translate3d(7.0vw, 28vh, 0) rotate(-130deg); } 50% { transform: translate3d(-2.8vw, 55vh, 0) rotate(-260deg); } 75% { transform: translate3d(9.8vw, 82vh, 0) rotate(-390deg); } 100% { transform: translate3d(14vw, 110vh, 0) rotate(-520deg); } }',
     '.bgx .sn.v1 { animation-name: bxFall1; } .bgx .e.v1 { animation-name: bxEmber1; } .bgx .f.v1 { animation-name: bxFly1; } .bgx .lf.v1, .bgx .pt.v1 { animation-name: bxLeaf1; }',
     '.bgx .sn.v2 { animation-name: bxFall2; } .bgx .e.v2 { animation-name: bxEmber2; } .bgx .f.v2 { animation-name: bxFly2; } .bgx .lf.v2, .bgx .pt.v2 { animation-name: bxLeaf2; }',
     '.bgx .sn.v3 { animation-name: bxFall3; } .bgx .e.v3 { animation-name: bxEmber3; } .bgx .f.v3 { animation-name: bxFly3; } .bgx .lf.v3, .bgx .pt.v3 { animation-name: bxLeaf3; }',
     '.bgx .sn.v4 { animation-name: bxFall4; } .bgx .e.v4 { animation-name: bxEmber4; } .bgx .f.v4 { animation-name: bxFly4; } .bgx .lf.v4, .bgx .pt.v4 { animation-name: bxLeaf4; }',
     '.bgx .tw { border-radius: 50%; background: #fff; opacity: .3; will-change: opacity; animation: twA 4s ease-in-out infinite; }',
-    '.bgx .tw.big { box-shadow: 0 0 6px 1px rgba(255,255,255,.75); } .bgx .tw.big::before, .bgx .tw.big::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(255,255,255,.7); transform: translate(-50%, -50%); } .bgx .tw.big::before { width: 9px; height: 1px; } .bgx .tw.big::after { width: 1px; height: 9px; }',
+    '.bgx .tw.big { box-shadow: 0 0 6px 1px rgba(255,255,255,.75); } .bgx .tw.big::before, .bgx .tw.big::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(255,255,255,.7); transform: translate3d(-50%, -50%, 0); } .bgx .tw.big::before { width: 9px; height: 1px; } .bgx .tw.big::after { width: 1px; height: 9px; }',
     '.bgx .tw.t2 { animation-name: twB; } .bgx .tw.t3 { animation-name: twC; }',
     '@keyframes twA { 0%, 100% { opacity: .25; } 42% { opacity: .3; } 50% { opacity: 1; } 58% { opacity: .3; } }',
     '@keyframes twB { 0%, 100% { opacity: .35; } 18% { opacity: .95; } 30% { opacity: .3; } 70% { opacity: .55; } }',
@@ -20268,22 +20493,34 @@ function coords() {
             save('wxPlace', np); return { lat: np.lat, lon: np.lon, name: np.name };
         });
     }
+    var saved = savedGeo();
+    if (saved && !geoForce) return Promise.resolve({ lat: saved.lat, lon: saved.lon, name: saved.name || '' });   // kept from last time: no asking again
     return new Promise(function (res, rej) {
         if (!navigator.geolocation) { rej(new Error('This device cannot share its location. Pick City in Settings > Appearance > Weather.')); return; }
         navigator.geolocation.getCurrentPosition(function (pos) { res({ lat: +pos.coords.latitude.toFixed(2), lon: +pos.coords.longitude.toFixed(2), name: '' }); },
-            function () { rej(new Error('Location is not allowed. Allow it for this site, or pick City in Settings > Appearance > Weather.')); }, { timeout: 12000, maximumAge: 3600000 });
+            function () { var old = savedGeo(true); if (old) { res({ lat: old.lat, lon: old.lon, name: old.name || '' }); return; }    // said no this time: keep using the last place
+                rej(new Error('Location is not allowed. Allow it for this site, or pick City in Settings > Appearance > Weather.')); },
+            { timeout: 12000, maximumAge: 24 * 3600000 });
     }).then(function (c) {
         var old = cached();
-        if (old && old.lat === c.lat && old.lon === c.lon && old.place) { c.name = old.place; return c; }
+        if (old && old.lat === c.lat && old.lon === c.lon && old.place) { c.name = old.place; keepGeo(c); return c; }
         return j('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en&latitude=' + c.lat + '&longitude=' + c.lon)
-            .then(function (d) { c.name = (d && (d.city || d.locality)) || ''; return c; }).catch(function () { return c; });
+            .then(function (d) { c.name = (d && (d.city || d.locality)) || ''; keepGeo(c); return c; }).catch(function () { keepGeo(c); return c; });
     });
 }
+var GEO_KEY = 'incator:geo', GEO_TTL = 14 * 24 * 3600000, geoForce = false;
+function savedGeo(any) {                                               // the last place that worked (kept for a fortnight)
+    try { var o = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); if (o && o.lat != null && (any || Date.now() - o.at < GEO_TTL)) return o; } catch (e) { /* ignore */ }
+    return null;
+}
+function keepGeo(c) { try { localStorage.setItem(GEO_KEY, JSON.stringify({ at: Date.now(), lat: c.lat, lon: c.lon, name: c.name || '' })); } catch (e) { /* ignore */ } }
 function refresh(force) {
     var c0 = cached();
     if (!force && c0 && Date.now() - c0.at < TTL && c0.mode === place().mode && (place().mode !== 'city' || c0.q === place().city)) return Promise.resolve(c0);
     if (busy) return busy;
+    geoForce = !!force && place().mode !== 'city';                      // you tapped Update now: it is fine to ask the phone again
     busy = coords().then(function (c) {
+        geoForce = false;
         return j('https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=1&latitude=' + c.lat + '&longitude=' + c.lon).then(function (d) {
             var cur = d.current || {}, day = d.daily || {};
             var o = { at: Date.now(), lat: c.lat, lon: c.lon, place: c.name, mode: place().mode, q: place().city, t: Math.round(cur.temperature_2m), code: cur.weather_code, isDay: cur.is_day === 1, kind: kind(cur.weather_code), words: WORDS[cur.weather_code] || '',
@@ -20416,6 +20653,7 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 function applyBg() {
     var m = bgMode(), on = m !== 'theme', r = document.documentElement;
     r.classList.toggle('inc-sky-on', on);
+    r.classList.toggle('bg-wet', m === 'rain' || m === 'storm');        // raining: the cards look like wet glass
     if (on && !sky && document.body) {
         sky = document.createElement('div'); sky.id = 'inc-sky'; sky.setAttribute('aria-hidden', 'true');
         document.body.insertBefore(sky, document.body.firstChild);
@@ -20773,6 +21011,37 @@ function inject() {
 }
 var css = document.createElement('style'); css.id = 'sky-css';
 css.textContent = [
+    /* rain on the glass: drops resting on each card, and a slow drip running down. One layer per card, moved only with transform. */
+    'html.bg-wet .stunning-form-container, html.bg-wet .mh-tile, html.bg-wet .home-card, html.bg-wet .mh-cta-wrap, html.bg-wet .rc-hero, html.bg-wet .bgpv-card { position: relative; }',
+    'html.bg-wet .home-card, html.bg-wet .mh-tile, html.bg-wet .rc-hero { overflow: hidden; }',   // the water stays on its own card
+    'html.bg-wet .stunning-form-container::after, html.bg-wet .mh-tile::after, html.bg-wet .home-card::after, html.bg-wet .mh-cta-wrap::after, html.bg-wet .rc-hero::after {'
+        + ' content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1; opacity: .75;'
+        + ' background-image:'
+        + ' radial-gradient(3px 3.6px at 12% 18%, rgba(255,255,255,.75) 0 18%, rgba(226,240,255,.3) 52%, rgba(255,255,255,.08) 76%, transparent 86%),'
+        + ' radial-gradient(5px 6px at 34% 9%, rgba(255,255,255,.7) 0 16%, rgba(226,240,255,.26) 50%, rgba(255,255,255,.07) 74%, transparent 85%),'
+        + ' radial-gradient(2.4px 2.8px at 58% 23%, rgba(255,255,255,.65) 0 20%, rgba(226,240,255,.24) 54%, transparent 84%),'
+        + ' radial-gradient(6px 7px at 78% 13%, rgba(255,255,255,.66) 0 15%, rgba(226,240,255,.24) 48%, rgba(255,255,255,.06) 72%, transparent 84%),'
+        + ' radial-gradient(3.2px 3.8px at 24% 47%, rgba(255,255,255,.62) 0 18%, rgba(226,240,255,.22) 52%, transparent 84%),'
+        + ' radial-gradient(4.4px 5.2px at 66% 58%, rgba(255,255,255,.66) 0 16%, rgba(226,240,255,.24) 50%, transparent 84%),'
+        + ' radial-gradient(2.6px 3px at 89% 44%, rgba(255,255,255,.6) 0 20%, rgba(226,240,255,.2) 54%, transparent 84%),'
+        + ' radial-gradient(5.2px 6.2px at 45% 76%, rgba(255,255,255,.64) 0 16%, rgba(226,240,255,.22) 50%, transparent 84%),'
+        + ' radial-gradient(3.4px 4px at 15% 86%, rgba(255,255,255,.6) 0 18%, rgba(226,240,255,.2) 52%, transparent 84%),'
+        + ' radial-gradient(4.6px 5.4px at 82% 81%, rgba(255,255,255,.62) 0 16%, rgba(226,240,255,.22) 50%, transparent 84%);'
+        + ' background-repeat: no-repeat; }',
+    'html.bg-wet .home-card::before, html.bg-wet .mh-tile::before, html.bg-wet .rc-hero::before {'
+        + ' content: ""; position: absolute; left: 0; right: 0; top: 0; height: 200%; border-radius: inherit; pointer-events: none; z-index: 1; opacity: .5;'
+        + ' will-change: transform; backface-visibility: hidden;'
+        + ' background-image:'
+        + ' linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.26) 48%, rgba(255,255,255,0) 52%),'
+        + ' linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.2) 22%, rgba(255,255,255,0) 26%);'
+        + ' background-repeat: no-repeat, no-repeat; background-size: 2px 100%, 1.4px 100%; background-position: 28% 0, 71% 0;'
+        + ' animation: wetDrip 7s linear infinite; }',
+    'html.bg-wet .mh-tile::before { animation-duration: 9s; animation-delay: -3s; } html.bg-wet .home-card::before { animation-duration: 8s; animation-delay: -5s; }',
+    'html.bg-wet .home-card:nth-child(2n)::before, html.bg-wet .mh-tile:nth-child(2n)::before { background-position: 63% 0, 19% 0; animation-duration: 10s; animation-delay: -2s; }',
+    'html.bg-wet .home-card:nth-child(3n)::before, html.bg-wet .mh-tile:nth-child(3n)::before { background-position: 44% 0, 83% 0; animation-duration: 7.5s; animation-delay: -6s; }',
+    '@keyframes wetDrip { from { transform: translate3d(0, -50%, 0); } to { transform: translate3d(0, 0, 0); } }',
+    'html.lm.bg-wet .stunning-form-container::after, html.lm.bg-wet .home-card::after, html.lm.bg-wet .mh-tile::after, html.lm.bg-wet .mh-cta-wrap::after, html.lm.bg-wet .rc-hero::after { opacity: .3; }',
+    'html.calm.bg-wet .home-card::before, html.calm.bg-wet .mh-tile::before, html.calm.bg-wet .rc-hero::before { animation: none; }',
     '#inc-sky, .sky-old { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }',
     '.sky-old.bgx-sky { background: radial-gradient(120% 80% at 50% 110%, #1e0b4b 0%, #0b0420 55%, #05010d 100%); }',
     '@keyframes skyFade { from { opacity: 0; } to { opacity: 1; } }',
@@ -23118,7 +23387,7 @@ function pricesSet() { return !!sget('roofPricesSet', false); }
 /* ================================================================ the estimate you are working on ================================================================ */
 const DRAFT = 'roofDraft';
 function newSection(n) { return { id: uid('s'), name: 'Section ' + n, shape: 'rect', a: '', b: '', c: '', pitch: 6, meas: 'slope', n: 1 }; }
-function newJob() { return { v: 1, id: null, name: '', customer: '', address: '', sections: [newSection(1)], lines: {}, counts: {}, layers: 1, storeys: 1, waste: '', use: {}, qty: {}, extra: [], snap: null, notes: '' }; }
+function newJob() { return { v: 1, id: null, name: '', customer: '', address: '', sections: [], lines: {}, counts: {}, layers: 1, storeys: 1, waste: '', use: {}, qty: {}, extra: [], snap: null, notes: '' }; }
 let job = null;
 function loadDraft() {
     try { const j = JSON.parse(appStore.getItem(DRAFT) || 'null'); if (j && Array.isArray(j.sections)) { job = Object.assign(newJob(), j); return; } } catch (e) { /* new one */ }
@@ -23242,7 +23511,7 @@ function injectPage() {
         card('rf-job', 'clipboard-list', '#a78bfa', 'Job', 'Optional: shows on the saved estimate and the quote',
             `<div class="rf-g3"><label class="rf-f"><span>Job name</span><input class="inv-input" data-j="name" maxlength="80" placeholder="e.g. Main house re-roof"></label><label class="rf-f"><span>Customer</span><input class="inv-input" data-j="customer" maxlength="80" placeholder="Name"></label><label class="rf-f"><span>Job address</span><input class="inv-input" data-j="address" maxlength="120" placeholder="Street, city"></label></div><div id="rf-from"></div>`) +
         card('rf-secs', 'home', '#38bdf8', 'Roof sections', 'Add every roof plane or area. Lengths in feet: 32.5 or 32\'6 both work.',
-            `<div id="rf-seclist"></div><div class="rf-btns"><button type="button" class="app-btn" data-rf="addsec"><i class="fas fa-plus mr-2"></i>Add a section</button></div><details class="rf-help"><summary>How to measure</summary><p><b>On the roof (slope):</b> measure the real roof surface, from eave to ridge. The pitch is then only used for steep-roof labour.</p><p><b>From a plan or the ground:</b> measure the flat footprint (from a drawing, satellite photo or the ground). IncAtor multiplies by the pitch to get the real roof area (for example, 6/12 adds about 12%).</p><p>A hip roof is usually 2 trapezoids (front and back) and 2 triangles (the ends). Use "x 2" for identical sides.</p></details>`) +
+            `<div id="rf-seclist"></div><div class="rf-btns"><button type="button" class="app-btn rf-addsec" data-rf="addsec"><i class="fas fa-plus mr-2"></i>Add a section</button></div><details class="rf-help"><summary>How to measure</summary><p><b>On the roof (slope):</b> measure the real roof surface, from eave to ridge. The pitch is then only used for steep-roof labour.</p><p><b>From a plan or the ground:</b> measure the flat footprint (from a drawing, satellite photo or the ground). IncAtor multiplies by the pitch to get the real roof area (for example, 6/12 adds about 12%).</p><p>A hip roof is usually 2 trapezoids (front and back) and 2 triangles (the ends). Use "x 2" for identical sides.</p></details>`) +
         card('rf-lines', 'border-style', '#f472b6', 'Edges', 'Total length of each, in feet. Leave empty if there are none.', `<div class="rf-g3" id="rf-linegrid"></div>`) +
         card('rf-det', 'sliders-h', '#fbbf24', 'Job details', '', `<div class="rf-g3" id="rf-detgrid"></div><div id="rf-counts"></div>`) +
         card('rf-est', 'calculator', '#34d399', 'Estimate', 'Tap a checkbox to leave an item out. Tap a quantity to change it.', `<div id="rf-out"></div>`) +
@@ -23300,30 +23569,113 @@ function paintJob() {
 }
 function paintSections(c) {
     const el = $('rf-seclist'); if (!el) return;
-    if (el.childElementCount !== job.sections.length || el.getAttribute('data-sig') !== job.sections.map(s => s.id + s.shape + s.meas).join()) {
-        el.innerHTML = job.sections.map((s, i) => {
-            const S = SHAPES[s.shape] || SHAPES.rect;
-            const fld = (k, lab) => `<label class="rf-f"><span>${lab} (ft)</span><input class="inv-input" data-s="${k}" data-i="${i}" inputmode="text" value="${h(s[k])}" placeholder="0"></label>`;
-            const dims = s.shape === 'area' ? `<label class="rf-f"><span>${S[1]}</span><input class="inv-input" data-s="a" data-i="${i}" inputmode="decimal" value="${h(s.a)}" placeholder="0"></label>`
-                : fld('a', S[1]) + (S[2] ? fld('b', S[2]) : '') + (S[3] ? fld('c', S[3]) : '');
-            return `<div class="rf-sec" data-sid="${h(s.id)}">
-                <div class="rf-sh"><input class="rf-sname" data-s="name" data-i="${i}" value="${h(s.name)}" maxlength="40" aria-label="Section name"><b class="rf-sa" id="rf-sa-${i}"></b>
-                    <button type="button" class="rf-ib" data-rf="dup" data-i="${i}" aria-label="Copy this section" title="Copy"><i class="fas fa-copy"></i></button><button type="button" class="rf-ib del" data-rf="delsec" data-i="${i}" aria-label="Delete this section" title="Delete"><i class="fas fa-trash"></i></button></div>
-                <div class="rf-shapes" role="group" aria-label="Shape">${Object.keys(SHAPES).map(k => `<button type="button" data-rf="shape" data-i="${i}" data-v="${k}" aria-pressed="${s.shape === k}" title="${SHAPES[k][0]}">${sicon(k)}<span>${SHAPES[k][0]}</span></button>`).join('')}</div>
-                ${WHOLE[s.shape] ? `<p class="rf-shelp">${sicon(s.shape)}<span>${WHOLE[s.shape]}</span></p>` : ''}
-                <div class="rf-g3">${dims}
-                    <label class="rf-f"><span>Pitch</span><select class="inv-input" data-s="pitch" data-i="${i}">${pitchOpts(s.pitch)}</select></label>
-                    <label class="rf-f"><span>How many like this</span><select class="inv-input" data-s="n" data-i="${i}">${[1, 2, 3, 4, 5, 6, 8, 10].map(n => `<option value="${n}"${+s.n === n ? ' selected' : ''}>x ${n}</option>`).join('')}</select></label></div>
-                ${WHOLE[s.shape] ? '' : `<div class="rf-seg sm" role="group" aria-label="Measured">${[['slope', 'Measured on the roof'], ['plan', 'From a plan / the ground']].map(m => `<button type="button" data-rf="meas" data-i="${i}" data-v="${m[0]}" aria-pressed="${s.meas === m[0]}">${m[1]}</button>`).join('')}</div>`}
-            </div>`;
-        }).join('');
-        el.setAttribute('data-sig', job.sections.map(s => s.id + s.shape + s.meas).join());
+    el.innerHTML = job.sections.map((s, i) => {
+        const a = c.secs[i], S = SHAPES[s.shape] || SHAPES.rect;
+        return `<div class="rf-srow" data-rf="editsec" data-i="${i}" role="button" tabindex="0">
+            <span class="rf-sic-w">${sicon(s.shape)}</span>
+            <span class="rf-srt"><b>${h(s.name)}</b><small>${h(S[0])}${+s.n > 1 ? ' x ' + (+s.n) : ''} · ${h(dimText(s))} · ${s.pitch > 0 ? s.pitch + '/12' : 'flat'}</small></span>
+            <span class="rf-sra">${a > 0 ? num1(a) + '<small>sq ft</small>' : '<small>no size yet</small>'}</span>
+            <span class="rf-ib" aria-hidden="true"><i class="fas fa-pen"></i></span></div>`;
+    }).join('') || '<p class="rf-note" style="margin:0 0 4px;">No roof sections yet. Tap Add a section and give it a shape and its sizes.</p>';
+}
+function dimText(s) {
+    const S = SHAPES[s.shape] || SHAPES.rect;
+    if (s.shape === 'area') return (N(s.a) > 0 ? num1(N(s.a)) + ' sq ft' : 'no area yet');
+    const v = [s.a, s.b, s.c].filter((x, k) => S[k + 1] && String(x || '').trim());
+    return v.length ? v.join(' x ') + ' ft' : 'no sizes yet';
+}
+/* ---------------- one section at a time, on a screen of its own that needs no scrolling ---------------- */
+let secEd = null;
+function openSecEditor(i) {
+    closeSecEditor();
+    const isNew = i < 0;
+    if (isNew) { job.sections.push(newSection(job.sections.length + 1)); i = job.sections.length - 1; }
+    const ov = document.createElement('div'); ov.className = 'rf-ed'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Roof section');
+    ov.innerHTML = `<div class="rf-ed-card">
+        <div class="rf-ed-top"><button type="button" class="rf-ib" data-se="back" aria-label="Back"><i class="fas fa-arrow-left"></i></button>
+            <input class="rf-ed-name" data-se="name" maxlength="40" aria-label="Section name">
+            <b class="rf-ed-area" id="rf-ed-area"></b>
+            <button type="button" class="rf-ib del" data-se="del" aria-label="Delete this section" title="Delete this section"><i class="fas fa-trash"></i></button></div>
+        <div class="rf-ed-body" id="rf-ed-body"></div>
+        <div class="rf-ed-foot"><button type="button" class="app-btn" data-se="clear"><i class="fas fa-eraser mr-2"></i>Clear</button>
+            <button type="button" class="app-btn" data-se="another"><i class="fas fa-plus mr-2"></i>Add another</button>
+            <button type="button" class="app-btn rf-main" data-se="done"><i class="fas fa-check mr-2"></i>Done</button></div></div>`;
+    document.body.appendChild(ov);
+    document.documentElement.classList.add('rf-ed-open');
+    secEd = { ov: ov, i: i, wasNew: isNew };
+    paintSecEditor();
+    requestAnimationFrame(() => ov.classList.add('on'));
+    ov.addEventListener('click', onSecClick);
+    ov.addEventListener('input', onSecInput);
+    ov.addEventListener('change', onSecChange);
+    document.addEventListener('keydown', secKeys, true);
+}
+function closeSecEditor() {
+    if (!secEd) return;
+    const o = secEd; secEd = null;
+    document.removeEventListener('keydown', secKeys, true);
+    document.documentElement.classList.remove('rf-ed-open');
+    o.ov.classList.remove('on');
+    setTimeout(() => { if (o.ov.parentNode) o.ov.parentNode.removeChild(o.ov); }, 220);
+}
+function secKeys(e) { if (e.key === 'Escape' && secEd) { e.preventDefault(); e.stopPropagation(); finishSec(); } }
+function dropEmpty() {                                                    // a section you never filled in does not stay behind
+    if (!secEd) return;
+    const s = job.sections[secEd.i];
+    if (s && shapeArea(s) <= 0) job.sections.splice(secEd.i, 1);
+}
+function finishSec() { dropEmpty(); closeSecEditor(); keep(); paintAll(); }
+function delSec() {                                                       // the little bin at the top: this section goes
+    if (!secEd) return;
+    const i = secEd.i; job.sections.splice(i, 1);
+    closeSecEditor(); keep(); paintAll();
+}
+function paintSecEditor() {
+    if (!secEd) return;
+    const s = job.sections[secEd.i]; if (!s) { closeSecEditor(); return; }
+    const S = SHAPES[s.shape] || SHAPES.rect, body = secEd.ov.querySelector('#rf-ed-body');
+    const nm = secEd.ov.querySelector('[data-se="name"]'); if (document.activeElement !== nm) nm.value = s.name;
+    const fld = (k, lab, dec) => `<label class="rf-f"><span>${lab} (ft)</span><input class="inv-input" data-se="dim" data-k="${k}" inputmode="${dec ? 'decimal' : 'text'}" value="${h(s[k])}" placeholder="0"></label>`;
+    const dims = s.shape === 'area'
+        ? `<label class="rf-f"><span>${S[1]}</span><input class="inv-input" data-se="dim" data-k="a" inputmode="decimal" value="${h(s.a)}" placeholder="0"></label>`
+        : fld('a', S[1]) + (S[2] ? fld('b', S[2]) : '') + (S[3] ? fld('c', S[3]) : '');
+    body.innerHTML = `<div class="rf-shapes" role="group" aria-label="Shape">${Object.keys(SHAPES).map(k => `<button type="button" data-se="shape" data-v="${k}" aria-pressed="${s.shape === k}" title="${SHAPES[k][0]}">${sicon(k)}<span>${SHAPES[k][0]}</span></button>`).join('')}</div>
+        ${WHOLE[s.shape] ? `<p class="rf-shelp">${sicon(s.shape)}<span>${WHOLE[s.shape]}</span></p>` : ''}
+        <div class="rf-g3">${dims}
+            <label class="rf-f"><span>Pitch</span><select class="inv-input" data-se="pitch">${pitchOpts(s.pitch)}</select></label>
+            <label class="rf-f"><span>How many like this</span><select class="inv-input" data-se="n">${[1, 2, 3, 4, 5, 6, 8, 10].map(n => `<option value="${n}"${+s.n === n ? ' selected' : ''}>x ${n}</option>`).join('')}</select></label></div>
+        ${WHOLE[s.shape] ? '' : `<div class="rf-seg sm" role="group" aria-label="Measured">${[['slope', 'Measured on the roof'], ['plan', 'From a plan / the ground']].map(m => `<button type="button" data-se="meas" data-v="${m[0]}" aria-pressed="${s.meas === m[0]}">${m[1]}</button>`).join('')}</div>`}`;
+    paintSecArea();
+}
+function paintSecArea() {
+    if (!secEd) return;
+    const s = job.sections[secEd.i], e = secEd.ov.querySelector('#rf-ed-area'); if (!s || !e) return;
+    const base = shapeArea(s), a = secArea(s), extra = (s.meas === 'plan' || isWhole(s)) && base > 0 ? ' (x' + pitchF(s.pitch).toFixed(3) + ')' : '';
+    e.innerHTML = a > 0 ? num1(a) + ' <small>sq ft' + extra + '</small>' : '';
+}
+function onSecInput(e) {
+    if (!secEd) return; const t = e.target, s = job.sections[secEd.i]; if (!s) return;
+    if (t.getAttribute('data-se') === 'dim') { s[t.getAttribute('data-k')] = t.value; keep(); paintSecArea(); }
+    else if (t.getAttribute('data-se') === 'name') { s.name = t.value; keep(); }
+}
+function onSecChange(e) {
+    if (!secEd) return; const t = e.target, s = job.sections[secEd.i], a = t.getAttribute('data-se'); if (!s) return;
+    if (a === 'pitch' || a === 'n') { s[a] = +t.value; keep(); paintSecArea(); }
+}
+function onSecClick(e) {
+    if (!secEd) return;
+    const b = e.target.closest('[data-se]'); if (!b) return;
+    const a = b.getAttribute('data-se'), s = job.sections[secEd.i];
+    if (a === 'shape') { s.shape = b.getAttribute('data-v'); keep(); paintSecEditor(); }
+    else if (a === 'meas') { s.meas = b.getAttribute('data-v'); keep(); paintSecEditor(); }
+    else if (a === 'clear') { s.a = ''; s.b = ''; s.c = ''; s.n = 1; keep(); paintSecEditor(); }
+    else if (a === 'back' || a === 'done') finishSec();
+    else if (a === 'del') delSec();
+    else if (a === 'another') {
+        if (shapeArea(s) <= 0) { toast('Give this one its sizes first', 'info'); return; }
+        closeSecEditor(); keep(); paintAll();
+        setTimeout(() => openSecEditor(-1), 180);
     }
-    job.sections.forEach((s, i) => {
-        const b = $('rf-sa-' + i); if (!b) return;
-        const base = shapeArea(s), a = c.secs[i], extra = (s.meas === 'plan' || isWhole(s)) && base > 0 ? ' (x' + pitchF(s.pitch).toFixed(3) + ' pitch)' : '';
-        b.textContent = a > 0 ? num1(a) + ' sq ft' + extra : '';
-    });
 }
 function paintLines(c) {
     const el = $('rf-linegrid'); if (!el) return;
@@ -23418,11 +23770,10 @@ function onChange(e) {
 async function onClick(e) {
     const b = e.target.closest('[data-rf]'); if (!b) return;
     const a = b.getAttribute('data-rf'), i = +b.getAttribute('data-i');
-    if (a === 'addsec') { job.sections.push(newSection(job.sections.length + 1)); keep(); paintAll(); setTimeout(() => { const x = document.querySelector('#rf-seclist .rf-sec:last-child [data-s="a"]'); if (x) { x.scrollIntoView({ block: 'center', behavior: 'smooth' }); try { x.focus({ preventScroll: true }); } catch (er) { /* ignore */ } } }, 60); }
+    if (a === 'addsec') openSecEditor(-1);
+    else if (a === 'editsec') openSecEditor(i);
     else if (a === 'dup') { const s = clone(job.sections[i]); s.id = uid('s'); s.name = (s.name || 'Section') + ' (copy)'; job.sections.splice(i + 1, 0, s); keep(); paintAll(); }
-    else if (a === 'delsec') { if (job.sections.length === 1) { job.sections = [newSection(1)]; } else job.sections.splice(i, 1); keep(); paintAll(); }
-    else if (a === 'shape') { const s = job.sections[i]; s.shape = b.getAttribute('data-v'); keep(); paintAll(); }
-    else if (a === 'meas') { job.sections[i].meas = b.getAttribute('data-v'); keep(); paintAll(); }
+    else if (a === 'delsec') { job.sections.splice(i, 1); keep(); paintAll(); }
     else if (a === 'autoqty') { delete job.qty[b.getAttribute('data-id')]; keep(); paintOut(calc()); }
     else if (a === 'addex') { const k = b.getAttribute('data-k'); job.extra.push({ id: uid('x'), kind: k, name: k === 'lab' ? 'Extra labour' : 'Extra material', qty: 1, unit: k === 'lab' ? 'hour' : 'piece', price: 0 }); keep(); paintOut(calc()); setTimeout(() => { const x = document.querySelectorAll('#rf-out .rf-exn'); const last = Array.from(x).filter(el => job.extra[+el.getAttribute('data-i')] && job.extra[+el.getAttribute('data-i')].kind === k).pop(); if (last) { try { last.focus(); last.select(); } catch (er) { /* ignore */ } } }, 40); }
     else if (a === 'delex') { job.extra.splice(i, 1); keep(); paintOut(calc()); }
@@ -23435,7 +23786,7 @@ async function onClick(e) {
     else if (a === 'open') { const s = (sget('roofJobs', []) || []).find(x => x.id === b.getAttribute('data-id')); if (!s) return; job = Object.assign(newJob(), clone(s.job), { id: s.id, snap: s.prices ? clone(s.prices) : null }); keep(); resetDom(); paintAll(); window.scrollTo({ top: 0, behavior: 'smooth' }); toast('Estimate opened', 'success'); }
     else if (a === 'delsaved') { const id = b.getAttribute('data-id'); const ok = await ask({ title: 'Delete this estimate?', message: 'The saved estimate is removed. Quotes made from it stay.', type: 'danger', confirmText: 'Delete', cancelText: 'Keep' }); if (!ok) return; sset('roofJobs', (sget('roofJobs', []) || []).filter(x => x.id !== id)); if (job.id === id) { job.id = null; keep(); } paintAll(); toast('Estimate deleted', 'info'); }
 }
-function resetDom() { const l = $('rf-linegrid'); if (l) l.innerHTML = ''; const s = $('rf-seclist'); if (s) s.removeAttribute('data-sig'); }
+function resetDom() { closeSecEditor(); const l = $('rf-linegrid'); if (l) l.innerHTML = ''; const s = $('rf-seclist'); if (s) { s.removeAttribute('data-sig'); s.innerHTML = ''; } }
 function openSettings() {
     showPage('settings');
     setTimeout(() => { const sec = $('roof-settings-section'); if (!sec) return; const hd = sec.querySelector(':scope > .acc-head'); if (hd && !sec.classList.contains('acc-open')) hd.click(); else sec.scrollIntoView({ behavior: 'smooth' }); }, 700);
@@ -23602,6 +23953,28 @@ const css = `
 .rf-f .inv-input { width: 100%; min-width: 0; box-sizing: border-box; }
 .rf-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .rf-help { margin-top: 12px; font-size: .84rem; color: rgba(255,255,255,.78); } .rf-help summary { cursor: pointer; font-weight: 600; color: rgb(var(--lav)); } .rf-help p { margin: 8px 0 0; line-height: 1.45; }
+.rf-srow { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 30px; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); margin-bottom: 8px; cursor: pointer; text-align: left; }
+.rf-srow:active { transform: scale(.995); } .rf-sic-w { display: flex; color: #7dd3fc; } .rf-sic-w .rf-sic { width: 30px; height: 30px; }
+.rf-srt { min-width: 0; } .rf-srt b { display: block; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .rf-srt small { display: block; font-size: .73rem; color: rgba(255,255,255,.62); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-sra { font-weight: 800; font-size: .95rem; color: #7dd3fc; white-space: nowrap; } .rf-sra small { font-size: .66rem; font-weight: 600; opacity: .8; margin-left: 3px; }
+.rf-srow .rf-ib { width: 30px; height: 30px; border: 0; background: transparent; color: rgba(255,255,255,.55); font-size: 12px; }
+.rf-addsec { width: 100%; justify-content: center; font-weight: 700; }
+html.rf-ed-open, html.rf-ed-open body { overflow: hidden !important; }
+.rf-ed { position: fixed; inset: 0; z-index: 10400; display: flex; align-items: flex-end; justify-content: center; background: rgba(4,2,12,.6); opacity: 0; transition: opacity .2s ease; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+.rf-ed.on { opacity: 1; }
+.rf-ed-card { width: min(560px, 100%); max-height: 100%; height: 100%; display: flex; flex-direction: column; background: rgb(var(--panel, 28, 18, 58)); color: #fff; font-family: var(--font, inherit); transform: translateY(14px); transition: transform .22s ease; }
+.rf-ed.on .rf-ed-card { transform: none; }
+.rf-ed-top { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px; border-bottom: 1px solid rgba(255,255,255,.1); flex: none; }
+.rf-ed-name { flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.25); color: inherit; font: 700 1.02rem var(--font, inherit); padding: 5px 2px; }
+.rf-ed-top .rf-ib.del { flex: none; }
+.rf-ed-area { color: #7dd3fc; white-space: nowrap; font-size: 1rem; } .rf-ed-area small { font-size: .68rem; opacity: .85; }
+.rf-ed-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+.rf-ed-foot { flex: none; display: flex; gap: 8px; padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px); border-top: 1px solid rgba(255,255,255,.1); }
+.rf-ed-foot .app-btn { flex: 1 1 0; justify-content: center; min-width: 0; padding: 12px 4px !important; font-size: .8rem; white-space: nowrap; }
+.rf-ed-foot .rf-main { background: linear-gradient(135deg, rgb(var(--pr4)), rgb(var(--acc2))) !important; color: #fff !important; border-color: transparent !important; font-weight: 700; }
+html.lm .rf-ed-card { background: #fff; color: #1e1b4b; } html.lm .rf-ed-name { color: #1e1b4b; } html.lm .rf-ed-area, html.lm .rf-sra, html.lm .rf-sic-w { color: #0369a1; }
+html.lm .rf-srow { background: rgba(124,58,237,.05); border-color: rgba(124,58,237,.18); } html.lm .rf-srt small { color: #475569; }
+@media (max-height: 700px) { .rf-ed-body { gap: 9px; padding: 9px 12px; } .rf-shapes button { padding: 5px 2px 4px; font-size: .6rem; } .rf-sic { width: 20px; height: 20px; } }
 .rf-sec { padding: 12px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
 .rf-sh { display: flex; align-items: center; gap: 8px; } .rf-sname { flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.25); color: inherit; font: 700 1rem var(--font, inherit); padding: 4px 2px; }
 .rf-sa { font-size: .8rem; color: #7dd3fc; white-space: nowrap; }
@@ -23795,6 +24168,101 @@ window.IncInk = { run: run, active: active, bright: bright, bright_list: BRIGHT,
 })();
 
 </script>
+<script id="incator-loading">
+/* The IncAtor orb with a quiet ring of light, shown only when something really does take a moment:
+   a page that is not ready yet, or Google Drive sorting itself out in the background.
+   It never appears for a quick change, so you only ever see it when there is genuinely something to wait for. */
+(function () {
+'use strict';
+if (window.IncWait) return;
+var el = null, shown = 0, holds = {}, offT = 0, deadT = {};
+function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
+function logo() { var v = S('homeLogo', ''); return typeof v === 'string' && v.indexOf('data:image/') === 0 ? v : ''; }
+function build() {
+    if (el) return el;
+    el = document.createElement('div'); el.id = 'inc-wait'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<div class="iw-box"><div class="iw-orb"><i class="iw-ring"></i><i class="iw-ring r2"></i><span class="iw-face"></span></div><p class="iw-t"></p></div>';
+    document.body.appendChild(el);
+    return el;
+}
+function paintFace() {
+    var f = el && el.querySelector('.iw-face'); if (!f) return;
+    var u = logo();
+    f.innerHTML = u ? '<img alt="" src="' + u + '">' : '<i class="fas fa-coins"></i>';
+}
+function show(key, text) {
+    holds[key] = text || 'Just a moment...';
+    clearTimeout(offT);
+    build(); paintFace();
+    el.querySelector('.iw-t').textContent = holds[key];
+    if (!shown) { shown = Date.now(); el.classList.add('on'); document.documentElement.classList.add('iw-on'); }
+    clearTimeout(deadT[key] || 0);
+    deadT[key] = setTimeout(function () { hide(key); }, 6000);        // whatever happens, it never stays on screen
+}
+function hide(key) {
+    delete holds[key]; clearTimeout(deadT[key] || 0); delete deadT[key];
+    if (Object.keys(holds).length) { if (el) el.querySelector('.iw-t').textContent = holds[Object.keys(holds)[0]]; return; }
+    if (!el || !shown) { shown = 0; return; }
+    var left = Math.max(0, 260 - (Date.now() - shown));                   // never a flash: once it is up it stays up a moment
+    clearTimeout(offT);
+    offT = setTimeout(function () { shown = 0; el.classList.remove('on'); document.documentElement.classList.remove('iw-on'); }, left);
+}
+/* A page is only covered when it has already proved slow. IncAtor times how long each page takes to put itself
+   together the first time you open it; from then on, that page gets the orb while it gets ready, and a page that
+   opens quickly is never covered, so you only ever see this when there is really something to wait for. */
+var cost = {}, SLOW = 330, t0 = 0, cur = null, want = '', hooked = false;
+function pageNow() { try { return document.body.getAttribute('data-pg') || ''; } catch (e) { return ''; } }
+function afterPaint(fn) { requestAnimationFrame(function () { requestAnimationFrame(fn); }); }
+function onSwitch() {                                                 // the new page is now the one on screen
+    var pg = pageNow(); if (pg === cur) return;
+    cur = pg; t0 = Date.now();
+    afterPaint(function () {
+        var took = Date.now() - t0;                                   // how long this page took to draw itself
+        if (cost[pg] === undefined || took > cost[pg]) cost[pg] = took;
+        if (want === pg) { want = ''; setTimeout(function () { hide('page'); }, 60); }
+    });
+}
+function hookPages() {
+    var orig = window.showPage;
+    if (hooked || typeof orig !== 'function') return false;
+    hooked = true;
+    window.showPage = function (id) {
+        if (cost[id] > SLOW && pageNow() !== id) { want = id; show('page', 'Opening...'); }   // this one took a while last time
+        var out;
+        try { out = orig.apply(this, arguments); } catch (e) { want = ''; hide('page'); throw e; }
+        if (want === id && pageNow() === id) { want = ''; afterPaint(function () { hide('page'); }); }
+        return out;
+    };
+    return true;
+}
+function watchPage() {
+    cur = pageNow();
+    try { new MutationObserver(onSwitch).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+    if (!hookPages()) { var n = 0, iv = setInterval(function () { if (hookPages() || ++n > 60) clearInterval(iv); }, 120); }
+}
+var css = document.createElement('style'); css.id = 'inc-wait-css';
+css.textContent = [
+    '#inc-wait { position: fixed; inset: 0; z-index: 10500; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; background: rgba(5,3,14,.55); transition: opacity .22s ease, visibility 0s linear .22s; }',
+    // the blur only exists while it is on screen, so it costs nothing the rest of the time
+    '#inc-wait.on { opacity: 1; visibility: visible; transition: opacity .22s ease; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }',   // it never swallows a tap: it only tells you something is happening
+    '.iw-box { display: flex; flex-direction: column; align-items: center; gap: 14px; }',
+    '.iw-orb { position: relative; width: 92px; height: 92px; display: flex; align-items: center; justify-content: center; }',
+    '.iw-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; border-top-color: rgb(var(--pr2, 167, 139, 250)); border-right-color: rgba(var(--acc, 34, 211, 238), .6); will-change: transform; backface-visibility: hidden; animation: iwSpin 1.15s linear infinite; }',
+    '.iw-ring.r2 { inset: 11px; border-top-color: rgba(var(--acc, 34, 211, 238), .75); border-right-color: transparent; border-left-color: rgba(var(--pr, 139, 92, 246), .5); animation-duration: 1.8s; animation-direction: reverse; }',
+    '.iw-face { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 23px; color: #fff; background: linear-gradient(140deg, rgb(var(--pr4, 124, 58, 237)), rgb(var(--ind2, 79, 70, 229))); box-shadow: 0 0 26px rgba(var(--pr, 139, 92, 246), .55); will-change: transform; animation: iwPulse 2.1s ease-in-out infinite alternate; }',
+    '.iw-face img { width: 100%; height: 100%; object-fit: cover; }',
+    '.iw-t { margin: 0; font: 600 .88rem var(--font, inherit); color: rgba(255,255,255,.85); text-shadow: 0 1px 6px rgba(0,0,0,.5); }',
+    '@keyframes iwSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }',
+    '@keyframes iwPulse { from { transform: scale(1); } to { transform: scale(1.06); } }',
+    'html.lm #inc-wait { background: rgba(245,243,255,.6); } html.lm .iw-t { color: #312e81; text-shadow: none; }'
+].join('\n');
+document.head.appendChild(css);
+function boot() { watchPage(); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+window.IncWait = { show: show, hide: hide, showing: function () { return !!shown; }, cost: function () { return cost; }, slowFrom: SLOW, hooked: function () { return hooked; } };
+})();
+
+</script>
 <script id="incator-perf">
 /* Smooth scrolling: keeps the work the browser does while you scroll as small as possible.
    - Cards far off screen are not drawn until you get near them (long lists of entries scroll like short ones).
@@ -23833,6 +24301,10 @@ var css = [
     '.fa-gift { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Crect%20x=%223%22%20y=%228%22%20width=%2218%22%20height=%224%22%20rx=%221%22/%3E%3Cpath%20d=%22M12%208v13M19%2012v7a2%202%200%200%201-2%202H7a2%202%200%200%201-2-2v-7M7.5%208a2.5%202.5%200%200%201%200-5C11%203%2012%208%2012%208s1-5%204.5-5a2.5%202.5%200%200%201%200%205%22/%3E%3C/svg%3E"); }',
     '.fa-moon { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Cpath%20d=%22M12%203a6%206%200%200%200%209%209%209%209%200%201%201-9-9Z%22/%3E%3C/svg%3E"); }',
     '.fa-lightbulb { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Cpath%20d=%22M15%2014c.2-1%20.7-1.7%201.5-2.5A6%206%200%201%200%206%208c0%201%20.2%202.2%201.5%203.5.7.7%201.3%201.5%201.5%202.5%22/%3E%3Cpath%20d=%22M9%2018h6M10%2022h4%22/%3E%3C/svg%3E"); }',
+    '.fa-eye-slash { --ic: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M9.9%204.24A9.12%209.12%200%200%201%2012%204c7%200%2011%208%2011%208a18.5%2018.5%200%200%201-2.16%203.19%27%2F%3E%3Cpath%20d%3D%27M6.61%206.61A18.15%2018.15%200%200%200%201%2012s4%208%2011%208a9.12%209.12%200%200%200%205.39-1.61%27%2F%3E%3Cpath%20d%3D%27M14.12%2014.12a3%203%200%201%201-4.24-4.24%27%2F%3E%3Cline%20x1%3D%271%27%20y1%3D%271%27%20x2%3D%2723%27%20y2%3D%2723%27%2F%3E%3C%2Fsvg%3E") }',
+    '.fa-ruler-combined { --ic: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M3%203h7v7H3z%27%2F%3E%3Cpath%20d%3D%27M10%2010h11v11H10z%27%2F%3E%3Cpath%20d%3D%27M3%206h3M3%209h2M13%2010v3M16%2010v2M19%2010v3M13%2013h-3M13%2016h-2M13%2019h-3%27%2F%3E%3C%2Fsvg%3E") }',
+    '.fa-draw-polygon { --ic: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M4%205l8-2%208%206-4%2010H7z%27%2F%3E%3Ccircle%20cx%3D%274%27%20cy%3D%275%27%20r%3D%271.6%27%2F%3E%3Ccircle%20cx%3D%2712%27%20cy%3D%273%27%20r%3D%271.6%27%2F%3E%3Ccircle%20cx%3D%2720%27%20cy%3D%279%27%20r%3D%271.6%27%2F%3E%3Ccircle%20cx%3D%2716%27%20cy%3D%2719%27%20r%3D%271.6%27%2F%3E%3Ccircle%20cx%3D%277%27%20cy%3D%2719%27%20r%3D%271.6%27%2F%3E%3C%2Fsvg%3E") }',
+    '.fa-hand-holding-usd { --ic: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M2%2016s3-2%206-2h4a1.8%201.8%200%200%200%200-3.6H9.5%27%2F%3E%3Cpath%20d%3D%27M12%2014.4l7.2-2.5a1.8%201.8%200%200%201%201.4%203.3L13%2020H2%27%2F%3E%3Cpath%20d%3D%27M12%202v7M14%203.4h-2.7a1.3%201.3%200%200%200%200%202.6h1.4a1.3%201.3%200%200%201%200%202.6H10%27%2F%3E%3C%2Fsvg%3E") }',
     '.fa-pause-circle { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Ccircle%20cx=%2212%22%20cy=%2212%22%20r=%2210%22/%3E%3Cpath%20d=%22M10%2015V9M14%2015V9%22/%3E%3C/svg%3E"); }',
     '.fa-music { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Cpath%20d=%22M9%2018V5l12-2v13%22/%3E%3Ccircle%20cx=%226%22%20cy=%2218%22%20r=%223%22/%3E%3Ccircle%20cx=%2218%22%20cy=%2216%22%20r=%223%22/%3E%3C/svg%3E"); }',
     '.fa-volume-up { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Cpath%20d=%22M11%205%206%209H2v6h4l5%204V5z%22/%3E%3Cpath%20d=%22M15.5%208.5a5%205%200%200%201%200%207M19%205a10%2010%200%200%201%200%2014%22/%3E%3C/svg%3E"); }',
@@ -23868,7 +24340,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.10.24 (v17)';
+var VERSION = '2026.10.29 (v18)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
