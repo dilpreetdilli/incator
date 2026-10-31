@@ -1,38 +1,16 @@
-// Shiftora helper file (sw.js). Upload it next to index.html, in the same folder.
-// It shows Shiftora alerts on your phone as real notifications, even when the app is closed.
-// It stores nothing and only talks to your phone's own notification system.
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-
-// An alert arrives from the push-alerts function (already decrypted by the phone)
-self.addEventListener('push', (e) => {
-  let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Shiftora', body: e.data ? e.data.text() : '' }; }
-  const title = d.title || 'Shiftora';
-  e.waitUntil((async () => {
-    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    wins.forEach((w) => w.postMessage({ alert: d }));           // an open app refreshes its bell at once
-    try { if (self.navigator.setAppBadge && typeof d.unread === 'number') await self.navigator.setAppBadge(d.unread); } catch { /* optional */ }
-    await self.registration.showNotification(title, {
-      body: d.body || '', tag: d.id || undefined, icon: 'app-icon.png', badge: 'app-icon.png',
-      timestamp: Date.now(), data: { link: d.link || 'admin/notifications' },
-    });
-  })());
+/* IncAtor service worker: lets the app open instantly and when offline. Your data is never touched (it lives in the browser / your Google Drive). */
+var CACHE = 'incator-v20';
+self.addEventListener('install', function (e) { self.skipWaiting(); });
+self.addEventListener('activate', function (e) {
+  e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); }));
 });
-
-// Tapping an alert opens Shiftora on the right page
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  const link = (e.notification.data && e.notification.data.link) || 'admin/notifications';
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-    for (const c of list) {
-      if ('focus' in c) { c.postMessage({ go: link }); return c.focus(); }
-    }
-    return self.clients.openWindow(new URL('./#/' + link, self.registration.scope).href);
-  }));
-});
-
-// The browser renewed this phone's push address: tell the app to save the new one next time it opens
-self.addEventListener('pushsubscriptionchange', (e) => {
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => list.forEach((c) => c.postMessage({ resubscribe: true }))));
+self.addEventListener('fetch', function (e) {
+  var r = e.request, u = new URL(r.url);
+  if (r.method !== 'GET') return;
+  if (/(^|\.)(google|googleapis|gstatic|googleusercontent)\.com$/.test(u.hostname) && !/fonts\./.test(u.hostname)) return;   // never cache sign-in or Drive traffic
+  // the page itself is always fetched fresh from GitHub (not from the browser's 10-minute cache), so an upload shows up right away
+  e.respondWith(
+    fetch(r.mode === 'navigate' || /\.html?$/.test(u.pathname) ? new Request(r.url, { cache: 'no-cache', credentials: 'same-origin' }) : r).then(function (res) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(r, copy); }); return res; })
+      .catch(function () { return caches.match(r).then(function (m) { return m || (r.mode === 'navigate' ? caches.match('./index.html') || caches.match('./') : undefined); }); })
+  );
 });
