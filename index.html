@@ -20423,7 +20423,8 @@ rcss.textContent = [
     '@keyframes rsTw2 { from { opacity: .09; } to { opacity: .75; } }',
     '@keyframes rsTw3 { from { opacity: .11; } to { opacity: .95; } }',
     '#inc-stars.rs-pause .rs { animation-play-state: paused; }',
-    '#inc-stars.rs-hold .rs { transform: translate3d(0, var(--y), 0); animation-name: rsTw2; animation-duration: var(--tw, 2s); animation-delay: var(--twd, 0s); animation-direction: alternate; animation-iteration-count: infinite; }',
+    /* each star keeps its own twinkle speed; !important because the rising speed is written on the star itself */
+    '#inc-stars.rs-hold .rs { transform: translate3d(0, var(--y), 0); animation-name: rsTw2; animation-duration: var(--tw, 2s) !important; animation-delay: var(--twd, 0s) !important; animation-direction: alternate !important; animation-iteration-count: infinite !important; animation-play-state: running; }',
     '#inc-stars.rs-hold .rs.a1 { animation-name: rsTw1; } #inc-stars.rs-hold .rs.a3 { animation-name: rsTw3; }',
     '#inc-stars.rs-hold .rs.e1 { animation-timing-function: ease-in-out; } #inc-stars.rs-hold .rs.e2 { animation-timing-function: cubic-bezier(.9,0,.1,1); } #inc-stars.rs-hold .rs.e3 { animation-timing-function: cubic-bezier(.3,0,.7,1); }',
     '#inc-stars.still .rs { animation: none; transform: translate3d(0, var(--y), 0); opacity: .7; }',
@@ -24648,7 +24649,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.10.30 (v20)';
+var VERSION = '2026.11.01 (v21)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
