@@ -10925,12 +10925,11 @@ bootstrap();
             if (!appSettings.worksafeNumber) missing.push('WorkSafe account number');
             if (!appSettings.gstNumber) missing.push('GST number');
 
-            openPrintModal({
+            invMark = group.some(e => !e.invoiced);
+            openInvoicePage({
                 title: `Invoice ${invoiceNo}${group.length > 1 ? ` (${group.length} jobs)` : ''}`,
-                html: '',
-                isInvoice: true,
                 warning: missing.length ? `Not set yet in Settings: ${missing.join(', ')}. They will be left out of the invoice.` : '',
-                markOption: group.some(e => !e.invoiced),
+                markOption: invMark,
                 validate: validateInvoiceForm,
                 onPrint: finalizeInvoice
             });
@@ -10955,11 +10954,12 @@ bootstrap();
         function readInvoiceForm() {
             const serviceDates = {};
             document.querySelectorAll('#inv-service-rows .inv-svc').forEach(i => { serviceDates[i.dataset.id] = i.value; });
+            const g = id => document.getElementById(id) || {};
             return {
-                invoiceDate: document.getElementById('inv-date').value,
-                billTo: document.getElementById('inv-billto').value.trim(),
-                notes: document.getElementById('inv-notes').value.trim(),
-                includeJobNotes: document.getElementById('inv-include-jobnotes').checked && invoiceGroupFromCtx().some(e => e.notes),
+                invoiceDate: g('inv-date').value || '',
+                billTo: (g('inv-billto').value || '').trim(),
+                notes: (g('inv-notes').value || '').trim(),
+                includeJobNotes: !!g('inv-include-jobnotes').checked && invoiceGroupFromCtx().some(e => e.notes),
                 serviceDates
             };
         }
@@ -10968,7 +10968,50 @@ bootstrap();
             return invCtx ? invCtx.ids.map(id => entries.find(e => e.id === id)).filter(Boolean) : [];
         }
 
+        var invMark = false, invHome = null;
+        function openInvoicePage(o) {
+            printCtx = o;                                            // the same checks and the same finishing step as before
+            const form = document.getElementById('invoice-form'), mark = document.getElementById('print-mark-wrap');
+            const warn = document.getElementById('print-modal-warning');
+            form.style.display = 'block';
+            mark.style.display = o.markOption ? 'block' : 'none';
+            document.getElementById('print-mark-invoiced').checked = true;
+            warn.textContent = o.warning || ''; warn.style.display = o.warning ? 'block' : 'none';
+            if (!invHome) invHome = { form: form.parentNode, mark: mark.parentNode, warn: warn.parentNode };
+            const startGroup = invoiceGroupFromCtx(), startOpts = invoiceOpts();   // read while the form is still in the page
+            const box = document.createElement('div');
+            box.appendChild(warn); box.appendChild(form); box.appendChild(mark);
+            IncInvoice.open({
+                title: o.title, form: box,
+                group: startGroup, o: startOpts,
+                validate: o.validate,
+                onPrint: function () { if (o.onPrint) o.onPrint(!!o.markOption && document.getElementById('print-mark-invoiced').checked); },
+                onClose: function () {                               // hand the form back to the preview window it came from
+                    if (!invHome) return;
+                    invHome.warn.appendChild(warn); invHome.form.appendChild(form); invHome.mark.appendChild(mark);
+                    form.style.display = 'none'; mark.style.display = 'none'; warn.style.display = 'none';
+                    printCtx = null; invCtx = null;
+                }
+            });
+        }
+        function invoiceOpts() {
+            const v = readInvoiceForm();
+            return {
+                invoiceNo: invCtx ? invCtx.invoiceNo : '',
+                invoiceDate: v.invoiceDate || todayStr(),
+                dueDate: v.invoiceDate || todayStr(),
+                billTo: v.billTo,
+                notes: v.notes,
+                includeJobNotes: v.includeJobNotes,
+                serviceDates: v.serviceDates,
+                showServiceDate: !!appSettings.invoiceShowServiceDate
+            };
+        }
         function refreshInvoicePreview() {
+            if (invCtx && window.IncInvoice && IncInvoice.showing()) {
+                IncInvoice.update(invoiceGroupFromCtx(), invoiceOpts());
+                return;
+            }
             if (!invCtx || !printCtx) return;
             const v = readInvoiceForm();
             printCtx.html = buildInvoiceHtml(invoiceGroupFromCtx(), {
@@ -24572,7 +24615,252 @@ window.IncWait = { show: show, hide: hide, showing: function () { return !!shown
 })();
 
 </script>
-<script id="incator-perf">
+<script id="incator-invoice">
+/* The invoice sheet: a full page of its own with a close button, drawn at real A4 size.
+   It is part of the page rather than a little preview window inside one, which is what lets
+   Print work on a phone - a phone cannot print a preview window, only the page you are on. */
+(function () {
+'use strict';
+if (window.IncInvoice) return;
+var TEAL = '#35778c', TEAL_D = '#2d6578', TEAL_L = '#bfdcea';
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+function lines(t) { return esc(t || '').replace(/\n/g, '<br>'); }
+function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
+function money(v) { var c = S('currency', '$'); return c + (Math.round((+v || 0) * 100) / 100).toFixed(2); }
+function dt(d) { try { return formatDate(d); } catch (e) { return String(d || ''); } }
+
+/* ---------------------------------------------------------------- the sheet */
+function sheetHtml(group, o) {
+    var sum = function (k) { return Math.round(group.reduce(function (a, e) { return a + (+e[k] || 0); }, 0) * 100) / 100; };
+    var services = sum('amount'), extras = sum('extras'), sub = sum('baseAmount'), gst = sum('gst'), total = sum('total');
+    var rates = []; group.forEach(function (e) { var r = e.baseAmount > 0 ? Math.round((e.gst / e.baseAmount) * 1000) / 10 : +S('gstRate', 5); if (rates.indexOf(r) < 0) rates.push(r); });
+    var oneRate = rates.length === 1 ? rates[0] : null;
+    var allPaid = group.length > 0 && group.every(function (e) { return e.paid; });
+    var paidOn = allPaid ? group.map(function (e) { return e.paidDate || ''; }).sort().pop() : '';
+    var showSvc = !!o.showServiceDate;
+    var rowTax = function (e) { return e.baseAmount > 0 ? Math.round((e.gst / e.baseAmount) * 1000) / 10 : (oneRate == null ? 0 : oneRate); };
+
+    var rows = '', n = 0;
+    group.forEach(function (e) {
+        n++;
+        var svc = (o.serviceDates && o.serviceDates[e.id]) || e.invoiceServiceDate || e.date;
+        var desc = 'Services at ' + esc(e.address) + (showSvc ? '<small>' + esc(dt(svc)) + '</small>' : '');
+        rows += '<tr><td class="iv-it">Item ' + n + '</td><td class="iv-de">' + desc + '</td><td class="iv-c">1</td><td class="iv-r">' + money(e.amount) + '</td><td class="iv-c">' + rowTax(e) + '%</td><td class="iv-r">' + money(e.amount) + '</td></tr>';
+        var list = (e.extrasList && e.extrasList.length) ? e.extrasList : (e.extras > 0 ? [e.extras] : []);
+        list.forEach(function (v, k) {
+            n++;
+            rows += '<tr><td class="iv-it">Item ' + n + '</td><td class="iv-de">Additional service' + (list.length > 1 ? ' ' + (k + 1) : '') + '</td><td class="iv-c">1</td><td class="iv-r">' + money(v) + '</td><td class="iv-c">' + rowTax(e) + '%</td><td class="iv-r">' + money(v) + '</td></tr>';
+        });
+    });
+
+    var jobNotes = o.includeJobNotes ? group.filter(function (e) { return e.notes; }) : [];
+    var noteBody = '';
+    if (o.notes && o.notes.trim()) noteBody += '<p>' + lines(o.notes) + '</p>';
+    jobNotes.forEach(function (e) { noteBody += '<p><b>' + esc(e.address) + ':</b> ' + lines(e.notes) + '</p>'; });
+
+    var fine = [];
+    if (S('gstNumber', '')) fine.push('GST # ' + esc(S('gstNumber', '')));
+    if (S('worksafeNumber', '')) fine.push('WorkSafe # ' + esc(S('worksafeNumber', '')));
+
+    var logo = S('homeLogo', '');
+    var mark = (typeof logo === 'string' && logo.indexOf('data:image/') === 0)
+        ? '<img class="iv-logo" alt="" src="' + logo + '">'
+        : '<svg class="iv-logo" viewBox="0 0 48 48" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="24" cy="24" r="19"/><path d="M6 20h16M26 20h16M6 28h12M22 28h20"/><circle cx="24" cy="20" r="3.4" fill="#35778c"/><circle cx="20" cy="28" r="3.4" fill="#35778c"/></svg>';
+
+    return '' +
+    '<div class="iv-head">' +
+      '<div class="iv-brand">' + mark + '<div class="iv-word">Invoice</div></div>' +
+      '<div class="iv-from"><div class="iv-co">' + (esc(S('invoiceName', '') || S('userName', '')) || '&nbsp;') + '</div>' +
+        (S('myAddress', '') ? '<div class="iv-ad">' + lines(S('myAddress', '')) + '</div>' : '') + '</div>' +
+    '</div>' +
+    '<div class="iv-body">' +
+      '<div class="iv-meta">' +
+        '<div class="iv-bill"><div class="iv-lab">BILL TO:</div><div class="iv-who">' + (lines(o.billTo) || '&nbsp;') + '</div></div>' +
+        '<div class="iv-nums">' +
+          '<div class="iv-lab">INVOICE #</div><div class="iv-val">' + esc(o.invoiceNo) + '</div>' +
+          '<div class="iv-lab">DATE</div><div class="iv-val">' + esc(dt(o.invoiceDate)) + '</div>' +
+          (o.dueDate ? '<div class="iv-lab">INVOICE DUE DATE</div><div class="iv-val">' + esc(dt(o.dueDate)) + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<table class="iv-tb"><thead><tr><th>ITEMS</th><th>DESCRIPTION</th><th class="iv-c">QUANTITY</th><th class="iv-r">PRICE</th><th class="iv-c">TAX</th><th class="iv-r">AMOUNT</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="iv-adds">' +
+        (extras > 0 ? '<div class="iv-ar"><span>Services</span><span>' + money(services) + '</span></div><div class="iv-ar"><span>Additional services</span><span>' + money(extras) + '</span></div>' : '') +
+        '<div class="iv-ar"><span>Subtotal</span><span>' + money(sub) + '</span></div>' +
+        '<div class="iv-ar"><span>GST' + (oneRate != null ? ' (' + oneRate + '%)' : '') + '</span><span>' + money(gst) + '</span></div>' +
+      '</div>' +
+      (allPaid ? '<div class="iv-paid">PAID' + (paidOn ? ' &middot; ' + esc(dt(paidOn)) : '') + '</div>' : '') +
+    '</div>' +
+    '<div class="iv-bottom">' +
+      '<div class="iv-notes"><div class="iv-lab">NOTES:</div>' + (noteBody || '<p>&nbsp;</p>') + '</div>' +
+      '<div class="iv-total"><div class="iv-tlab">' + (allPaid ? 'TOTAL PAID' : 'TOTAL') + '</div><div class="iv-tval">' + money(total) + '</div></div>' +
+    '</div>' +
+    '<div class="iv-foot"><div class="iv-thanks">Thanks for your business!</div>' +
+      (fine.length ? '<div class="iv-fine">' + fine.join(' &middot; ') + '</div>' : '') + '</div>';
+}
+
+/* ---------------------------------------------------------------- the page it lives on */
+var CSS = [
+'#inv-page { position: fixed; inset: 0; z-index: 10600; display: none; flex-direction: column; background: #0d1326; }',
+'#inv-page.on { display: flex; }',
+'#inv-bar { flex: none; display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px; background: rgba(8,12,26,.96); border-bottom: 1px solid rgba(255,255,255,.1); color: #fff; }',
+'#inv-bar h3 { margin: 0; font: 700 1.02rem var(--font, inherit); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
+'#inv-bar button { flex: none; }',
+'#inv-x { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }',
+'#inv-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 16px 10px 24px; background: #0d1326; }',
+'#inv-form { color: #fff; }',
+'#inv-det { max-width: 820px; margin: 0 auto 14px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); overflow: hidden; }',
+'#inv-det > summary { list-style: none; cursor: pointer; padding: 12px 14px; font: 600 .95rem var(--font, inherit); color: #fff; display: flex; align-items: center; gap: 8px; }',
+'#inv-det > summary::-webkit-details-marker { display: none; }',
+'#inv-det > summary::after { content: "\\f078"; font-family: "Font Awesome 6 Free", "Font Awesome 5 Free"; font-weight: 900; margin-left: auto; font-size: .8rem; opacity: .8; transition: transform .2s ease; }',
+'#inv-det[open] > summary::after { transform: rotate(180deg); }',
+'#inv-det > div { padding: 0 14px 14px; }',
+'#inv-foot { flex: none; display: flex; gap: 8px; padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px); background: rgba(8,12,26,.96); border-top: 1px solid rgba(255,255,255,.1); }',
+'#inv-foot .app-btn { flex: 1 1 0; justify-content: center; min-width: 0; }',
+'#inv-form { max-width: 820px; margin: 0 auto 14px; }',
+/* the sheet: a real A4 page, 210mm x 297mm */
+'#inv-sheet { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; color: #333; box-shadow: 0 14px 50px rgba(0,0,0,.45); display: flex; flex-direction: column;',
+'  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; }',
+'#inv-zoom { margin: 0 auto; overflow: hidden; }',
+'#inv-sheet { transform-origin: top left; }',
+'#inv-sheet * { box-sizing: border-box; }',
+'#inv-sheet p { margin: 0 0 6px; }',
+'.iv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16mm; padding: 14mm 14mm 12mm; background: ' + TEAL + '; color: #fff; }',
+'.iv-brand { display: flex; flex-direction: column; gap: 6mm; }',
+'.iv-logo { width: 22mm; height: 22mm; display: block; object-fit: contain; border-radius: 50%; }',
+'.iv-word { font-size: 30pt; font-weight: 400; line-height: 1; letter-spacing: .5px; }',
+'.iv-from { text-align: right; }',
+'.iv-co { font-size: 15pt; font-weight: 700; }',
+'.iv-ad { margin-top: 3mm; font-size: 9pt; color: rgba(255,255,255,.88); line-height: 1.7; }',
+'.iv-body { flex: 1 1 auto; padding: 10mm 14mm 6mm; }',
+'.iv-meta { display: flex; justify-content: space-between; gap: 12mm; padding-bottom: 7mm; border-bottom: 1px solid #e3e8ec; }',
+'.iv-lab { font-size: 7.5pt; letter-spacing: .6px; color: #8a97a0; text-transform: uppercase; }',
+'.iv-who { margin-top: 1.5mm; font-size: 13pt; color: #2f3b44; line-height: 1.5; }',
+'.iv-nums { text-align: right; min-width: 45mm; }',
+'.iv-nums .iv-val { margin: 0 0 2.5mm; font-size: 10pt; color: #5b6872; }',
+'.iv-tb { width: 100%; border-collapse: collapse; margin-top: 7mm; }',
+'.iv-tb th { padding: 0 2mm 3mm; font-size: 7.5pt; font-weight: 400; letter-spacing: .6px; color: #8a97a0; text-align: left; border-bottom: 1px solid #e3e8ec; }',
+'.iv-tb td { padding: 3.6mm 2mm; font-size: 9.5pt; color: #5b6872; vertical-align: top; }',
+'.iv-tb tbody tr { page-break-inside: avoid; break-inside: avoid; }',
+'.iv-tb .iv-c { text-align: center; white-space: nowrap; }',
+'.iv-tb .iv-r { text-align: right; white-space: nowrap; }',
+'.iv-it { color: #6b7780; white-space: nowrap; }',
+'.iv-de small { display: block; margin-top: 1mm; font-size: 8pt; color: #93a0a8; }',
+'.iv-adds { margin: 6mm 0 0; margin-left: auto; width: 72mm; }',
+'.iv-ar { display: flex; justify-content: space-between; gap: 6mm; padding: 1.6mm 0; font-size: 9.5pt; color: #5b6872; }',
+'.iv-paid { margin-top: 6mm; display: inline-block; padding: 2mm 5mm; border: 2px solid #1f9d55; color: #1f9d55; border-radius: 2mm; font-weight: 700; letter-spacing: 1px; }',
+'.iv-bottom { display: flex; align-items: stretch; margin-top: auto; }',
+'.iv-notes { flex: 1 1 auto; padding: 8mm 10mm; background: ' + TEAL_L + '; color: #37474f; font-size: 9pt; }',
+'.iv-notes .iv-lab { color: #4f6b78; margin-bottom: 2mm; }',
+'.iv-total { flex: 0 0 62mm; padding: 8mm 10mm; background: ' + TEAL_D + '; color: #fff; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }',
+'.iv-tlab { font-size: 7.5pt; letter-spacing: .8px; color: rgba(255,255,255,.85); }',
+'.iv-tval { margin-top: 1.5mm; font-size: 21pt; font-weight: 700; line-height: 1.1; }',
+'.iv-foot { padding: 6mm 14mm 9mm; text-align: center; }',
+'.iv-thanks { font-size: 11pt; color: #4a5a63; }',
+'.iv-fine { margin-top: 2mm; font-size: 8pt; color: #93a0a8; }',
+/* printing: the whole app steps aside and only the sheet is put on the paper */
+'@page { size: A4; margin: 0; }',
+'@media print {',
+'  html.inv-printing, html.inv-printing body { background: #fff !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }',
+'  html.inv-printing body > * { display: none !important; }',
+'  html.inv-printing body > #inv-page { display: block !important; position: static !important; background: #fff !important; }',
+'  html.inv-printing #inv-bar, html.inv-printing #inv-foot, html.inv-printing #inv-form { display: none !important; }',
+'  html.inv-printing #inv-scroll { overflow: visible !important; padding: 0 !important; background: #fff !important; }',
+'  html.inv-printing #inv-zoom { transform: none !important; width: auto !important; height: auto !important; overflow: visible !important; }',
+'  html.inv-printing #inv-sheet { transform: none !important; }',
+'  html.inv-printing #inv-sheet { width: 210mm !important; min-height: 297mm !important; margin: 0 !important; box-shadow: none !important; }',
+'  html.inv-printing #inv-sheet, html.inv-printing #inv-sheet * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
+'}'
+].join('\n');
+
+var el = null, zoomEl = null, ctx = null, onClose = null;
+function build() {
+    if (el) return el;
+    var st = document.createElement('style'); st.id = 'inv-css'; st.textContent = CSS; document.head.appendChild(st);
+    el = document.createElement('div'); el.id = 'inv-page'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Invoice');
+    el.innerHTML = '<div id="inv-bar"><h3 id="inv-title">Invoice</h3>' +
+        '<button type="button" id="inv-x" aria-label="Close the invoice" title="Close"><i class="fas fa-times"></i></button></div>' +
+        '<div id="inv-scroll"><div id="inv-form"></div><div id="inv-zoom"><div id="inv-sheet"></div></div></div>' +
+        '<div id="inv-foot">' +
+        '<button type="button" class="app-btn" id="inv-settings"><i class="fas fa-cog mr-2"></i>Settings</button>' +
+        '<button type="button" class="app-btn rf-main" id="inv-print"><i class="fas fa-print mr-2"></i>Print / Save as PDF</button></div>';
+    document.body.appendChild(el);
+    el.querySelector('#inv-x').addEventListener('click', close);
+    el.querySelector('#inv-print').addEventListener('click', print);
+    el.querySelector('#inv-settings').addEventListener('click', function () { close(); try { showPage('settings'); } catch (e) { /* ignore */ } });
+    zoomEl = el.querySelector('#inv-zoom');
+    window.addEventListener('resize', fit);
+    return el;
+}
+function fit() {                                                      // an A4 page is wider than a phone: shrink the whole sheet to fit
+    if (!el || !el.classList.contains('on') || !zoomEl) return;
+    var box = el.querySelector('#inv-scroll'), sheet = el.querySelector('#inv-sheet');
+    if (!box || !sheet) return;
+    sheet.style.transform = 'none';
+    zoomEl.style.width = ''; zoomEl.style.height = '';
+    var cs = getComputedStyle(box);
+    var avail = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    var w = sheet.offsetWidth, hgt = sheet.offsetHeight;
+    if (!(w > 0) || !(avail > 0)) return;
+    var k = Math.min(1, avail / w);
+    sheet.style.transform = k < 1 ? 'scale(' + k + ')' : 'none';      // the box takes the shrunken size, so nothing hangs off the side
+    zoomEl.style.width = Math.floor(w * k) + 'px';
+    zoomEl.style.height = Math.ceil(hgt * k) + 'px';
+}
+function open(o) {
+    build();
+    ctx = o || {};
+    el.querySelector('#inv-title').textContent = ctx.title || 'Invoice';
+    var f = el.querySelector('#inv-form');
+    f.innerHTML = '';
+    if (ctx.form) {
+        var d = document.createElement('details'); d.id = 'inv-det';
+        var sm = document.createElement('summary'); sm.innerHTML = '<i class="fas fa-pen"></i> Invoice details';
+        var bd = document.createElement('div'); bd.appendChild(ctx.form);
+        d.appendChild(sm); d.appendChild(bd); f.appendChild(d);
+        d.addEventListener('toggle', function () { setTimeout(fit, 60); });
+        f.style.display = '';
+    } else f.style.display = 'none';
+    paint();
+    el.classList.add('on');
+    document.documentElement.classList.add('inv-open');
+    el.querySelector('#inv-scroll').scrollTop = 0;
+    requestAnimationFrame(fit); setTimeout(fit, 120); setTimeout(fit, 450);
+    document.addEventListener('keydown', keys, true);
+}
+function paint() {
+    if (!el || !ctx) return;
+    el.querySelector('#inv-sheet').innerHTML = sheetHtml(ctx.group || [], ctx.o || {});
+    requestAnimationFrame(fit);
+}
+function close() {
+    if (!el) return;
+    el.classList.remove('on');
+    document.documentElement.classList.remove('inv-open');
+    document.documentElement.classList.remove('inv-printing');        // never leave the print rules on: another page may be printed next
+    document.removeEventListener('keydown', keys, true);
+    var cb = onClose || (ctx && ctx.onClose); ctx = null; onClose = null;
+    if (cb) try { cb(); } catch (e) { /* ignore */ }
+}
+function keys(e) { if (e.key === 'Escape' && el && el.classList.contains('on')) { e.preventDefault(); e.stopPropagation(); close(); } }
+function print() {
+    if (!el) return;
+    if (ctx && ctx.validate && !ctx.validate()) return;
+    document.documentElement.classList.add('inv-printing');
+    var done = false, off = function () { if (done) return; done = true; document.documentElement.classList.remove('inv-printing'); };
+    try { window.addEventListener('afterprint', off, { once: true }); } catch (e) { /* ignore */ }
+    setTimeout(function () {                                          // give the phone a frame to lay the page out before the dialog opens
+        try { window.print(); } catch (e) { off(); try { showToast('This browser could not open the print dialog', 'error'); } catch (e2) { /* ignore */ } return; }
+        setTimeout(off, 60000);                                       // iOS does not always fire afterprint: clear it late rather than mid-dialog
+        try { window.addEventListener('focus', off, { once: true }); } catch (e4) { /* ignore */ }
+        if (ctx && ctx.onPrint) try { ctx.onPrint(); } catch (e3) { /* ignore */ }
+    }, 60);
+}
+function update(group, o) { if (!ctx) return; ctx.group = group || ctx.group; ctx.o = o || ctx.o; paint(); }
+window.IncInvoice = { open: open, close: close, paint: paint, update: update, html: sheetHtml, showing: function () { return !!(el && el.classList.contains('on')); }, fit: fit };
+})();
+
+</script>
+    <script id="incator-perf">
 /* Smooth scrolling: keeps the work the browser does while you scroll as small as possible.
    - Cards far off screen are not drawn until you get near them (long lists of entries scroll like short ones).
    - No blur inside a blur: cards already sit on a frosted panel, so they don't blur the background again.
@@ -24649,7 +24937,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.01 (v21)';
+var VERSION = '2026.11.05 (v22)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
