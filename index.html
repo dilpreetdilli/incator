@@ -5562,7 +5562,7 @@ setTimeout(wrap, 500);
                         <label>Service date</label>
                         <div id="inv-service-rows"></div>
                     </div>
-                    <div class="inv-field">
+                    <div class="inv-field" id="inv-notes-wrap">
                         <label for="inv-notes">Invoice notes <small>(optional - leave empty and no Notes section is printed)</small></label>
                         <textarea id="inv-notes" rows="3" class="inv-input" placeholder="Payment terms, thank-you message, job details..." oninput="scheduleInvoicePreview()"></textarea>
                     </div>
@@ -6680,6 +6680,60 @@ setTimeout(wrap, 500);
                                     </div>
                                     <div class="setting-control">
                                         <div class="magic-toggle" id="invoice-service-date-toggle" onclick="toggleInvoiceServiceDate()">
+                                            <div class="toggle-orb"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon"><i class="fas fa-hourglass-half"></i></div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Show a Due Date on Invoices</h4>
+                                            <p class="setting-description">Off by default. When on, the invoice shows a due date worked out from the days below</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <div class="magic-toggle" id="invoice-due-toggle" onclick="toggleInvoiceDue()">
+                                            <div class="toggle-orb"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="setting-item" id="invoice-due-days-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon"><i class="fas fa-calendar-day"></i></div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Payment Terms</h4>
+                                            <p class="setting-description">How many days after the invoice date payment is due</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <input type="number" id="invoice-due-days" class="inv-input" min="0" max="365" step="1" style="width: 92px; text-align: center;" onchange="setInvoiceDueDays(this.value)">
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon"><i class="fas fa-image"></i></div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Show Your Logo on Invoices</h4>
+                                            <p class="setting-description">Uses the logo from Settings &gt; Appearance &gt; Home screen. Off shows a plain mark instead</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <div class="magic-toggle" id="invoice-logo-toggle" onclick="toggleInvoiceLogo()">
+                                            <div class="toggle-orb"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon"><i class="fas fa-sticky-note"></i></div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Show the Notes Box on Invoices</h4>
+                                            <p class="setting-description">Off leaves the notes box off the invoice completely, even if you typed some</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <div class="magic-toggle" id="invoice-notes-toggle" onclick="toggleInvoiceNotes()">
                                             <div class="toggle-orb"></div>
                                         </div>
                                     </div>
@@ -8704,6 +8758,7 @@ bootstrap();
             invoiceName: '', soldTo: '', worksafeNumber: '', gstNumber: '',
             invoicePrefix: 'INV-', nextInvoiceNumber: 1,
             myAddress: '', invoiceShowServiceDate: false, invoiceNotesDefault: '', invoiceDefaultsV2: true,
+            invoiceShowDue: false, invoiceDueDays: 14, invoiceShowLogo: true, invoiceShowNotes: true,
             backupReminders: true, backupReminderDays: 14, lastBackupAt: null, backupSnoozeUntil: null
         };
         // One-time: service date is now off by default, and "thank you" moved to the invoice footer
@@ -8940,6 +8995,7 @@ bootstrap();
             setVal('invoice-notes-setting', appSettings.invoiceNotesDefault);
             const svcToggle = document.getElementById('invoice-service-date-toggle');
             if (svcToggle) svcToggle.classList.toggle('active', !!appSettings.invoiceShowServiceDate);
+            try { paintInvoiceOptions(); } catch (e) { /* ignore */ }
             setVal('invoice-next-setting', appSettings.nextInvoiceNumber);
             setVal('backup-days-setting', appSettings.backupReminderDays);
             const backupToggle = document.getElementById('backup-reminders-toggle');
@@ -10600,6 +10656,36 @@ bootstrap();
             showToast(appSettings.invoiceShowServiceDate ? 'Invoices will ask for a service date' : 'Service date will not appear on invoices', appSettings.invoiceShowServiceDate ? 'success' : 'info');
         }
 
+        function toggleInvoiceDue() {
+            appSettings.invoiceShowDue = !appSettings.invoiceShowDue;
+            paintInvoiceOptions(); saveSettings(); refreshInvoicePreview();
+            showToast(appSettings.invoiceShowDue ? 'Invoices will show a due date' : 'No due date on invoices', appSettings.invoiceShowDue ? 'success' : 'info');
+        }
+        function setInvoiceDueDays(v) {
+            var n = parseInt(v, 10); if (!(n >= 0 && n <= 365)) { paintInvoiceOptions(); showToast('Enter a number of days from 0 to 365', 'error'); return; }
+            appSettings.invoiceDueDays = n; saveSettings(); refreshInvoicePreview();
+            showToast(n === 0 ? 'Payment is due on the invoice date' : 'Payment is due ' + n + ' days after the invoice date', 'success');
+        }
+        function toggleInvoiceLogo() {
+            appSettings.invoiceShowLogo = !appSettings.invoiceShowLogo;
+            paintInvoiceOptions(); saveSettings(); refreshInvoicePreview();
+            showToast(appSettings.invoiceShowLogo ? 'Your logo will show on invoices' : 'Invoices will use a plain mark', 'info');
+        }
+        function toggleInvoiceNotes() {
+            appSettings.invoiceShowNotes = !appSettings.invoiceShowNotes;
+            paintInvoiceOptions(); saveSettings(); refreshInvoicePreview();
+            showToast(appSettings.invoiceShowNotes ? 'The notes box will show on invoices' : 'No notes box on invoices', 'info');
+        }
+        function paintInvoiceOptions() {
+            var t = function (id, on) { var e = document.getElementById(id); if (e) { e.classList.toggle('active', !!on); e.setAttribute('aria-checked', String(!!on)); } };
+            t('invoice-due-toggle', appSettings.invoiceShowDue);
+            t('invoice-logo-toggle', appSettings.invoiceShowLogo !== false);
+            t('invoice-notes-toggle', appSettings.invoiceShowNotes !== false);
+            var d = document.getElementById('invoice-due-days'); if (d) d.value = appSettings.invoiceDueDays == null ? 14 : appSettings.invoiceDueDays;
+            var it = document.getElementById('invoice-due-days-item'); if (it) it.style.display = appSettings.invoiceShowDue ? '' : 'none';
+            var nw = document.getElementById('inv-notes-wrap'); if (nw) nw.style.display = appSettings.invoiceShowNotes === false ? 'none' : '';
+        }
+
         function updateNextInvoiceNumber(value) {
             const n = parseInt(value, 10);
             if (n >= 1 && n <= 999999) {
@@ -10994,12 +11080,21 @@ bootstrap();
                 }
             });
         }
+        function invoiceDueDate(from) {                               // only when you asked for one in Settings
+            if (!appSettings.invoiceShowDue) return '';
+            var d = new Date((from || todayStr()) + 'T12:00:00');
+            if (isNaN(d.getTime())) return '';
+            d.setDate(d.getDate() + (parseInt(appSettings.invoiceDueDays, 10) || 0));
+            return d.toISOString().slice(0, 10);
+        }
         function invoiceOpts() {
             const v = readInvoiceForm();
             return {
                 invoiceNo: invCtx ? invCtx.invoiceNo : '',
                 invoiceDate: v.invoiceDate || todayStr(),
-                dueDate: v.invoiceDate || todayStr(),
+                dueDate: invoiceDueDate(v.invoiceDate || todayStr()),
+                showLogo: appSettings.invoiceShowLogo !== false,
+                showNotes: appSettings.invoiceShowNotes !== false,
                 billTo: v.billTo,
                 notes: v.notes,
                 includeJobNotes: v.includeJobNotes,
@@ -11008,6 +11103,7 @@ bootstrap();
             };
         }
         function refreshInvoicePreview() {
+            try { paintInvoiceOptions(); } catch (e) { /* ignore */ }   // the form follows the settings, wherever it is sitting
             if (invCtx && window.IncInvoice && IncInvoice.showing()) {
                 IncInvoice.update(invoiceGroupFromCtx(), invoiceOpts());
                 return;
@@ -24640,16 +24736,14 @@ function sheetHtml(group, o) {
     var showSvc = !!o.showServiceDate;
     var rowTax = function (e) { return e.baseAmount > 0 ? Math.round((e.gst / e.baseAmount) * 1000) / 10 : (oneRate == null ? 0 : oneRate); };
 
-    var rows = '', n = 0;
+    var rows = '';
     group.forEach(function (e) {
-        n++;
         var svc = (o.serviceDates && o.serviceDates[e.id]) || e.invoiceServiceDate || e.date;
         var desc = 'Services at ' + esc(e.address) + (showSvc ? '<small>' + esc(dt(svc)) + '</small>' : '');
-        rows += '<tr><td class="iv-it">Item ' + n + '</td><td class="iv-de">' + desc + '</td><td class="iv-c">1</td><td class="iv-r">' + money(e.amount) + '</td><td class="iv-c">' + rowTax(e) + '%</td><td class="iv-r">' + money(e.amount) + '</td></tr>';
+        rows += '<tr><td class="iv-de">' + desc + '</td><td class="iv-c">1</td><td class="iv-r">' + money(e.amount) + '</td><td class="iv-r">' + money(e.amount) + '</td></tr>';
         var list = (e.extrasList && e.extrasList.length) ? e.extrasList : (e.extras > 0 ? [e.extras] : []);
         list.forEach(function (v, k) {
-            n++;
-            rows += '<tr><td class="iv-it">Item ' + n + '</td><td class="iv-de">Additional service' + (list.length > 1 ? ' ' + (k + 1) : '') + '</td><td class="iv-c">1</td><td class="iv-r">' + money(v) + '</td><td class="iv-c">' + rowTax(e) + '%</td><td class="iv-r">' + money(v) + '</td></tr>';
+            rows += '<tr><td class="iv-de">Additional service' + (list.length > 1 ? ' ' + (k + 1) : '') + '</td><td class="iv-c">1</td><td class="iv-r">' + money(v) + '</td><td class="iv-r">' + money(v) + '</td></tr>';
         });
     });
 
@@ -24658,12 +24752,14 @@ function sheetHtml(group, o) {
     if (o.notes && o.notes.trim()) noteBody += '<p>' + lines(o.notes) + '</p>';
     jobNotes.forEach(function (e) { noteBody += '<p><b>' + esc(e.address) + ':</b> ' + lines(e.notes) + '</p>'; });
 
+    var showNotes = o.showNotes !== false && !!noteBody;
     var fine = [];
     if (S('gstNumber', '')) fine.push('GST # ' + esc(S('gstNumber', '')));
     if (S('worksafeNumber', '')) fine.push('WorkSafe # ' + esc(S('worksafeNumber', '')));
 
-    var logo = S('homeLogo', '');
-    var mark = (typeof logo === 'string' && logo.indexOf('data:image/') === 0)
+    var logo = S('homeLogo', ''), wantLogo = o.showLogo !== false;
+    var mark = !wantLogo ? ''
+        : (typeof logo === 'string' && logo.indexOf('data:image/') === 0)
         ? '<img class="iv-logo" alt="" src="' + logo + '">'
         : '<svg class="iv-logo" viewBox="0 0 48 48" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="24" cy="24" r="19"/><path d="M6 20h16M26 20h16M6 28h12M22 28h20"/><circle cx="24" cy="20" r="3.4" fill="#35778c"/><circle cx="20" cy="28" r="3.4" fill="#35778c"/></svg>';
 
@@ -24682,7 +24778,7 @@ function sheetHtml(group, o) {
           (o.dueDate ? '<div class="iv-lab">INVOICE DUE DATE</div><div class="iv-val">' + esc(dt(o.dueDate)) + '</div>' : '') +
         '</div>' +
       '</div>' +
-      '<table class="iv-tb"><thead><tr><th>ITEMS</th><th>DESCRIPTION</th><th class="iv-c">QUANTITY</th><th class="iv-r">PRICE</th><th class="iv-c">TAX</th><th class="iv-r">AMOUNT</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<table class="iv-tb"><thead><tr><th>DESCRIPTION</th><th class="iv-c">QUANTITY</th><th class="iv-r">PRICE</th><th class="iv-r">AMOUNT</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div class="iv-adds">' +
         (extras > 0 ? '<div class="iv-ar"><span>Services</span><span>' + money(services) + '</span></div><div class="iv-ar"><span>Additional services</span><span>' + money(extras) + '</span></div>' : '') +
         '<div class="iv-ar"><span>Subtotal</span><span>' + money(sub) + '</span></div>' +
@@ -24690,8 +24786,8 @@ function sheetHtml(group, o) {
       '</div>' +
       (allPaid ? '<div class="iv-paid">PAID' + (paidOn ? ' &middot; ' + esc(dt(paidOn)) : '') + '</div>' : '') +
     '</div>' +
-    '<div class="iv-bottom">' +
-      '<div class="iv-notes"><div class="iv-lab">NOTES:</div>' + (noteBody || '<p>&nbsp;</p>') + '</div>' +
+    '<div class="iv-bottom' + (showNotes ? '' : ' nonotes') + '">' +
+      (showNotes ? '<div class="iv-notes"><div class="iv-lab">NOTES:</div>' + noteBody + '</div>' : '') +
       '<div class="iv-total"><div class="iv-tlab">' + (allPaid ? 'TOTAL PAID' : 'TOTAL') + '</div><div class="iv-tval">' + money(total) + '</div></div>' +
     '</div>' +
     '<div class="iv-foot"><div class="iv-thanks">Thanks for your business!</div>' +
@@ -24724,38 +24820,40 @@ var CSS = [
 '#inv-sheet { transform-origin: top left; }',
 '#inv-sheet * { box-sizing: border-box; }',
 '#inv-sheet p { margin: 0 0 6px; }',
-'.iv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16mm; padding: 14mm 14mm 12mm; background: ' + TEAL + '; color: #fff; }',
-'.iv-brand { display: flex; flex-direction: column; gap: 6mm; }',
-'.iv-logo { width: 22mm; height: 22mm; display: block; object-fit: contain; border-radius: 50%; }',
-'.iv-word { font-size: 30pt; font-weight: 400; line-height: 1; letter-spacing: .5px; }',
+'.iv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12mm; padding: 10mm 12mm 9mm; background: ' + TEAL + '; color: #fff; }',
+'.iv-brand { display: flex; flex-direction: column; gap: 4mm; }',
+'.iv-logo { width: 17mm; height: 17mm; display: block; object-fit: contain; border-radius: 50%; }',
+'.iv-word { font-size: 25pt; font-weight: 400; line-height: 1; letter-spacing: .5px; }',
 '.iv-from { text-align: right; }',
-'.iv-co { font-size: 15pt; font-weight: 700; }',
-'.iv-ad { margin-top: 3mm; font-size: 9pt; color: rgba(255,255,255,.88); line-height: 1.7; }',
-'.iv-body { flex: 1 1 auto; padding: 10mm 14mm 6mm; }',
-'.iv-meta { display: flex; justify-content: space-between; gap: 12mm; padding-bottom: 7mm; border-bottom: 1px solid #e3e8ec; }',
+'.iv-co { font-size: 13.5pt; font-weight: 700; }',
+'.iv-ad { margin-top: 2mm; font-size: 8.5pt; color: rgba(255,255,255,.88); line-height: 1.55; }',
+'.iv-body { flex: 1 1 auto; padding: 8mm 12mm 5mm; }',
+'.iv-meta { display: flex; justify-content: space-between; gap: 10mm; padding-bottom: 5mm; border-bottom: 1px solid #e3e8ec; }',
 '.iv-lab { font-size: 7.5pt; letter-spacing: .6px; color: #8a97a0; text-transform: uppercase; }',
-'.iv-who { margin-top: 1.5mm; font-size: 13pt; color: #2f3b44; line-height: 1.5; }',
+'.iv-who { margin-top: 1mm; font-size: 11.5pt; color: #2f3b44; line-height: 1.4; }',
 '.iv-nums { text-align: right; min-width: 45mm; }',
-'.iv-nums .iv-val { margin: 0 0 2.5mm; font-size: 10pt; color: #5b6872; }',
-'.iv-tb { width: 100%; border-collapse: collapse; margin-top: 7mm; }',
-'.iv-tb th { padding: 0 2mm 3mm; font-size: 7.5pt; font-weight: 400; letter-spacing: .6px; color: #8a97a0; text-align: left; border-bottom: 1px solid #e3e8ec; }',
-'.iv-tb td { padding: 3.6mm 2mm; font-size: 9.5pt; color: #5b6872; vertical-align: top; }',
+'.iv-nums .iv-val { margin: 0 0 1.8mm; font-size: 9.5pt; color: #5b6872; }',
+'.iv-tb { width: 100%; border-collapse: collapse; margin-top: 5mm; }',
+'.iv-tb th { padding: 0 2mm 2.2mm; font-size: 7.5pt; font-weight: 400; letter-spacing: .6px; color: #8a97a0; text-align: left; border-bottom: 1px solid #e3e8ec; }',
+'.iv-tb td { padding: 2.6mm 2mm; font-size: 9.5pt; color: #5b6872; vertical-align: top; }',
 '.iv-tb tbody tr { page-break-inside: avoid; break-inside: avoid; }',
 '.iv-tb .iv-c { text-align: center; white-space: nowrap; }',
 '.iv-tb .iv-r { text-align: right; white-space: nowrap; }',
 '.iv-it { color: #6b7780; white-space: nowrap; }',
 '.iv-de small { display: block; margin-top: 1mm; font-size: 8pt; color: #93a0a8; }',
-'.iv-adds { margin: 6mm 0 0; margin-left: auto; width: 72mm; }',
-'.iv-ar { display: flex; justify-content: space-between; gap: 6mm; padding: 1.6mm 0; font-size: 9.5pt; color: #5b6872; }',
-'.iv-paid { margin-top: 6mm; display: inline-block; padding: 2mm 5mm; border: 2px solid #1f9d55; color: #1f9d55; border-radius: 2mm; font-weight: 700; letter-spacing: 1px; }',
+'.iv-adds { margin: 4mm 0 0; margin-left: auto; width: 68mm; border-top: 1px solid #e3e8ec; padding-top: 2.5mm; }',
+'.iv-ar { display: flex; justify-content: space-between; gap: 6mm; padding: 1.1mm 0; font-size: 9.5pt; color: #5b6872; }',
+'.iv-paid { margin-top: 4mm; display: inline-block; padding: 2mm 5mm; border: 2px solid #1f9d55; color: #1f9d55; border-radius: 2mm; font-weight: 700; letter-spacing: 1px; }',
 '.iv-bottom { display: flex; align-items: stretch; margin-top: auto; }',
-'.iv-notes { flex: 1 1 auto; padding: 8mm 10mm; background: ' + TEAL_L + '; color: #37474f; font-size: 9pt; }',
+'.iv-notes { flex: 1 1 auto; padding: 6mm 9mm; background: ' + TEAL_L + '; color: #37474f; font-size: 8.5pt; }',
 '.iv-notes .iv-lab { color: #4f6b78; margin-bottom: 2mm; }',
-'.iv-total { flex: 0 0 62mm; padding: 8mm 10mm; background: ' + TEAL_D + '; color: #fff; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }',
+'.iv-total { flex: 0 0 62mm; padding: 6mm 9mm; background: ' + TEAL_D + '; color: #fff; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }',
+'.iv-bottom.nonotes { justify-content: flex-end; }',
+'.iv-bottom.nonotes .iv-total { flex: 0 0 auto; min-width: 62mm; }',
 '.iv-tlab { font-size: 7.5pt; letter-spacing: .8px; color: rgba(255,255,255,.85); }',
-'.iv-tval { margin-top: 1.5mm; font-size: 21pt; font-weight: 700; line-height: 1.1; }',
-'.iv-foot { padding: 6mm 14mm 9mm; text-align: center; }',
-'.iv-thanks { font-size: 11pt; color: #4a5a63; }',
+'.iv-tval { margin-top: 1mm; font-size: 19pt; font-weight: 700; line-height: 1.1; }',
+'.iv-foot { padding: 5mm 12mm 7mm; text-align: center; }',
+'.iv-thanks { font-size: 10.5pt; color: #4a5a63; }',
 '.iv-fine { margin-top: 2mm; font-size: 8pt; color: #93a0a8; }',
 /* printing: the whole app steps aside and only the sheet is put on the paper */
 '@page { size: A4; margin: 0; }',
@@ -24772,7 +24870,7 @@ var CSS = [
 '}'
 ].join('\n');
 
-var el = null, zoomEl = null, ctx = null, onClose = null;
+var el = null, zoomEl = null, ctx = null, onClose = null, titleWas = null;
 function build() {
     if (el) return el;
     var st = document.createElement('style'); st.id = 'inv-css'; st.textContent = CSS; document.head.appendChild(st);
@@ -24837,16 +24935,25 @@ function close() {
     el.classList.remove('on');
     document.documentElement.classList.remove('inv-open');
     document.documentElement.classList.remove('inv-printing');        // never leave the print rules on: another page may be printed next
+    restoreTitle();
     document.removeEventListener('keydown', keys, true);
     var cb = onClose || (ctx && ctx.onClose); ctx = null; onClose = null;
     if (cb) try { cb(); } catch (e) { /* ignore */ }
 }
+function restoreTitle() { if (titleWas !== null) { document.title = titleWas; titleWas = null; } }
 function keys(e) { if (e.key === 'Escape' && el && el.classList.contains('on')) { e.preventDefault(); e.stopPropagation(); close(); } }
+function docName() {
+    var no = (ctx && ctx.o && ctx.o.invoiceNo) ? String(ctx.o.invoiceNo) : '';
+    no = no.replace(/[\\/:*?"<>|]+/g, '').trim();
+    return no || 'Invoice';
+}
 function print() {
     if (!el) return;
     if (ctx && ctx.validate && !ctx.validate()) return;
     document.documentElement.classList.add('inv-printing');
-    var done = false, off = function () { if (done) return; done = true; document.documentElement.classList.remove('inv-printing'); };
+    if (titleWas === null) titleWas = document.title;
+    document.title = docName();                                       // this is the name the PDF is saved under
+    var done = false, off = function () { if (done) return; done = true; document.documentElement.classList.remove('inv-printing'); restoreTitle(); };
     try { window.addEventListener('afterprint', off, { once: true }); } catch (e) { /* ignore */ }
     setTimeout(function () {                                          // give the phone a frame to lay the page out before the dialog opens
         try { window.print(); } catch (e) { off(); try { showToast('This browser could not open the print dialog', 'error'); } catch (e2) { /* ignore */ } return; }
@@ -24937,7 +25044,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.05 (v22)';
+var VERSION = '2026.11.05 (v23)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
