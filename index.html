@@ -5115,6 +5115,25 @@ var css = [
 /* ---- Saved Entries cards: Paid + Edit + more menu ---- */
 '.iconic-entry-card .entry-more { display: none !important; }',
 '.entry-header-content .entry-actions, #view-page .entry-header-content .entry-actions { order: 4; flex: 0 0 auto !important; width: auto !important; margin: 0 0 0 auto !important; padding: 0 !important; gap: 8px; justify-content: flex-end; align-self: center; }',
+/* The amount and the three round buttons are one group on the right. Wide enough, and they sit side
+   by side on a single line, which keeps the tile short. Narrow, and the amount steps above them with
+   a real gap, so the two can never end up touching or, as they did, overlapping. */
+/* The amount used to be pinned to the right edge of the card with no regard for the buttons, so on a
+   wide screen it sat right on top of them and on a phone it pressed against them. Both now live in one
+   group on the right: side by side where there is room, and on a phone the amount keeps its place beside
+   the address while the buttons take a line of their own, with a gap you can actually see. */
+'.iconic-entry-card .entry-header-content { display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }',
+'.iconic-entry-card .entry-card-header { height: auto !important; min-height: 0 !important; }',
+'.entry-right { display: contents; }',
+'.iconic-entry-card .entry-compact-total { position: static !important; top: auto !important; right: auto !important; transform: none !important; margin: 0 !important; order: 2; flex: 0 0 auto; white-space: nowrap; text-align: right; margin-left: auto !important; }',
+'.iconic-entry-card .entry-actions { position: static; order: 4; margin: 0 !important; padding: 0 !important; width: auto !important; flex: 0 0 auto !important; align-self: center; justify-content: flex-end; gap: 8px; margin-left: auto !important; }',
+'.entry-header-content .entry-date-badge, .entry-header-content .invoiced-badge { order: 3; }',
+'@media (min-width: 481px) {',
+'  .entry-right { display: flex; order: 2; margin-left: auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px 14px; flex: 0 1 auto; min-width: 0; }',
+'  .entry-right .entry-compact-total { order: 0; margin-left: 0 !important; }',
+'  .entry-right .entry-actions { order: 1; margin-left: 0 !important; }',
+'  .iconic-entry-card .entry-header-content > .entry-title { flex: 1 1 150px; min-width: 0; }',
+'}',
 '.entry-more-btn { font-size: 15px !important; }',
 '.entry-more-btn[aria-expanded="true"] { background: rgba(var(--pr2), .3) !important; border-color: rgba(var(--pr2), .6) !important; color: #fff !important; }',
 '#view-page .entry-title { font-size: 1.06rem !important; line-height: 1.25; white-space: normal !important; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }',
@@ -7802,7 +7821,7 @@ function quietRenew() {
         if (Cloud.status.kind === 'needs-auth') { setStatus('ok', ''); runBackup({ auto: true }); }
         armRenew();
     }).catch(function () {
-        renewTries = Math.min(renewTries + 1, 6);                     // try again soon, then much less often
+        renewTries = Math.min(renewTries + 1, 6);                     // try again soon, then further and further apart
         renewTimer = setTimeout(quietRenew, Math.min(600000, 20000 * Math.pow(2, renewTries - 1)));
         offerReconnect();
     }).then(function () {
@@ -9894,6 +9913,7 @@ bootstrap();
                                 <span>${formatDate(entry.date)}</span>
                             </div>
                             ${entry.projectId ? `<div class="invoiced-badge" style="color:rgb(var(--lav));border-color:rgba(196,181,253,.5);background:rgba(var(--pr), .15);cursor:pointer;" onclick="event.stopPropagation(); BIZ.openProjectByUid(${entry.projectUid || entry.paymentOf})"><i class="fas fa-briefcase"></i><span>${escapeHtml(entry.projectId)}</span></div>` : ''}${entry.invoiced ? '<div class="invoiced-badge"><i class="fas fa-flag"></i><span>Invoiced</span></div>' : ''}${entry.paid ? '<div class="invoiced-badge paid-badge"><i class="fas fa-check-circle"></i><span>Paid</span></div>' : ''}<div class="invoiced-badge jp-badge" style="display:none" role="button" tabindex="0" aria-label="Job photos" onclick="event.stopPropagation(); IncJobPhotos.open('e:${entry.id}')"><i class="fas fa-camera"></i><span class="jp-count" data-job="e:${entry.id}"></span></div>
+                            <div class="entry-right">
                             <div class="entry-compact-total">${formatCurrency(entry.total)}</div>
                             <div class="entry-actions">
                                 <button onclick="togglePaid(${entry.id})" class="entry-action-btn paid-btn${entry.paid ? ' active' : ''}" data-tip="${entry.paid ? 'Paid - click to mark unpaid' : 'Mark as paid'}" aria-label="${entry.paid ? 'Paid - click to mark unpaid' : 'Mark as paid'}">
@@ -9913,6 +9933,7 @@ bootstrap();
                                     <hr>
                                     <button role="menuitem" onclick="deleteEntry(${entry.id})" class="entry-action-btn delete-btn" aria-label="Delete Entry"><i class="fas fa-trash"></i><span>Delete</span></button>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -14147,7 +14168,47 @@ async function cleanOrphans() {
 }
 function stats() { var a = allMeta(); return { n: a.length, bytes: a.reduce(function (s, m) { return s + (m.bytes || 0); }, 0), jobs: Object.keys(idx().jobs).length, orphans: orphans().length }; }
 
-window.IncJobPhotos = { markUp: markUp, setNote: setNote, shoot: shoot, open: open, close: close, list: list, count: count, add: addFiles, remove: remove, purge: purge, restore: restore, setTag: setTag, url: url, record: record, paintBadges: paintBadges, exportable: exportable, importFrom: importFrom, orphans: orphans, cleanOrphans: cleanOrphans, stats: stats, sync: function () { return Sync.run(); }, _db: DB };
+/* Old job photos are the thing that quietly fills a phone up. Once a job is long finished you rarely
+   look at its photos again, so after a set number of days they move to the Trash on their own - where
+   they can still be brought back - rather than being thrown away outright. */
+var AGE_MIN = 7, AGE_MAX = 3650;
+function autoOn() { return S('photoAutoDelete', true) !== false; }
+function autoDays() {
+    var n = parseInt(S('photoAutoDeleteDays', 60), 10);
+    if (!isFinite(n)) return 60;
+    return Math.max(AGE_MIN, Math.min(AGE_MAX, n));
+}
+function setAuto(on) { save('photoAutoDelete', !!on); paintToggles(); if (on) sweepOld(); }
+function setAutoDays(n) {
+    n = parseInt(n, 10); if (!isFinite(n)) return autoDays();
+    n = Math.max(AGE_MIN, Math.min(AGE_MAX, n));
+    save('photoAutoDeleteDays', n); paintToggles(); sweepOld(); return n;
+}
+function dueForSweep() {                                     // photos old enough to go, oldest first
+    var cut = Date.now() - autoDays() * 86400000;
+    return allMeta().filter(function (m) {
+        var t = Date.parse(m.at || ''); return isFinite(t) && t < cut;
+    }).sort(function (a, b) { return Date.parse(a.at) - Date.parse(b.at); });
+}
+async function sweepOld(force) {
+    if (!force && !autoOn()) return 0;
+    var go = dueForSweep(); if (!go.length) return 0;           // nothing to do, and nothing written: a note saved here
+                                                                // would look like a change of yours and start a sync conflict
+    var n = 0;
+    for (var i = 0; i < go.length; i++) {
+        try { await remove(go[i].id); n++; } catch (e) { /* leave it for next time */ }
+    }
+    paintBadges(); paintToggles();
+    if (n) try { showToast(n + ' job photo' + (n === 1 ? '' : 's') + ' over ' + autoDays() + ' days old moved to the Trash', 'info'); } catch (e) { /* ignore */ }
+    return n;
+}
+function sweepSoon() {                                       // at startup, then once every six hours
+    setTimeout(function () { sweepOld(); }, 9000);
+    setInterval(function () { sweepOld(); }, 6 * 3600000);
+}
+
+window.IncJobPhotos = { markUp: markUp, setNote: setNote, shoot: shoot, open: open, close: close, list: list, count: count, add: addFiles, remove: remove, purge: purge, restore: restore, setTag: setTag, url: url, record: record, paintBadges: paintBadges, exportable: exportable, importFrom: importFrom, orphans: orphans, cleanOrphans: cleanOrphans, stats: stats, sync: function () { return Sync.run(); },
+    autoOn: autoOn, setAuto: setAuto, days: autoDays, setDays: setAutoDays, sweep: sweepOld, due: dueForSweep, _db: DB };
 
 /* ======================================== Battery Saver ======================================== */
 function saverOn() { return S('batterySaver', false) === true; }
@@ -14229,6 +14290,13 @@ function paintToggles() {
     var q = document.getElementById('job-photo-quality'); if (q && document.activeElement !== q) q.value = S('jobPhotoQuality', 'standard');
     var s = document.getElementById('job-photo-stats'); if (s) { var t = stats(); s.textContent = t.n ? t.n + ' job photo' + (t.n === 1 ? '' : 's') + ' on ' + t.jobs + ' job' + (t.jobs === 1 ? '' : 's') + ', ' + mb(t.bytes) + ' on this device.' : 'No job photos yet.'; }
     var c = document.getElementById('job-photo-clean'); if (c) { var o = orphans().length; c.style.display = o ? '' : 'none'; c.querySelector('span').textContent = 'Remove ' + o + ' photo' + (o === 1 ? '' : 's') + ' of deleted jobs'; }
+    var g = document.getElementById('job-photo-age-toggle'); if (g) g.classList.toggle('active', autoOn());
+    var d = document.getElementById('job-photo-age-days'); if (d && document.activeElement !== d) d.value = autoDays();
+    var w = document.getElementById('job-photo-age-note');
+    if (w) {
+        if (!autoOn()) w.textContent = 'Off: your job photos are kept for ever.';
+        else { var k = dueForSweep().length; w.textContent = k ? k + ' photo' + (k === 1 ? '' : 's') + ' are old enough now and will be moved shortly.' : 'Nothing is old enough yet.'; }
+    }
 }
 function item(id, icon, title, desc, control) {
     return '<div class="setting-item" id="' + id + '-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-' + icon + '"></i></div><div class="setting-content"><h4 class="setting-title">' + title + '</h4><p class="setting-description">' + desc + '</p></div></div><div class="setting-control">' + control + '</div></div>';
@@ -14240,6 +14308,9 @@ function injectSettings() {
     wrap.innerHTML =
         item('battery-saver', 'battery-half', 'Battery Saver', 'Turns off the bubbles, the glass blur and the moving effects so your phone lasts longer on long days on site.', '<div class="magic-toggle" id="battery-saver-toggle" role="switch" tabindex="0" onclick="IncSaver.toggle()"><div class="toggle-orb"></div></div>') +
         item('quote-nudge', 'bell', 'Quote Follow-up Nudges', 'Once a day, a reminder when a sent quote has had no reply for the number of days set in Quote Details, with a ready-to-send follow-up message.', '<div class="magic-toggle" id="quote-nudge-toggle" role="switch" tabindex="0" onclick="IncNudge.set(!IncNudge.on()); IncNudge.on() ? showToast(\'Follow-up nudges on\', \'success\') : showToast(\'Follow-up nudges off\', \'info\')"><div class="toggle-orb"></div></div>') +
+        item('job-photo-age', 'calendar-minus', 'Delete Old Job Photos', 'Job photos older than this move to the Trash on their own, so your phone does not fill up. Nothing is lost straight away - you can still bring them back from the Trash. <span id="job-photo-age-note"></span>',
+            '<div class="magic-toggle" id="job-photo-age-toggle" role="switch" tabindex="0" onclick="IncJobPhotos.setAuto(!IncJobPhotos.autoOn()); IncJobPhotos.autoOn() ? showToast(\'Old job photos will be tidied away\', \'success\') : showToast(\'Job photos will be kept for ever\', \'info\')"><div class="toggle-orb"></div></div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="number" id="job-photo-age-days" class="magic-input" inputmode="numeric" min="7" max="3650" step="1" style="padding:8px 12px;width:92px;text-align:center" onchange="this.value = IncJobPhotos.setDays(this.value); showToast(\'Job photos are kept for \' + this.value + \' days\', \'success\')"><span class="text-gray-400 text-sm">days</span></div>') +
         item('job-photo', 'camera', 'Job Photo Size', 'Photos are made smaller before saving. Standard looks sharp on any screen and uses about 150 to 300 KB a photo. <span id="job-photo-stats"></span>',
             '<select id="job-photo-quality" class="magic-input" style="padding:8px 12px;min-width:160px" onchange="IncJobPhotos && (appSettings.jobPhotoQuality=this.value, appStore.setItem(\'appSettings\', JSON.stringify(appSettings)), showToast(\'New job photos will use this size\', \'success\'))"><option value="small">Small (1200 px)</option><option value="standard">Standard (1600 px)</option><option value="high">High (2400 px)</option></select>' +
             '<button type="button" class="app-btn" id="job-photo-clean" style="display:none;margin-top:8px" onclick="IncJobPhotos.cleanOrphans().then(function(n){showToast(n+\' photo(s) removed\',\'success\');})"><i class="fas fa-trash mr-2"></i><span></span></button>');
@@ -14250,7 +14321,7 @@ function injectSettings() {
 
 /* ======================================== start ======================================== */
 function boot() {
-    applySaver(); watch(); paintBadges();
+    applySaver(); watch(); paintBadges(); sweepSoon();
     var n = 0, tm = setInterval(function () { if (injectSettings() || ++n > 60) clearInterval(tm); }, 250);
     try { new MutationObserver(function () { paintToggles(); applySaver(); if (document.body.getAttribute('data-pg') === 'home') setTimeout(function () { checkNudge(false); }, 1200); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
     setTimeout(function () { checkNudge(false); }, 4500);
@@ -24758,7 +24829,14 @@ var box = null, inp = null, note = null, wrap = null, tmr = 0, lastQ = '';
 var CSS = [
 '#set-find { position: sticky; top: 0; z-index: 30; margin: 0 0 14px; padding: 10px 0 12px; background: linear-gradient(180deg, rgba(var(--bg1, 12, 10, 32), .97) 72%, rgba(var(--bg1, 12, 10, 32), 0)); }',
 '#set-find .sf-box { position: relative; display: flex; align-items: center; }',
-'#set-find .sf-ic { position: absolute; left: 16px; pointer-events: none; font-size: .9rem; color: #c084fc; }',
+'#set-find .sf-ic { position: absolute; left: 16px; pointer-events: none; font-size: .9rem; color: rgba(255,255,255,.5); }',
+/* This bar belongs to the page it sits on, not to whichever colour theme is picked, so its own
+   colours are plain light-on-dark and it stays that way while you are typing in it. */
+'#set-find input { background: rgba(255,255,255,.055) !important; border-color: rgba(255,255,255,.18) !important; box-shadow: none !important; }',
+'#set-find input:focus { border-color: rgba(255,255,255,.34) !important; box-shadow: none !important; outline: none; }',
+'html.lm #set-find .sf-ic { color: rgba(30,27,75,.5); }',
+'html.lm #set-find input { background: rgba(30,27,75,.05) !important; border-color: rgba(30,27,75,.16) !important; }',
+'html.lm #set-find input:focus { border-color: rgba(30,27,75,.32) !important; }',
 '@media (min-width: 481px) { #set-find input { padding-left: 42px !important; } }',
 '#set-find input { width: 100%; padding-right: 44px !important; }',   /* shape, colour and spacing come from the same rules as the Saved Entries bar */
 '#set-find input::-webkit-search-cancel-button, #set-find input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }',
@@ -25752,7 +25830,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.05 (v26)';
+var VERSION = '2026.11.06 (v27)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
