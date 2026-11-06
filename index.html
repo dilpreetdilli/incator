@@ -552,6 +552,8 @@
         }
         
         /* Iconic Entry Card Styles */
+        .iconic-entry-card { cursor: pointer; }
+        .iconic-entry-card button, .iconic-entry-card a, .iconic-entry-card input, .iconic-entry-card label { cursor: auto; }
         .iconic-entry-card {
             background: linear-gradient(145deg, rgba(var(--deep2), 0.12) 0%, rgba(var(--deep), 0.1) 30%, rgba(var(--ind), 0.08) 70%, rgba(55, 48, 163, 0.06) 100%);
             border: 2px solid rgba(var(--deep2), 0.35);
@@ -9796,9 +9798,35 @@ bootstrap();
             }
         }
 
+        /* Tapping a saved entry anywhere opens its details. Buttons, menus, tick boxes and
+           links keep doing their own job, and a tap that was really a drag or a text
+           selection is left alone. */
+        var entryTapDown = null;
+        function wireEntryTap() {
+            const box = document.getElementById('entries-container');
+            if (!box || box.dataset.tapWired) return;
+            box.dataset.tapWired = '1';
+            box.addEventListener('pointerdown', function (e) { entryTapDown = { x: e.clientX, y: e.clientY }; }, true);
+            box.addEventListener('click', function (e) {
+                const card = e.target.closest && e.target.closest('.iconic-entry-card');
+                if (!card) return;
+                if (e.target.closest('button, a, input, select, textarea, label, [role="menu"], [role="menuitem"], [onclick], .entry-actions, .entry-more-wrap, .inv-badge, .invoiced-badge')) return;
+                if (entryTapDown) {                                   // a swipe or a drag is not a tap
+                    const d = Math.hypot(e.clientX - entryTapDown.x, e.clientY - entryTapDown.y);
+                    entryTapDown = null;
+                    if (d > 12) return;
+                }
+                const sel = window.getSelection && window.getSelection();
+                if (sel && String(sel).length > 2) return;            // they were copying text
+                const id = parseInt(card.getAttribute('data-entry-id'), 10);
+                if (id) viewEntryDetails(id);
+            });
+        }
+
         // Update entries list
         function updateEntriesList() {
             const entriesContainer = document.getElementById('entries-container');
+            setTimeout(wireEntryTap, 0);
             updateInvoiceFilterOptions();
             updateFilterSummary();
             updateViewSummaryLine();
@@ -24791,7 +24819,8 @@ function sheetHtml(group, o) {
       '<div class="iv-total"><div class="iv-tlab">' + (allPaid ? 'TOTAL PAID' : 'TOTAL') + '</div><div class="iv-tval">' + money(total) + '</div></div>' +
     '</div>' +
     '<div class="iv-foot"><div class="iv-thanks">Thanks for your business!</div>' +
-      (fine.length ? '<div class="iv-fine">' + fine.join(' &middot; ') + '</div>' : '') + '</div>';
+      (fine.length ? '<div class="iv-fine">' + fine.join(' &middot; ') + '</div>' : '') + '</div>' +
+    '<div class="iv-tail"></div>';
 }
 
 /* ---------------------------------------------------------------- the page it lives on */
@@ -24827,7 +24856,7 @@ var CSS = [
 '.iv-from { text-align: right; }',
 '.iv-co { font-size: 13.5pt; font-weight: 700; }',
 '.iv-ad { margin-top: 2mm; font-size: 8.5pt; color: rgba(255,255,255,.88); line-height: 1.55; }',
-'.iv-body { flex: 1 1 auto; padding: 8mm 12mm 5mm; }',
+'.iv-body { padding: 8mm 12mm 0; }',
 '.iv-meta { display: flex; justify-content: space-between; gap: 10mm; padding-bottom: 5mm; border-bottom: 1px solid #e3e8ec; }',
 '.iv-lab { font-size: 7.5pt; letter-spacing: .6px; color: #8a97a0; text-transform: uppercase; }',
 '.iv-who { margin-top: 1mm; font-size: 11.5pt; color: #2f3b44; line-height: 1.4; }',
@@ -24844,7 +24873,7 @@ var CSS = [
 '.iv-adds { margin: 4mm 0 0; margin-left: auto; width: 68mm; border-top: 1px solid #e3e8ec; padding-top: 2.5mm; }',
 '.iv-ar { display: flex; justify-content: space-between; gap: 6mm; padding: 1.1mm 0; font-size: 9.5pt; color: #5b6872; }',
 '.iv-paid { margin-top: 4mm; display: inline-block; padding: 2mm 5mm; border: 2px solid #1f9d55; color: #1f9d55; border-radius: 2mm; font-weight: 700; letter-spacing: 1px; }',
-'.iv-bottom { display: flex; align-items: stretch; margin-top: auto; }',
+'.iv-bottom { display: flex; align-items: stretch; margin-top: 9mm; }',
 '.iv-notes { flex: 1 1 auto; padding: 6mm 9mm; background: ' + TEAL_L + '; color: #37474f; font-size: 8.5pt; }',
 '.iv-notes .iv-lab { color: #4f6b78; margin-bottom: 2mm; }',
 '.iv-total { flex: 0 0 62mm; padding: 6mm 9mm; background: ' + TEAL_D + '; color: #fff; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }',
@@ -24853,6 +24882,7 @@ var CSS = [
 '.iv-tlab { font-size: 7.5pt; letter-spacing: .8px; color: rgba(255,255,255,.85); }',
 '.iv-tval { margin-top: 1mm; font-size: 19pt; font-weight: 700; line-height: 1.1; }',
 '.iv-foot { padding: 5mm 12mm 7mm; text-align: center; }',
+'.iv-tail { flex: 1 1 auto; }',                                   // the empty paper below, so the page is still A4
 '.iv-thanks { font-size: 10.5pt; color: #4a5a63; }',
 '.iv-fine { margin-top: 2mm; font-size: 8pt; color: #93a0a8; }',
 /* printing: the whole app steps aside and only the sheet is put on the paper */
@@ -25044,7 +25074,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.05 (v23)';
+var VERSION = '2026.11.05 (v24)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
