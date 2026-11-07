@@ -5115,22 +5115,26 @@ var css = [
 /* The amount and the three round buttons are one group on the right. Wide enough, and they sit side
    by side on a single line, which keeps the tile short. Narrow, and the amount steps above them with
    a real gap, so the two can never end up touching or, as they did, overlapping. */
-/* The amount used to be pinned to the right edge of the card with no regard for the buttons, so on a
-   wide screen it sat right on top of them and on a phone it pressed against them. Both now live in one
-   group on the right: side by side where there is room, and on a phone the amount keeps its place beside
-   the address while the buttons take a line of their own, with a gap you can actually see. */
-'.iconic-entry-card .entry-header-content { display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }',
-'.iconic-entry-card .entry-card-header { height: auto !important; min-height: 0 !important; }',
+/* Two fixed rows, always: the address and the amount on top, the date, the badges and the three
+   buttons underneath. Before this the pieces were loose in one wrapping row, so they landed
+   differently on every screen and text size - and left an empty band behind when they wrapped. */
+'.iconic-entry-card .entry-header-content { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: \'title amount\' \'meta actions\'; align-items: center; column-gap: 12px; row-gap: 8px; min-width: 0; }',
+'.iconic-entry-card .entry-card-header { height: auto !important; min-height: 0 !important; align-items: center; }',
 '.entry-right { display: contents; }',
-'.iconic-entry-card .entry-compact-total { position: static !important; top: auto !important; right: auto !important; transform: none !important; margin: 0 !important; order: 2; flex: 0 0 auto; white-space: nowrap; text-align: right; margin-left: auto !important; }',
-'.iconic-entry-card .entry-actions { position: static; order: 4; margin: 0 !important; padding: 0 !important; width: auto !important; flex: 0 0 auto !important; align-self: center; justify-content: flex-end; gap: 8px; margin-left: auto !important; }',
-'.entry-header-content .entry-date-badge, .entry-header-content .invoiced-badge { order: 3; }',
-'@media (min-width: 481px) {',
-'  .entry-right { display: flex; order: 2; margin-left: auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px 14px; flex: 0 1 auto; min-width: 0; }',
-'  .entry-right .entry-compact-total { order: 0; margin-left: 0 !important; }',
-'  .entry-right .entry-actions { order: 1; margin-left: 0 !important; }',
-'  .iconic-entry-card .entry-header-content > .entry-title { flex: 1 1 150px; min-width: 0; }',
-'}',
+'.iconic-entry-card .entry-title { grid-area: title; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+'.iconic-entry-card .entry-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }',
+'.iconic-entry-card .entry-compact-total { grid-area: amount; justify-self: end; position: static !important; top: auto !important; right: auto !important; transform: none !important; margin: 0 !important; white-space: nowrap; font-variant-numeric: tabular-nums; }',
+'.iconic-entry-card .entry-actions { grid-area: actions; justify-self: end; position: static; margin: 0 !important; padding: 0 !important; width: auto !important; flex: 0 0 auto !important; display: flex; gap: 8px; justify-content: flex-end; }',
+'.iconic-entry-card .entry-date-badge, .iconic-entry-card .invoiced-badge { margin: 0 !important; }',
+/* The tick box for picking several entries sat there as an empty square on every card, reading as
+   something unfinished. It stays out of the way until you reach for it, or until one is ticked. */
+'.iconic-entry-card .entry-checkbox-wrapper { opacity: .3; transition: opacity .18s ease; }',
+'.iconic-entry-card:hover .entry-checkbox-wrapper, .iconic-entry-card.selected .entry-checkbox-wrapper { opacity: 1; }',
+'.iconic-entry-card .entry-checkbox-wrapper:has(.entry-checkbox:checked) { opacity: 1; }',
+'.iconic-entry-card .entry-checkbox-wrapper:focus-within { opacity: 1; }',
+/* a little more air, and the amount reads as the thing it is */
+'.iconic-entry-card .entry-compact-total { font-variant-numeric: tabular-nums; letter-spacing: -.01em; }',
+'@media (hover: hover) { .iconic-entry-card { transition: transform .16s ease, box-shadow .16s ease; } .iconic-entry-card:hover { transform: translateY(-1px); } }',
 '.entry-more-btn { font-size: 15px !important; }',
 '.entry-more-btn[aria-expanded="true"] { background: rgba(var(--pr2), .3) !important; border-color: rgba(var(--pr2), .6) !important; color: #fff !important; }',
 '#view-page .entry-title { font-size: 1.06rem !important; line-height: 1.25; white-space: normal !important; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }',
@@ -9905,11 +9909,13 @@ bootstrap();
                         
                         <div class="entry-header-content">
                             <h3 class="entry-title">${entry.address}</h3>
+                            <div class="entry-meta">
                             <div class="entry-date-badge">
                                 <i class="fas fa-calendar-alt"></i>
                                 <span>${formatDate(entry.date)}</span>
                             </div>
                             ${entry.projectId ? `<div class="invoiced-badge" style="color:rgb(var(--lav));border-color:rgba(196,181,253,.5);background:rgba(var(--pr), .15);cursor:pointer;" onclick="event.stopPropagation(); BIZ.openProjectByUid(${entry.projectUid || entry.paymentOf})"><i class="fas fa-briefcase"></i><span>${escapeHtml(entry.projectId)}</span></div>` : ''}${entry.invoiced ? '<div class="invoiced-badge"><i class="fas fa-flag"></i><span>Invoiced</span></div>' : ''}${entry.paid ? '<div class="invoiced-badge paid-badge"><i class="fas fa-check-circle"></i><span>Paid</span></div>' : ''}<div class="invoiced-badge jp-badge" style="display:none" role="button" tabindex="0" aria-label="Job photos" onclick="event.stopPropagation(); IncJobPhotos.open('e:${entry.id}')"><i class="fas fa-camera"></i><span class="jp-count" data-job="e:${entry.id}"></span></div>
+                            </div>
                             <div class="entry-right">
                             <div class="entry-compact-total">${formatCurrency(entry.total)}</div>
                             <div class="entry-actions">
@@ -14473,7 +14479,7 @@ var Lens = (function () {
     var offX = 0, offY = 0, el = null, host = null, root = null, strips = [], mode = '', forced = false, key = '', box = null, P = null, mo = null, pruneY = -1e9, t = 0, raf = 0, pruneT = 0, poll = 0;
     // Scroll-driven: each strip of the copy is moved by the browser itself, in step with the scrolling (no lag, no sticking).
     // Where that is not available, a frame loop follows the scroll position while the page moves.
-    var SDA = (function () { try { return CSS.supports('animation-timeline', 'scroll()'); } catch (e) { return false; } })(), animSig = '', animEl = null, lastClone = 0, loopT = 0, loopUntil = 0, BAND_UP = 450, BAND_DOWN = 800, curUp = 450, curDown = 800, BUDGET = 700, lastSoon = 0;
+    var SDA = (function () { try { return CSS.supports('animation-timeline', 'scroll()'); } catch (e) { return false; } })(), animSig = '', animEl = null, lastClone = 0, loopT = 0, loopUntil = 0, BAND_UP = 700, BAND_DOWN = 800, curUp = 450, curDown = 800, BUDGET = 700, lastSoon = 0;
     // Phones (iPhone above all) close a page that uses too much memory, which looks like the app restarting on Home.
     // So the copy is kept small: a few strips, a limited stretch of page, and at most about BUDGET pieces per strip.
     function wantMode() {
@@ -14565,6 +14571,16 @@ var Lens = (function () {
             var r = ch.getBoundingClientRect(); if (r.width < 0.5 || r.height < 0.5) continue;
             if (r.bottom < lo || r.top > hi) continue;
             var cs = getComputedStyle(ch); if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') continue;
+            if (ch.classList && ch.classList.contains('iconic-entry-card')) {
+                /* A saved entry is about two dozen elements, and this copy has a budget. Shorter tiles
+                   mean more of them beside the bar, which spent that budget and made the copied stretch
+                   of page shrink until it no longer reached the bar, leaving part of it unmirrored.
+                   Behind this much blur a tile reads as its shape, so one box each is plenty. */
+                var cbox = ch.cloneNode(false);
+                pin(cbox, (r.left - pr.left - bl) / Z, (r.top - pr.top - bt) / Z, r.width / Z, r.height / Z);
+                cParent.appendChild(cbox);
+                continue;
+            }
             var leaf = !ch.children.length || r.height <= LEAF_H || depth > 14 || (r.top >= lo && r.bottom <= hi);
             var c = ch.cloneNode(leaf);
             if (!leaf) Array.prototype.forEach.call(ch.childNodes, function (n) { if (n.nodeType === 3 && n.textContent.trim()) leaf = true; });   // mixed text: copy whole
@@ -20607,7 +20623,8 @@ function held() { return S('starsStill', false) === true; }           // stay wh
 function level() { var v = S('starsAmount', DEF); return LEVELS[v] ? v : DEF; }
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
 function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
-function reduced() { return osCalm() && S('motionAlways', false) !== true; }   // the phone asks for less motion (unless you chose Move anyway)
+function bigCalmOn() { try { return document.documentElement.classList.contains('big-calm'); } catch (e) { return false; } }
+function reduced() { return bigCalmOn() || (osCalm() && S('motionAlways', false) !== true); }   // the phone asks for less motion, or Big numbers is resting them
 function phone() { if (PH === null) PH = (window.innerWidth || 400) < 900 || (navigator.maxTouchPoints || 0) > 0; return PH; }   // worked out once (reading the width every frame made the page re-measure itself)
 var TINT = ['255,255,255', '255,255,255', '221,214,254', '165,243,252', '251,207,232', '254,240,138'];
 function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -20656,6 +20673,9 @@ rcss.textContent = [
     '#inc-stars { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; pointer-events: none; z-index: 0; overflow: hidden; contain: strict; }',
     '#inc-stars .rs { position: absolute; top: 0; display: block; border-radius: 50%; background: rgb(var(--c)); will-change: transform, opacity; transform: translate3d(0, 110vh, 0); animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite; animation-direction: normal, alternate; animation-name: rsUp1, rsTw2; }',
     '#inc-stars .rs.w2 { animation-name: rsUp2, rsTw2; } #inc-stars .rs.w3 { animation-name: rsUp3, rsTw2; }',
+'html[data-theme="graphite"] #inc-stars, html[data-theme="terminal"] #inc-stars, html[data-theme="business"] #inc-stars { --lift: 2.1; }',
+'html[data-theme="graphite"] .floating-bubbles, html[data-theme="terminal"] .floating-bubbles, html[data-theme="business"] .floating-bubbles { filter: brightness(1.85) contrast(1.1); }',
+'html[data-theme="graphite"] #inc-shoot, html[data-theme="terminal"] #inc-shoot, html[data-theme="business"] #inc-shoot { filter: brightness(1.5); }',
     '#inc-stars .rs.w1.a1 { animation-name: rsUp1, rsTw1; } #inc-stars .rs.w2.a1 { animation-name: rsUp2, rsTw1; } #inc-stars .rs.w3.a1 { animation-name: rsUp3, rsTw1; }',
     '#inc-stars .rs.w1.a3 { animation-name: rsUp1, rsTw3; } #inc-stars .rs.w2.a3 { animation-name: rsUp2, rsTw3; } #inc-stars .rs.w3.a3 { animation-name: rsUp3, rsTw3; }',
     '#inc-stars .rs.big { box-shadow: 0 0 calc(var(--L) * .9) calc(var(--L) * .25) rgba(var(--c), .28); }',
@@ -20666,9 +20686,9 @@ rcss.textContent = [
     '@keyframes rsUp1 { 0% { transform: translate3d(0.0px, calc((100vh + 12px) * 1.000 - 14px * 0.000), 0); } 12% { transform: translate3d(7.0px, calc((100vh + 12px) * 0.875 - 14px * 0.125), 0); } 25% { transform: translate3d(0.0px, calc((100vh + 12px) * 0.750 - 14px * 0.250), 0); } 38% { transform: translate3d(-7.0px, calc((100vh + 12px) * 0.625 - 14px * 0.375), 0); } 50% { transform: translate3d(-0.0px, calc((100vh + 12px) * 0.500 - 14px * 0.500), 0); } 62% { transform: translate3d(7.0px, calc((100vh + 12px) * 0.375 - 14px * 0.625), 0); } 75% { transform: translate3d(0.0px, calc((100vh + 12px) * 0.250 - 14px * 0.750), 0); } 88% { transform: translate3d(-7.0px, calc((100vh + 12px) * 0.125 - 14px * 0.875), 0); } 100% { transform: translate3d(-0.0px, calc((100vh + 12px) * 0.000 - 14px * 1.000), 0); } }',
     '@keyframes rsUp2 { 0% { transform: translate3d(0.0px, calc((100vh + 12px) * 1.000 - 14px * 0.000), 0); } 12% { transform: translate3d(13.0px, calc((100vh + 12px) * 0.875 - 14px * 0.125), 0); } 25% { transform: translate3d(0.0px, calc((100vh + 12px) * 0.750 - 14px * 0.250), 0); } 38% { transform: translate3d(-13.0px, calc((100vh + 12px) * 0.625 - 14px * 0.375), 0); } 50% { transform: translate3d(-0.0px, calc((100vh + 12px) * 0.500 - 14px * 0.500), 0); } 62% { transform: translate3d(13.0px, calc((100vh + 12px) * 0.375 - 14px * 0.625), 0); } 75% { transform: translate3d(0.0px, calc((100vh + 12px) * 0.250 - 14px * 0.750), 0); } 88% { transform: translate3d(-13.0px, calc((100vh + 12px) * 0.125 - 14px * 0.875), 0); } 100% { transform: translate3d(-0.0px, calc((100vh + 12px) * 0.000 - 14px * 1.000), 0); } }',
     '@keyframes rsUp3 { 0% { transform: translate3d(0.0px, calc((100vh + 12px) * 1.000 - 14px * 0.000), 0); } 12% { transform: translate3d(20.0px, calc((100vh + 12px) * 0.875 - 14px * 0.125), 0); } 25% { transform: translate3d(0.0px, calc((100vh + 12px) * 0.750 - 14px * 0.250), 0); } 38% { transform: translate3d(-20.0px, calc((100vh + 12px) * 0.625 - 14px * 0.375), 0); } 50% { transform: translate3d(-0.0px, calc((100vh + 12px) * 0.500 - 14px * 0.500), 0); } 62% { transform: translate3d(20.0px, calc((100vh + 12px) * 0.375 - 14px * 0.625), 0); } 75% { transform: translate3d(0.0px, calc((100vh + 12px) * 0.250 - 14px * 0.750), 0); } 88% { transform: translate3d(-20.0px, calc((100vh + 12px) * 0.125 - 14px * 0.875), 0); } 100% { transform: translate3d(-0.0px, calc((100vh + 12px) * 0.000 - 14px * 1.000), 0); } }',
-    '@keyframes rsTw1 { from { opacity: .06; } to { opacity: .55; } }',
-    '@keyframes rsTw2 { from { opacity: .09; } to { opacity: .75; } }',
-    '@keyframes rsTw3 { from { opacity: .11; } to { opacity: .95; } }',
+    '@keyframes rsTw1 { from { opacity: calc(.06 * var(--lift, 1)); } to { opacity: calc(.55 * var(--lift, 1)); } }',
+    '@keyframes rsTw2 { from { opacity: calc(.09 * var(--lift, 1)); } to { opacity: calc(.75 * var(--lift, 1)); } }',
+    '@keyframes rsTw3 { from { opacity: calc(.11 * var(--lift, 1)); } to { opacity: calc(.95 * var(--lift, 1)); } }',
     '#inc-stars.rs-pause .rs, #inc-stars.rs-pause.rs-hold .rs { animation-play-state: paused !important; }',
     /* each star keeps its own twinkle speed; !important because the rising speed is written on the star itself */
     '#inc-stars.rs-hold .rs { transform: translate3d(0, var(--y), 0); animation-name: rsTw2; animation-duration: var(--tw, 2s) !important; animation-delay: var(--twd, 0s) !important; animation-direction: alternate !important; animation-iteration-count: infinite !important; animation-play-state: running; }',
@@ -20819,7 +20839,8 @@ function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } cat
 function save(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ } }
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
 function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
-function reduced() { return osCalm() && S('motionAlways', false) !== true; }   // the phone asks for less motion (unless you chose Move anyway)
+function bigCalmOn() { try { return document.documentElement.classList.contains('big-calm'); } catch (e) { return false; } }
+function reduced() { return bigCalmOn() || (osCalm() && S('motionAlways', false) !== true); }   // the phone asks for less motion, or Big numbers is resting them
 function rnd(a, b) { return a + Math.random() * (b - a); }
 
 /* ---------- background ---------- */
@@ -22214,7 +22235,8 @@ if (window.IncBubbles) return;
 var BG_MAX = 40, CARD_MAX = 8, BG_DEF = 10, CARD_DEF = 3, SPD_MAX = 300, SPD_DEF = 100;
 var CARD_SEL = '.home-card, .mh-tile, .rc-hc, .rc-scan';
 var TINTS = ['--pr2', '--pr', '--acc', '--pr3', '--acc2', '--ind2'];
-function reduceNow() { var os = false; try { os = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { os = false; } var always = false; try { always = appSettings.motionAlways === true; } catch (e) { always = false; } return os && !always; }   // the phone asks for less motion, unless you chose Move anyway
+function bigCalmOn() { try { return document.documentElement.classList.contains('big-calm'); } catch (e) { return false; } }
+function reduceNow() { if (bigCalmOn()) return true; var os = false; try { os = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { os = false; } var always = false; try { always = appSettings.motionAlways === true; } catch (e) { always = false; } return os && !always; }   // the phone asks for less motion, unless you chose Move anyway
 
 function num(k, d, max) { var v; try { v = appSettings[k]; } catch (e) { v = undefined; } v = typeof v === 'number' && isFinite(v) ? Math.round(v) : d; return Math.max(0, Math.min(max, v)); }
 function saver() { try { return appSettings.batterySaver === true; } catch (e) { return false; } }   // Battery Saver: no bubbles
@@ -23017,7 +23039,8 @@ var css = [
     sel(NUMS, 'html.big-num') + ' { font-size: 1.3em !important; font-weight: 800 !important; letter-spacing: .2px; }',
     'html.big-num body { font-size: 1.06em; } html.big-num .app-btn, html.big-num .rc-rvb, html.big-num .bz-btn { min-height: 48px; font-size: 1.02rem !important; }',
     'html.big-num .mh-tile b, html.big-num .ap-t b, html.big-num .setting-title { font-size: 1.08em; }',
-    'html.big-calm #inc-stars, html.big-calm #inc-shoot, html.big-calm .floating-bubbles, html.big-calm .cb-layer, html.big-calm .floating-orb { display: none !important; }',
+    'html.big-calm #inc-stars .rs, html.big-calm .floating-bubbles .bubble, html.big-calm .cb-layer .bubble, html.big-calm .floating-orb { animation-play-state: paused !important; }',
+    'html.big-calm #inc-shoot { display: none !important; }',   /* a streak is nothing but movement, so there is no still version of one */
     'html.big-calm #inc-sky *, html.big-calm .iconic-entry-card, html.big-calm .mh-tile-icon, html.big-calm .mh-ring, html.big-calm .breathing-text, html.big-calm .magic-icon i { animation: none !important; }',
     /* logo */
     '.mh-orb.has-logo { padding: 0; overflow: hidden; background: rgba(255,255,255,.08); }',
@@ -25842,7 +25865,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.07 (v29)';
+var VERSION = '2026.11.07 (v30)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
