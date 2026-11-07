@@ -4718,8 +4718,7 @@
         html[data-theme="sunset"] body{background:linear-gradient(180deg, rgb(var(--bg1)) 0%, rgb(var(--bg2)) 60%, rgb(var(--bg3)) 100%), radial-gradient(800px 500px at 50% 110%, rgba(var(--acc),.35), transparent 70%);background-blend-mode:normal}
         html[data-theme="sunset"] .home-card:hover{box-shadow:0 25px 70px rgba(0,0,0,.5),0 0 50px rgba(var(--acc),.45)}
         /* Graphite: flat, quiet, square-ish, no floating bubbles, no card float */
-        html[data-theme="graphite"] .floating-bubbles{display:none}
-        html[data-theme="graphite"] .home-card{animation:none!important;border-radius:6px;box-shadow:none}
+                html[data-theme="graphite"] .home-card{animation:none!important;border-radius:6px;box-shadow:none}
         html[data-theme="graphite"] .magic-calc-display, html[data-theme="graphite"] .glass-card, html[data-theme="graphite"] .iconic-entry-card{border-radius:6px;box-shadow:none}
         html[data-theme="graphite"] body{background:linear-gradient(180deg, rgb(var(--bg1)), rgb(var(--bg3)))}
         /* Neon: near-black, sharp edges, glowing outlines */
@@ -4788,8 +4787,7 @@
         html[data-theme="arctic"] .bubble{opacity:.25}
         html[data-theme="arctic"] body{background:linear-gradient(180deg, rgb(var(--bg1)) 0%, rgb(var(--bg2)) 70%, rgb(var(--bg3)) 100%)}
         /* Terminal: green phosphor, square, no float */
-        html[data-theme="terminal"] .floating-bubbles{display:none}
-        html[data-theme="terminal"] .home-card{animation:none!important}
+                html[data-theme="terminal"] .home-card{animation:none!important}
         html[data-theme="terminal"] .home-card, html[data-theme="terminal"] .magic-calc-display, html[data-theme="terminal"] .glass-card, html[data-theme="terminal"] .iconic-entry-card, html[data-theme="terminal"] .floating-nav, html[data-theme="terminal"] .app-btn{border-radius:0!important;border:1px solid rgba(var(--pr),.6);box-shadow:0 0 10px rgba(var(--pr),.18)}
         html[data-theme="terminal"] h1, html[data-theme="terminal"] h2, html[data-theme="terminal"] h3, html[data-theme="terminal"] .home-card-title{text-shadow:0 0 8px rgba(var(--pr),.55)}
         /* Crimson: bold red edges */
@@ -4800,8 +4798,7 @@
         html[data-theme="terra"] .home-card{animation:none!important}
         html[data-theme="terra"] .bubble{opacity:.12}
         /* Business: quiet blue, tight corners, subtle depth */
-        html[data-theme="business"] .floating-bubbles{display:none}
-        html[data-theme="business"] .home-card{animation:none!important}
+                html[data-theme="business"] .home-card{animation:none!important}
         html[data-theme="business"] .home-card, html[data-theme="business"] .magic-calc-display, html[data-theme="business"] .glass-card, html[data-theme="business"] .iconic-entry-card{border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.35)}
 
     </style>
@@ -20611,7 +20608,6 @@ function level() { var v = S('starsAmount', DEF); return LEVELS[v] ? v : DEF; }
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
 function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 function reduced() { return osCalm() && S('motionAlways', false) !== true; }   // the phone asks for less motion (unless you chose Move anyway)
-function hiddenTheme() { var t = document.documentElement.getAttribute('data-theme'); return t === 'graphite' || t === 'terminal' || t === 'business'; }
 function phone() { if (PH === null) PH = (window.innerWidth || 400) < 900 || (navigator.maxTouchPoints || 0) > 0; return PH; }   // worked out once (reading the width every frame made the page re-measure itself)
 var TINT = ['255,255,255', '255,255,255', '221,214,254', '165,243,252', '251,207,232', '254,240,138'];
 function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -20632,7 +20628,7 @@ function fill() {
     if (stars.length > n) { stars.splice(n).forEach(function (e) { e.remove(); }); }
     if (stars.length < n) { var f = document.createDocumentFragment(); while (stars.length < n) { var e = make(); stars.push(e); f.appendChild(e); } cv.appendChild(f); }
 }
-function want() { return on() && !saver() && !hiddenTheme(); }
+function want() { return on() && !saver(); }                          // every theme, not just the colourful ones
 function apply() {
     if (!document.body) return;
     if (!want()) { stop(); if (cv) { cv.style.display = 'none'; cv.textContent = ''; } stars = []; paint(); return; }
@@ -20649,6 +20645,11 @@ function apply() {
     paint();
 }
 function start() { running = true; if (cv) cv.classList.remove('rs-pause'); }
+function revive() {                                                   // never leave them frozen on a page you are looking at
+    if (!cv || document.hidden) return;
+    if (!want() || reduced()) return;
+    if (!running || cv.classList.contains('rs-pause')) start();
+}
 function stop() { running = false; if (cv) cv.classList.add('rs-pause'); }
 var rcss = document.createElement('style'); rcss.id = 'rstars-css';
 rcss.textContent = [
@@ -20668,7 +20669,7 @@ rcss.textContent = [
     '@keyframes rsTw1 { from { opacity: .06; } to { opacity: .55; } }',
     '@keyframes rsTw2 { from { opacity: .09; } to { opacity: .75; } }',
     '@keyframes rsTw3 { from { opacity: .11; } to { opacity: .95; } }',
-    '#inc-stars.rs-pause .rs { animation-play-state: paused; }',
+    '#inc-stars.rs-pause .rs, #inc-stars.rs-pause.rs-hold .rs { animation-play-state: paused !important; }',
     /* each star keeps its own twinkle speed; !important because the rising speed is written on the star itself */
     '#inc-stars.rs-hold .rs { transform: translate3d(0, var(--y), 0); animation-name: rsTw2; animation-duration: var(--tw, 2s) !important; animation-delay: var(--twd, 0s) !important; animation-direction: alternate !important; animation-iteration-count: infinite !important; animation-play-state: running; }',
     '#inc-stars.rs-hold .rs.a1 { animation-name: rsTw1; } #inc-stars.rs-hold .rs.a3 { animation-name: rsTw3; }',
@@ -20683,7 +20684,7 @@ function paint() {
     var t = document.getElementById('stars-toggle'); if (t) { t.classList.toggle('active', on()); t.setAttribute('aria-checked', String(on())); }
     var hs = document.getElementById('stars-still'); if (hs) { hs.classList.toggle('active', held()); hs.setAttribute('aria-checked', String(held())); hs.classList.toggle('off', !on()); }
     Array.prototype.forEach.call(document.querySelectorAll('#stars-block [data-stars]'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-stars') === level())); b.disabled = !on(); });
-    var n = document.getElementById('stars-note'); if (n) n.textContent = saver() ? 'Battery Saver is on, so the stars rest for now.' : hiddenTheme() ? 'This theme keeps the background plain, so the stars are hidden.' : '';
+    var n = document.getElementById('stars-note'); if (n) n.textContent = saver() ? 'Battery Saver is on, so the stars rest for now.' : '';
     try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* ignore */ }
 }
 function inject() {
@@ -20692,6 +20693,7 @@ function inject() {
     var box = document.createElement('div'); box.id = 'stars-block'; box.className = 'space-y-6';
     box.innerHTML = '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-star"></i></div><div class="setting-content"><h4 class="setting-title">Rising stars</h4><p class="setting-description">Tiny stars drift up behind every page and twinkle.</p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="stars-toggle" role="switch" tabindex="0" aria-label="Rising stars"><div class="toggle-orb"></div></div></div></div>' +
+        '<div class="motion-why" role="status"></div>' +
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">How many stars</h4><p class="setting-description" id="stars-note"></p></div></div>' +
         '<div class="setting-control"><span class="nm-seg" role="group" aria-label="How many stars"><button type="button" data-stars="few">Few</button><button type="button" data-stars="some">Some</button><button type="button" data-stars="lots">Lots</button></span></div></div>' +
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-snowflake"></i></div><div class="setting-content"><h4 class="setting-title">Hold them still</h4><p class="setting-description">The stars stay where they are and only twinkle, each at its own pace.</p></div></div>' +
@@ -20700,6 +20702,8 @@ function inject() {
     var item = document.querySelector('#ap-menu .ap-item[data-ap="stars"]'), bub = document.querySelector('#ap-menu .ap-item[data-ap="bubbles"]');
     if (item && bub && bub.nextSibling !== item) bub.parentNode.insertBefore(item, bub.nextSibling);   // right under Bubbles
     box.addEventListener('click', function (e) {
+        var mw = e.target.closest('[data-mwfix]');
+        if (mw) { try { IncSky.fixWhy(mw.getAttribute('data-mwfix')); } catch (e2) { /* ignore */ } return; }
         if (e.target.closest('#stars-toggle')) { save('starsOn', !on()); apply(); if (window.showToast) showToast(on() ? 'Rising stars on' : 'Rising stars off', 'info'); return; }
         if (e.target.closest('#stars-still')) { save('starsStill', !held()); apply(); if (window.showToast) showToast(held() ? 'The stars stay still and twinkle' : 'The stars drift up again', 'info'); return; }
         var b = e.target.closest('[data-stars]'); if (b && !b.disabled) { save('starsAmount', b.getAttribute('data-stars')); apply(); }   // fill() adds or takes away stars to match (the old ones are never left behind)
@@ -20716,7 +20720,10 @@ function boot() {
     apply();
     var n = 0, tm = setInterval(function () { if (inject() || ++n > 80) clearInterval(tm); }, 250);
     window.addEventListener('resize', function () { PH = null; size(); });
-    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else if (want() && !reduced()) start(); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else { revive(); setTimeout(revive, 400); } });
+    window.addEventListener('pageshow', function () { revive(); setTimeout(revive, 400); });
+    window.addEventListener('focus', revive);
+    setInterval(revive, 5000);                                        // a quiet safety net, in case a wake-up went unnoticed
     try { new MutationObserver(apply).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); var ls = saver(); new MutationObserver(function () { var v = saver(); if (v !== ls) { ls = v; apply(); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
@@ -20813,7 +20820,6 @@ function save(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', 
 function saver() { return S('batterySaver', false) === true || (document.body && document.body.classList.contains('battery-saver')); }
 function osCalm() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 function reduced() { return osCalm() && S('motionAlways', false) !== true; }   // the phone asks for less motion (unless you chose Move anyway)
-function hiddenTheme() { var t = document.documentElement.getAttribute('data-theme'); return t === 'graphite' || t === 'terminal' || t === 'business'; }
 function rnd(a, b) { return a + Math.random() * (b - a); }
 
 /* ---------- background ---------- */
@@ -21013,7 +21019,7 @@ function applyHdr() {
 function shootOn() { return S('shootOn', true) !== false; }
 function rate() { var v = parseInt(S('shootRate', 3), 10); return isFinite(v) ? Math.max(1, Math.min(10, v)) : 3; }   // about how many every 10 seconds
 var cv = null, W = 0, H = 0, meteors = [], timer = 0, fired = 0;
-function want() { return shootOn() && !saver() && !hiddenTheme() && !reduced() && !document.hidden; }
+function want() { return shootOn() && !saver() && !reduced() && !document.hidden; }
 // Each shooting star is a small element the browser animates by itself: smooth at the screen's full refresh rate,
 // unaffected by scrolling, and it always removes itself at the end (so one can never stay stuck on the screen).
 function size() { W = window.innerWidth || 400; H = window.innerHeight || 800; }
@@ -21081,7 +21087,7 @@ function paintSet() {
     var t = document.getElementById('shoot-toggle'); if (t) { t.classList.toggle('active', shootOn()); t.setAttribute('aria-checked', String(shootOn())); }
     var r = document.getElementById('shoot-rate'), o = document.getElementById('shoot-rate-val'); if (r && document.activeElement !== r) r.value = rate(); if (o) o.textContent = rate();
     if (r) r.disabled = !shootOn();
-    var n = document.getElementById('shoot-note'); if (n) n.textContent = !shootOn() ? '' : saver() ? 'Battery Saver is on, so they rest for now.' : hiddenTheme() ? 'This theme keeps the background plain, so they are hidden.' : reduced() ? 'Your device asks for less motion, so they are hidden.' : '';
+    var n = document.getElementById('shoot-note'); if (n) n.textContent = !shootOn() ? '' : saver() ? 'Battery Saver is on, so they rest for now.' : reduced() ? 'Your device asks for less motion, so they are hidden.' : '';
     try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* ignore */ }
 }
 function toggleRot(k) {
@@ -21103,15 +21109,20 @@ function whyStill() {
     if (saver()) r.push(['saver', 'Battery Saver is on, so the background, bubbles and stars rest.', 'Turn Battery Saver off']);
     if (h.classList.contains('big-calm')) r.push(['big', 'Big numbers is resting the moving effects.', 'Let them move']);
     if (reduced()) r.push(['os', 'Your phone asks for less motion (Reduce Motion is on in its Accessibility settings), so the background stays still.', 'Move anyway']);
-    if (hiddenTheme()) r.push(['theme', 'This theme keeps the background plain.', '']);
     return r;
 }
+function whyHtml() {
+    return whyStill().map(function (x) {
+        return '<div class="mw-row"><i class="fas fa-pause-circle"></i><span>' + x[1] + '</span>' +
+            (x[2] ? '<button type="button" class="app-btn mw-fix" data-mwfix="' + x[0] + '">' + x[2] + '</button>' : '') + '</div>';
+    }).join('') + (osCalm() && S('motionAlways', false) === true
+        ? '<div class="mw-row ok"><i class="fas fa-check"></i><span>Moving even though your phone asks for less motion.</span><button type="button" class="app-btn mw-fix" data-mwfix="calm">Follow my phone</button></div>' : '');
+}
 function paintWhy() {
-    var el = document.getElementById('motion-why'); if (!el) return;
-    var r = whyStill();
-    el.innerHTML = r.map(function (x) { return '<div class="mw-row"><i class="fas fa-pause-circle"></i><span>' + x[1] + '</span>' + (x[2] ? '<button type="button" class="app-btn mw-fix" data-mwfix="' + x[0] + '">' + x[2] + '</button>' : '') + '</div>'; }).join('') +
-        (osCalm() && S('motionAlways', false) === true ? '<div class="mw-row ok"><i class="fas fa-check"></i><span>Moving even though your phone asks for less motion.</span><button type="button" class="app-btn mw-fix" data-mwfix="calm">Follow my phone</button></div>' : '');
-    el.style.display = el.innerHTML ? '' : 'none';
+    var html = whyHtml();
+    Array.prototype.forEach.call(document.querySelectorAll('.motion-why'), function (el) {
+        el.innerHTML = html; el.style.display = html ? '' : 'none';
+    });
 }
 function applyMotion() {
     document.documentElement.classList.toggle('motion-ok', S('motionAlways', false) === true);
@@ -21424,7 +21435,7 @@ document.head.appendChild(css);
     var go = function () { armRot(); try { new MutationObserver(onPage).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ } onPage(); };
     if (document.body) go(); else document.addEventListener('DOMContentLoaded', go);
 })();
-window.IncSky = { next: nextRot, rotWhen: function (v, every, fx) { if (v) save('bgRotWhen', v); if (every) save('bgRotEvery', +every); if (fx) save('bgRotFx', fx); armRot(); paintSet(); return { when: rotWhen(), every: rotEvery(), fx: fxStyle() }; }, header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) || isAuto(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, choice: bgChoice, resolve: resolve, whyStill: whyStill, motionAlways: function (v) { if (v !== undefined) { save('motionAlways', !!v); applyMotion(); applyBg(); } return S('motionAlways', false) === true; }, timeBg: timeBg, seasonBg: seasonBg, weatherBg: weatherBg, glow: function (v) { if (v !== undefined) setGlow(v ? 'match' : 'theme'); return glowOn(); }, glowMode: function (m, hx) { if (hx) save('glowColor', hx); if (m) setGlow(m); return glowMode(); }, customPalette: customPalette, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
+window.IncSky = { fixWhy: fixWhy, paintWhy: paintWhy, next: nextRot, rotWhen: function (v, every, fx) { if (v) save('bgRotWhen', v); if (every) save('bgRotEvery', +every); if (fx) save('bgRotFx', fx); armRot(); paintSet(); return { when: rotWhen(), every: rotEvery(), fx: fxStyle() }; }, header: function (v) { if (v !== undefined) { save('hdrTop', v === null ? null : +v); applyHdr(); } return hdr(); }, mode: function (v) { if (v) { var k = BG.has(v) || isAuto(v) ? v : 'theme'; if (S('bgRotate', false) === true) { var l = rotList(); if (l.indexOf(k) < 0) { l.push(k); save('bgRotateList', l); } setNow(k); } save('appBg', k); applyBg(); } return bgMode(); }, shooting: function (v) { if (v !== undefined) { save('shootOn', !!v); applyShoot(); } return shootOn(); }, rate: function (v) { if (v) { save('shootRate', Math.max(1, Math.min(10, +v))); next(); } return rate(); }, fire: spawn, fired: function () { return fired; }, rotate: function (v) { if (v !== undefined) setRotate(!!v); return rotOn(); }, rotation: function (list) { if (list) { save('bgRotateList', list.filter(BG.has)); applyBg(); } return rotList(); }, choice: bgChoice, resolve: resolve, whyStill: whyStill, motionAlways: function (v) { if (v !== undefined) { save('motionAlways', !!v); applyMotion(); applyBg(); } return S('motionAlways', false) === true; }, timeBg: timeBg, seasonBg: seasonBg, weatherBg: weatherBg, glow: function (v) { if (v !== undefined) setGlow(v ? 'match' : 'theme'); return glowOn(); }, glowMode: function (m, hx) { if (hx) save('glowColor', hx); if (m) setGlow(m); return glowMode(); }, customPalette: customPalette, palette: palette, preview: preview, closePreview: closePreview, previewing: function () { return pvKey; }, active: function () { return meteors.length; }, running: function () { return !!timer; } };
 function boot() {
     document.documentElement.classList.toggle('motion-ok', S('motionAlways', false) === true);
     applyBg(); applyShoot(); applyHdr();
@@ -22226,7 +22237,6 @@ style.textContent = [
 '.bubble.jb { animation: none !important; left: 0 !important; top: 0; bottom: auto; opacity: var(--bo, .4); box-shadow: 0 0 12px rgba(255,255,255,.15), inset 0 0 12px rgba(255,255,255,.1); }',
 '.cb-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; border-radius: inherit; pointer-events: none; z-index: 0; }',
 '.cbub { position: absolute; left: 0; top: 0; border-radius: 50%; opacity: .5; will-change: transform; box-shadow: inset 0 0 6px rgba(255,255,255,.28), 0 0 8px rgba(255,255,255,.08); }',
-'html[data-theme="graphite"] .cb-layer, html[data-theme="terminal"] .cb-layer, html[data-theme="business"] .cb-layer { display: none; }',
 '.bub-ctl { display: flex; align-items: center; gap: 8px; }',
 '.bub-ctl input[type=range] { width: 170px; max-width: 42vw; accent-color: rgb(var(--pr4)); }',
 '.bub-step { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; padding: 0; -webkit-appearance: none; appearance: none; }',
@@ -22553,7 +22563,7 @@ function injectSettings() {
         return '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-' + icon + '"></i></div><div class="setting-content"><h4 class="setting-title">' + title + '</h4><p class="setting-description">' + desc + '</p></div></div>' +
             '<div class="setting-control"><div class="bub-ctl"><button type="button" class="bub-step" data-bub="' + id + '" data-d="-1" aria-label="Lower ' + title.toLowerCase() + '">&minus;</button><input type="range" id="bub-' + id + '" min="0" max="' + c.max + '" step="' + c.step + '" aria-label="' + title + '"><button type="button" class="bub-step" data-bub="' + id + '" data-d="1" aria-label="Raise ' + title.toLowerCase() + '">+</button><output class="bub-val" id="bub-' + id + '-val"></output></div></div></div>';
     }
-    sec.innerHTML = '<div class="ap-sub">Bubbles</div><div class="space-y-6">' +
+    sec.innerHTML = '<div class="ap-sub">Bubbles</div><div class="motion-why" role="status"></div><div class="space-y-6">' +
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-bubbles"></i></div><div class="setting-content"><h4 class="setting-title">Show bubbles</h4><p class="setting-description">Turn all the bubbles on or off. Your amounts below are kept for when you turn them back on.</p></div></div><div class="setting-control"><div class="magic-toggle" id="bub-show" role="switch" tabindex="0" aria-label="Show bubbles"><div class="toggle-orb"></div></div></div></div>' +
         row('bg', 'bubbles', 'Background bubbles', 'Bubbles that drift behind every page. Set 0 to turn them off.') +
         row('card', 'bubbles', 'Bubbles inside cards', 'Small bubbles that roam inside each Home and Receipts card, per card. Set 0 to turn them off.') +
@@ -22581,6 +22591,8 @@ function injectSettings() {
     sec.addEventListener('input', function (ev) { var t = ev.target; if (t.id && t.id.indexOf('bub-') === 0 && CTL[t.id.slice(4)]) apply(t.id.slice(4), t.value, false); });
     sec.addEventListener('change', function (ev) { var t = ev.target; if (t.id && t.id.indexOf('bub-') === 0 && CTL[t.id.slice(4)]) apply(t.id.slice(4), t.value, true); });
     sec.addEventListener('click', function (ev) {
+        var mw = ev.target.closest('[data-mwfix]');
+        if (mw) { try { IncSky.fixWhy(mw.getAttribute('data-mwfix')); } catch (e) { /* ignore */ } return; }
         var b = ev.target.closest('[data-bub]');
         if (b) { var w = b.getAttribute('data-bub'), c = CTL[w]; apply(w, c.get() + (+b.getAttribute('data-d')) * c.step, true); return; }
         var lk = ev.target.closest('[data-blook]'); if (lk) { save('bubblesLook', lk.getAttribute('data-blook')); applyLook(); show(); return; }
@@ -25830,7 +25842,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.06 (v28)';
+var VERSION = '2026.11.07 (v29)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
