@@ -17334,6 +17334,7 @@ const quietReadOn = () => sget('receiptQuietRead', false) === true;      // read
 const backupPhotosOn = () => sget('receiptBackupPhotos', true) !== false;
 const cropOn = () => sget('rcSmartCrop', true) !== false;                  // Smart Crop: keep only the receipt (on by default)
 const autoCapOn = () => sget('rcAutoCapture', true) !== false;             // Auto Capture: the camera takes the photo when the receipt is steady
+const autoReadOn = () => sget('rcAutoRead', false) === true;               // Auto Read: after Auto Capture takes the photo, start reading it straight away (off by default)
 async function smartCrop(blob) {                                          // never fails: the original comes back when no receipt is found clearly
     if (!cropOn() || !window.IncCrop) return { blob: blob, cropped: false };
     try { return await IncCrop.crop(blob); } catch (e) { return { blob: blob, cropped: false }; }
@@ -17697,7 +17698,10 @@ st.textContent = `
 .rc-cam-torch { position: absolute; right: 14px; bottom: 190px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.45); color: #fff; font-size: 17px; cursor: pointer; z-index: 2; }
 .rc-cam-torch.on { background: #fde68a; color: #78350f; border-color: transparent; }
 .rc-cam-ol { position: fixed; pointer-events: none; z-index: 1; }
-.rc-cam-auto { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); z-index: 2; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.5); color: #fff; font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.rc-cam-autos { position: absolute; top: 76px; left: 0; right: 0; z-index: 2; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 0 12px; pointer-events: none; }
+.rc-cam-autos .rc-cam-auto { pointer-events: auto; }
+.rc-cam-auto[hidden] { display: none; }
+.rc-cam-auto { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.5); color: #fff; font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
 .rc-cam-st { position: absolute; left: 0; right: 0; bottom: 200px; text-align: center; font-size: .9rem; font-weight: 600; text-shadow: 0 1px 4px #000; z-index: 2; pointer-events: none; }
 .rc-tgs-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
 .rc-tg { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.06); color: #fff; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
@@ -18134,9 +18138,10 @@ function pagesStrip(key) {
 const savePhotoNow = () => UI.saveOverride === null ? savePhotosOn() : UI.saveOverride;
 function camToggles(withAuto) {
     const t = (k, on, label, help) => `<button type="button" class="rc-tg${on ? ' on' : ''}" data-rcx="${k}" role="switch" aria-checked="${on}" title="${help}"><span class="rc-tgs"><span></span></span>${label}</button>`;
-    return `<div class="rc-tgs-row">${t('crop', cropOn(), 'Smart Crop', 'Keep only the receipt in the photo, so it takes less space')}${withAuto ? t('auto', autoCapOn(), 'Auto Capture', 'The camera takes the photo by itself when the receipt is steady') : ''}</div>`;
+    return `<div class="rc-tgs-row">${t('crop', cropOn(), 'Smart Crop', 'Keep only the receipt in the photo, so it takes less space')}${withAuto ? t('auto', autoCapOn(), 'Auto Capture', 'The camera takes the photo by itself when the receipt is steady') + t('read', autoReadOn(), 'Auto Read', 'After Auto Capture takes the photo, IncAtor starts reading it by itself') : ''}</div>`;
 }
 function setCamOpt(k, v) {
+    if (k === 'read') { sset('rcAutoRead', !!v); if (v && !autoCapOn()) sset('rcAutoCapture', true); showToast(v ? 'Auto Read on: once the camera takes the photo, IncAtor reads it straight away' + (autoCapOn() ? '' : '') : 'Auto Read off: tap Read when you have all the photos', 'info'); return; }
     if (k === 'crop') { sset('rcSmartCrop', !!v); showToast(v ? 'Smart Crop on: only the receipt is kept' : 'Smart Crop off: photos are kept as taken', 'info'); }
     else { sset('rcAutoCapture', !!v); showToast(v ? 'Auto Capture on: hold the receipt steady and the camera takes the photo' : 'Auto Capture off: tap the round button to take each photo', 'info'); }
 }
@@ -18199,7 +18204,7 @@ function openCamera() {
             <div class="rc-cam-wb"><button type="button" class="app-btn" data-cam="retry"><i class="fas fa-sync-alt mr-2"></i>Try again</button><button type="button" class="app-btn" data-cam="file"><i class="fas fa-camera mr-2"></i>Phone camera app</button></div></div>
         <button type="button" class="rc-cam-torch" data-cam="torch" hidden aria-label="Light"><i class="fas fa-bolt"></i></button>
         <canvas class="rc-cam-ol" aria-hidden="true"></canvas>
-        <button type="button" class="rc-cam-auto" data-cam="auto" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Capture</button>
+        <div class="rc-cam-autos"><button type="button" class="rc-cam-auto" data-cam="auto" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Capture</button><button type="button" class="rc-cam-auto" data-cam="autoread" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Read</button></div>
         <div class="rc-cam-st" aria-live="polite"></div>
         <div class="rc-cam-bar"><div class="rc-cam-strip"></div><div class="rc-cam-ctl">
             <button type="button" class="rc-cam-btn rc-cam-close" data-cam="close"><i class="fas fa-times mr-2"></i>Close</button>
@@ -18209,7 +18214,8 @@ function openCamera() {
     const video = ov.querySelector('video'), strip = ov.querySelector('.rc-cam-strip'), flash = ov.querySelector('.rc-flash'), wait = ov.querySelector('#rc-cam-wait');
     let torchOn = false, starting = false, waitT = 0, autoT = 0, steady = 0, lastBox = null, shotBox = null, cool = 0;
     const ol = ov.querySelector('.rc-cam-ol'), stEl = ov.querySelector('.rc-cam-st'), autoBtn = ov.querySelector('[data-cam="auto"]');
-    const paintAuto = () => { const on = autoCapOn(); autoBtn.classList.toggle('on', on); autoBtn.setAttribute('aria-checked', String(on)); if (!on) { stEl.textContent = ''; drawBox(null); } };
+    const readBtn = ov.querySelector('[data-cam="autoread"]');
+    const paintAuto = () => { const on = autoCapOn(), rd = autoReadOn(); autoBtn.classList.toggle('on', on); autoBtn.setAttribute('aria-checked', String(on)); readBtn.classList.toggle('on', rd); readBtn.setAttribute('aria-checked', String(rd)); readBtn.hidden = !on; if (!on) { stEl.textContent = ''; drawBox(null); } };
     function drawBox(box, good) {                                   // the outline of the receipt the camera sees
         const r = video.getBoundingClientRect(); ol.width = Math.round(r.width); ol.height = Math.round(r.height); ol.style.left = r.left + 'px'; ol.style.top = r.top + 'px'; ol.style.width = r.width + 'px'; ol.style.height = r.height + 'px';
         const x = ol.getContext('2d'); x.clearRect(0, 0, ol.width, ol.height); if (!box || !video.videoWidth) return;
@@ -18236,7 +18242,10 @@ function openCamera() {
         const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight; c.getContext('2d').drawImage(video, 0, 0);
         flash.style.opacity = '.85'; setTimeout(() => { flash.style.opacity = '0'; }, 120);
         if (!auto && autoCapOn() && lastBox) shotBox = lastBox;
-        c.toBlob(bl => { if (!bl) return; smartCrop(bl).then(cr => makePage(cr.blob).then(p => { p.cropped = cr.cropped; p.auto = !!auto; UI.pages[key].push(p); sync(); })); }, 'image/jpeg', 0.92);
+        c.toBlob(bl => { if (!bl) return; smartCrop(bl).then(cr => makePage(cr.blob).then(p => {
+            p.cropped = cr.cropped; p.auto = !!auto; UI.pages[key].push(p); sync();
+            if (auto && autoReadOn() && !gone()) { stEl.textContent = 'Taken - reading it now...'; setTimeout(() => { if (gone() || !UI.pages[key].length) return; stop(); renderPanel(); readPages(key); }, 700); }   // Auto Read
+        })); }, 'image/jpeg', 0.92);
     }
     const live = { ov: ov, video: video, stream: null, onVis: null, stopAuto: () => clearTimeout(autoT) };
     camLive = live;
@@ -18287,6 +18296,7 @@ function openCamera() {
         else if (a === 'torch') { try { torchOn = !torchOn; live.stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }); b.classList.toggle('on', torchOn); } catch (e) { /* ignore */ } }
         else if (a === 'shot') takeShot(false);
         else if (a === 'auto') { setCamOpt('auto', !autoCapOn()); steady = 0; lastBox = null; shotBox = null; paintAuto(); }
+        else if (a === 'autoread') { setCamOpt('read', !autoReadOn()); paintAuto(); }
     });
 }
 
@@ -19470,7 +19480,7 @@ function wirePage() {
         const tmb = ev.target.closest('[data-rc-taxmode]'); if (tmb) { setTaxMode(tmb.getAttribute('data-rc-taxmode')); return; }
         if (ev.target.closest('#rc-newcat')) { newCategory('').then(id => { if (id) renderAll(); }); return; }
         if (ev.target.closest('#rc-ftog')) { const f = document.getElementById('rc-filters'), on = !f.classList.contains('open'); f.classList.toggle('open', on); ev.target.closest('#rc-ftog').setAttribute('aria-expanded', String(on)); return; }
-        const tg = ev.target.closest('[data-rcx]'); if (tg) { const k = tg.getAttribute('data-rcx'); setCamOpt(k, !(k === 'crop' ? cropOn() : autoCapOn())); renderPanel(); return; }
+        const tg = ev.target.closest('[data-rcx]'); if (tg) { const k = tg.getAttribute('data-rcx'); setCamOpt(k, !(k === 'crop' ? cropOn() : k === 'read' ? autoReadOn() : autoCapOn())); renderPanel(); return; }
         const mode = ev.target.closest('[data-rc-mode]'); if (mode) { UI.mode = mode.getAttribute('data-rc-mode'); renderPanel(); return; }
         const rm = ev.target.closest('[data-rc-rm]'); if (rm) { const k = UI.mode === 'upload' ? 'upload' : 'capture'; UI.pages[k] = UI.pages[k].filter(p => p.id !== rm.getAttribute('data-rc-rm')); renderPanel(); return; }
         const a = ev.target.closest('[data-rc]');
@@ -26886,8 +26896,10 @@ async function enablePush() {
 function notifSection() {
     var page = document.getElementById('settings-page'), grid = page && page.querySelector('.form-grid'); if (!grid) return false;
     if (document.getElementById('notif-settings-section')) return true;
-    var sec = document.createElement('div'); sec.className = 'magic-calc-display animate-item acc-section'; sec.id = 'notif-settings-section';
-    sec.innerHTML = '<div class="acc-head" role="button" tabindex="0"><h3><i class="fas fa-envelope mr-3"></i>Notifications</h3><p class="section-sub">Phone notifications about your work orders</p><i class="fas fa-chevron-down acc-chev"></i></div><div class="acc-body"><div id="nt-body"></div></div>';
+    var sec = document.createElement('div'); sec.className = 'magic-calc-display animate-item'; sec.id = 'notif-settings-section';   // built like the other sections, so it opens the same way
+    sec.style.cssText = 'margin: 20px 0; padding: 20px;';
+    sec.innerHTML = '<div class="live-calc-header" style="margin-bottom: 16px;"><div class="live-calc-icon" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.3)); color: #a78bfa;"><i class="fas fa-envelope"></i></div>' +
+        '<div><h3 class="live-calc-title" style="color: #a78bfa;">Notifications</h3><p class="text-gray-400 text-sm">Phone notifications about your work orders</p></div></div><div id="nt-body"></div>';
     var ad = document.getElementById('autodelete-settings-section'); grid.insertBefore(sec, ad || null);
     sec.addEventListener('click', onNotifClick);
     sec.addEventListener('change', function (e) {
@@ -26932,6 +26944,7 @@ async function onNotifClick(e) {
 /* ---------------------------------------------------------------- start */
 function paintAll() { paintMail(); paintButton(); paintNotif(); }
 var css = [
+'.wm-cath .magic-toggle, .nt-type .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
 '.wm-row, .wm-add { display: flex; gap: 8px; margin-top: 8px; } .wm-row .app-input, .wm-add .app-input { flex: 1; min-width: 0; font-size: 16px; }',
 '.wm-note { font-size: .8rem; color: rgba(255,255,255,.75); margin: 6px 0; line-height: 1.4; } .wm-good { color: #86efac; font-weight: 600; } .wm-bad { color: #fca5a5; font-weight: 600; } .wm-warn { color: #fde68a; }',
 '.wm-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; font-size: .86rem; } .wm-kv span { color: rgba(255,255,255,.7); } .wm-kv b { word-break: break-all; }',
@@ -27071,12 +27084,13 @@ function build(rebuild) {
     var sec = document.getElementById('autodelete-settings-section');
     if (!sec) {
         sec = document.createElement('div');
-        sec.className = 'magic-calc-display animate-item acc-section';
+        sec.className = 'magic-calc-display animate-item';               // the same build as the other Settings sections, so it opens and closes the same way
         sec.id = 'autodelete-settings-section';
-        sec.innerHTML = '<div class="acc-head" role="button" tabindex="0"><h3><i class="fas fa-calendar-minus mr-3"></i>Auto Delete</h3>' +
-            '<p class="section-sub">What IncAtor clears out on its own, and how long it waits</p><i class="fas fa-chevron-down acc-chev"></i></div>' +
-            '<div class="acc-body"><div class="ad-list"></div>' +
-            '<p class="setting-description" style="margin-top:12px;opacity:.75">Old photos, work order files and receipts go to the Trash first, so you can still get them back until the Trash is emptied.</p></div>';
+        sec.style.cssText = 'margin: 20px 0; padding: 20px;';
+        sec.innerHTML = '<div class="live-calc-header" style="margin-bottom: 16px;"><div class="live-calc-icon" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(20, 184, 166, 0.3)); color: #14b8a6;"><i class="fas fa-calendar-minus"></i></div>' +
+            '<div><h3 class="live-calc-title" style="color: #14b8a6;">Auto Delete</h3><p class="text-gray-400 text-sm">What IncAtor clears out on its own, and how long it waits</p></div></div>' +
+            '<div class="ad-list"></div>' +
+            '<p class="setting-description" style="margin-top:12px;opacity:.75">Old photos, work order files and receipts go to the Trash first, so you can still get them back until the Trash is emptied.</p>';
         grid.appendChild(sec);
         wire(sec);
     }
@@ -27089,6 +27103,7 @@ function build(rebuild) {
 
 var CSS = [
     '#autodelete-settings-section .ad-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; }',
+    '#autodelete-settings-section .ad-controls .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',   /* a switch sits in its row, not pinned to the page */
     '#autodelete-settings-section .ad-age { display: flex; align-items: center; gap: 8px; transition: opacity .18s ease; }',
     '#autodelete-settings-section .ad-num { width: 86px; text-align: center; padding: 8px 10px; }',
     '#autodelete-settings-section .ad-unit { padding: 8px 10px; }',
@@ -27964,7 +27979,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.12 (v31)';
+var VERSION = '2026.11.13 (v32)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
