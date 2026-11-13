@@ -5761,7 +5761,7 @@ setTimeout(wrap, 500);
 
                     <button type="button" class="mh-cta" onclick="showPage('add')">
                         <span class="mh-cta-icon"><i class="fas fa-plus"></i></span>
-                        <span>New Entry</span>
+                        <span>Create New Job</span>
                     </button>
 
                     <div class="mh-tiles">
@@ -23744,6 +23744,7 @@ function build() {
 /* inline colours written by the app (style="color:#fff") */
 var ORIG = 'data-lm-orig';
 function fixInline(el) {
+    if (el === document.documentElement || el === document.body) return;   // the page itself: its colours are set by the themes, never rewritten here (Safari kept old ones)
     var st = el.getAttribute('style'); if (!st || !/(color|background|border)/.test(st) || el.closest(SKIPEL)) return;
     if (!el.hasAttribute(ORIG)) el.setAttribute(ORIG, st); else if (el.getAttribute('data-lm-done') === st) return;
     var s = el.style, ch = false;
@@ -23904,7 +23905,7 @@ T + ' #inc-stars, ' + T + ' #inc-shoot, ' + T + ' #inc-sky, ' + T + ' .floating-
 T + ' *, ' + T + ' *::before, ' + T + ' *::after { text-shadow: none !important; }',
 T + ' .page:not(#home-page) *, ' + T + ' .floating-nav, ' + T + ' .notification, ' + T + ' .modal-content { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }',
 /* ---- the greeting at the top ---- */
-T + ' #main-header, ' + T + ' .wx-greet, ' + T + ' #main-header * { background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; font-weight: 600 !important; letter-spacing: -0.01em; }',
+T + ' #main-header, ' + T + ' .wx-greet, ' + T + ' #main-header *:not(i) { background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; font-weight: 600 !important; letter-spacing: -0.01em; }',
 /* ---- pages: no cards ---- */
 on(CARDS) + ' { background: transparent !important; background-image: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }',
 on(CARDS.map(function (c) { return c + '::before'; }).concat(CARDS.map(function (c) { return c + '::after'; }))) + ' { display: none !important; }',
@@ -23925,6 +23926,10 @@ PAGES + ' .magical-header .magic-icon { display: none !important; }',
 PAGES + ' .magic-title { font-size: 2rem !important; line-height: 1.1 !important; font-weight: 700 !important; letter-spacing: -0.035em !important; text-align: left !important; margin: 0 !important; background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; animation: none !important; }',
 PAGES + ' .magic-subtitle { text-align: left !important; color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; font-size: .82rem !important; margin-top: 6px !important; letter-spacing: 0 !important; }',
 T + ' .gradient-text, ' + T + ' .breathing-text, ' + T + ' .entry-title, ' + T + ' h1, ' + T + ' h2, ' + T + ' h3, ' + T + ' h4 { background: none !important; -webkit-text-fill-color: currentColor !important; animation: none !important; }',
+/* text that other themes paint with a colour gradient: plain solid text (written strongly so nothing can bring the gradient box back on Safari) */
+(function () { var S = 'html[data-theme="sleek"][data-theme] body '; return ['.gradient-text', '.breathing-text', '.magic-title', '.mh-brand', '#greeting', '#wx-greet', '.live-calc-title', '.entry-title', 'h1', 'h2', 'h3'].map(function (x) { return S + x; }).join(', '); })() +
+    ' { background-image: none !important; background-color: transparent !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; filter: none !important; animation: none !important; text-shadow: none !important; }',
+T + ' #lm-keepbg-row { display: none !important; }',
 T + ' .page:not(#home-page) h3, ' + T + ' .page:not(#home-page) h4, ' + T + ' .entry-title, ' + T + ' .setting-title { color: var(--sk-fg) !important; }',
 T + ' .setting-description, ' + T + ' .entry-meta, ' + T + ' .magic-subtitle, ' + T + ' .text-gray-400, ' + T + ' .text-gray-300, ' + T + ' .text-gray-500 { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
 T + ' label, ' + T + ' .form-label, ' + T + ' .input-label { letter-spacing: .02em; }',
@@ -23941,7 +23946,9 @@ T + ' input[type=checkbox], ' + T + ' input[type=radio], ' + T + ' input[type=ra
 T + ' .app-btn, ' + T + ' .magic-btn, ' + T + ' .secondary-magic, ' + T + ' .ic-btn, ' + T + ' .confirmation-btn, ' + T + ' .entry-action-btn, ' + T + ' .wo-seg button { background: transparent !important; background-image: none !important; border: 1px solid var(--sk-line2) !important; border-radius: 999px !important; box-shadow: none !important; color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; transform: none !important; animation: none !important; }',
 T + ' .app-btn:active, ' + T + ' .magic-btn:active, ' + T + ' .ic-btn:active, ' + T + ' .confirmation-btn:active { background: var(--sk-press) !important; }',
 T + ' .primary-magic, ' + T + ' .wo-pri, ' + T + ' .ic-btn.primary, ' + T + ' .confirmation-btn.primary, ' + T + ' .rf-main, ' + T + ' .mh-cta, ' + T + ' button[type=submit], ' + T + ' .wo-seg button.on, ' + T + ' .rc-cam-btn.go { background: var(--sk-fg) !important; background-image: none !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; border-color: var(--sk-fg) !important; box-shadow: none !important; }',
-T + ' .primary-magic *, ' + T + ' .wo-pri *, ' + T + ' .ic-btn.primary *, ' + T + ' .confirmation-btn.primary *, ' + T + ' .rf-main *, ' + T + ' .mh-cta *, ' + T + ' button[type=submit] *, ' + T + ' .wo-seg button.on * { color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; background: none !important; }',
+T + ' .primary-magic *, ' + T + ' .wo-pri *, ' + T + ' .ic-btn.primary *, ' + T + ' .confirmation-btn.primary *, ' + T + ' .rf-main *, ' + T + ' .mh-cta *, ' + T + ' button[type=submit] *, ' + T + ' .wo-seg button.on * { color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+T + ' .mh-cta-icon { background: transparent !important; border: 1.5px solid var(--sk-bg) !important; }',
+T + ' .primary-magic :not(i), ' + T + ' .wo-pri :not(i), ' + T + ' .mh-cta :not(i):not(.mh-cta-icon):not(.inc-badge), ' + T + ' button[type=submit] :not(i) { background-image: none !important; }',
 T + ' .delete-btn, ' + T + ' .edit-xdel { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
 T + ' .wo-seg { background: var(--sk-soft) !important; border: 1px solid var(--sk-line) !important; border-radius: 999px !important; }',
 T + ' .wo-seg button { border-color: transparent !important; }',
@@ -24053,7 +24060,38 @@ window.addEventListener('load', function () { setTimeout(inject, 0); watch(); })
 try { new MutationObserver(watch).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
 if (document.readyState !== 'loading') setTimeout(watch, 0); else document.addEventListener('DOMContentLoaded', watch);
 window.addEventListener('scroll', function () { if (mo) later(); }, { passive: true });
-window.IncSleek = { on: isOn, scan: scan };
+/* The colours are also written straight onto the page itself (not only in the style sheet). Safari on iPhone sometimes
+   kept the old theme's colours after switching light/dark (half purple, half Sleek); colours written on the page always win
+   and are redrawn at once. They are removed again when you pick another theme. */
+var PAL_DARK = { '--sk-bg': '#0b0b0c', '--sk-raise': '#141416', '--sk-fg': '#ededee', '--sk-mut': '#8d8d93', '--sk-faint': '#5b5b61', '--sk-line': 'rgba(255,255,255,.085)', '--sk-line2': 'rgba(255,255,255,.16)', '--sk-soft': 'rgba(255,255,255,.045)', '--sk-press': 'rgba(255,255,255,.08)',
+    '--pr': '168, 168, 172', '--pr2': '206, 206, 210', '--pr3': '136, 136, 140', '--pr4': '156, 156, 160', '--pr5': '112, 112, 116', '--deep': '58, 58, 62', '--deep2': '66, 66, 70', '--ind': '120, 120, 124', '--ind2': '186, 186, 190', '--ind3': '150, 150, 154',
+    '--lav': '222, 222, 225', '--lav2': '238, 238, 240', '--lav3': '238, 238, 240', '--lav4': '222, 222, 225', '--panel': '20, 20, 22', '--bg1': '11, 11, 12', '--bg2': '11, 11, 12', '--bg3': '11, 11, 12', '--bg4': '20, 20, 22', '--bgd': '16, 16, 18', '--bgdd': '11, 11, 12',
+    '--acc': '236, 236, 238', '--acc2': '170, 170, 174', '--primary': '#ededee', '--primary-dark': '#cfcfd2', '--secondary': '#a8a8ac', '--accent': '#ededee', '--dark': '#0b0b0c', '--darker': '#070708' };
+var PAL_LIGHT = { '--sk-bg': '#fafaf9', '--sk-raise': '#ffffff', '--sk-fg': '#111113', '--sk-mut': '#6a6a70', '--sk-faint': '#a2a2a8', '--sk-line': 'rgba(0,0,0,.085)', '--sk-line2': 'rgba(0,0,0,.16)', '--sk-soft': 'rgba(0,0,0,.035)', '--sk-press': 'rgba(0,0,0,.06)',
+    '--pr': '90, 90, 94', '--pr2': '60, 60, 64', '--pr3': '110, 110, 114', '--pr4': '96, 96, 100', '--pr5': '40, 40, 44', '--acc': '17, 17, 19', '--acc2': '80, 80, 84', '--lav': '50, 50, 54', '--lav2': '30, 30, 34', '--lav3': '30, 30, 34', '--lav4': '50, 50, 54', '--ind2': '60, 60, 64',
+    '--bg1': '250, 250, 249', '--bg2': '250, 250, 249', '--bg3': '250, 250, 249', '--bg4': '255, 255, 255', '--bgd': '244, 244, 243', '--bgdd': '250, 250, 249', '--panel': '255, 255, 255', '--light': '#111113' };
+var painted = null;
+function paintVars() {
+    var r = document.documentElement, b = document.body, on = isOn(), lm = r.classList.contains('lm');
+    var want = on ? (lm ? 'light' : 'dark') : '';
+    if (want === painted) return;
+    var keys = Object.keys(PAL_DARK).concat(Object.keys(PAL_LIGHT));
+    keys.forEach(function (k) { r.style.removeProperty(k); });
+    ['background-color', 'background-image', 'color-scheme'].forEach(function (k) { r.style.removeProperty(k); if (b) b.style.removeProperty(k); });
+    if (on) {
+        var P = Object.assign({}, PAL_DARK, lm ? PAL_LIGHT : {});
+        Object.keys(P).forEach(function (k) { r.style.setProperty(k, P[k]); });
+        r.style.setProperty('color-scheme', lm ? 'light' : 'dark');
+        r.style.setProperty('background-color', P['--sk-bg'], 'important'); r.style.setProperty('background-image', 'none', 'important');
+        if (b) { b.style.setProperty('background-color', P['--sk-bg'], 'important'); b.style.setProperty('background-image', 'none', 'important'); }
+    }
+    painted = want;
+    try { void (b || r).offsetHeight; r.classList.add('sk-redraw'); requestAnimationFrame(function () { r.classList.remove('sk-redraw'); }); } catch (e) { /* ignore */ }   // Safari: redraw everything now
+}
+try { new MutationObserver(paintVars).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) { /* ignore */ }
+paintVars();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { painted = null; paintVars(); });
+window.IncSleek = { on: isOn, scan: scan, paint: function () { painted = null; paintVars(); } };
 })();
 
 </script>
@@ -27266,9 +27304,9 @@ async function paintNotif() {
         (status.devices.length ? status.devices.map(function (d) { return '<div class="wm-dev"><span><b>' + esc(d.device || 'Device') + '</b><small>added ' + esc(when(d.created_at)) + (d.last_ok ? ' · last notification ' + esc(when(d.last_ok)) : '') + (sub && sub.endpoint.slice(-24) === d.endpoint ? ' · this device' : '') + '</small></span><button type="button" class="app-btn" data-nt="rm" data-id="' + esc(d.id) + '">Remove</button></div>'; }).join('') : '<p class="setting-description">No devices yet.</p>') + '</div></div></div>' +
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">What to notify you about</h4><p class="setting-description">Each one has its own switch. The same choices apply on all your devices.</p></div></div>' +
         '<div class="nt-types">' + status.typeNames.map(function (t) { return '<div class="nt-type"><span>' + esc(t[1]) + '</span>' + tog('nt-t' + t[0], p.types[t[0]], t[1]) + '</div>'; }).join('') + '</div></div>' +
-        '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-calendar-minus"></i></div><div class="setting-content"><h4 class="setting-title">Notification Retention</h4><p class="setting-description">Automatically Delete Old Notifications. Only notifications - never jobs, drafts, PDFs, JobVault files or import history.</p></div></div>' +
-        '<div class="setting-control">' + tog('nt-ret', p.retention_on, 'Automatically delete old notifications') + '</div>' +
-        '<div class="ad-age" style="' + (p.retention_on ? '' : 'opacity:.4;pointer-events:none') + '"><span class="wm-note">Delete notifications older than</span><input type="number" min="1" max="3650" class="magic-input ad-num" id="nt-days" value="' + p.retention_days + '" style="width:86px;text-align:center"><span class="wm-note">days</span></div></div>';
+        '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-calendar-minus"></i></div><div class="setting-content"><h4 class="setting-title">Notification Retention</h4><p class="setting-description">' +
+        (window.IncNotes ? (IncNotes.autoOn() ? 'On: notifications older than <b>' + IncNotes.days() + ' days</b> are deleted by themselves.' : 'Off: notifications are kept until you remove them.') : '') +
+        ' Change it in the Notification Centre or in Settings &gt; Auto Delete &gt; Old notifications. Only notifications are deleted - never jobs, drafts, PDFs, JobVault files or import history.</p></div></div></div>';
 }
 async function onNotifClick(e) {
     var t = e.target.closest('[data-nt], .magic-toggle'); if (!t) return;
@@ -27324,6 +27362,287 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 window.IncMail = { api: api, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart };
+})();
+
+</script>
+<script id="incator-notes">
+/* Notification Centre.
+   - The bell on Home (right of "Create New Job") opens it; its red number = notifications you have not seen yet.
+   - "Create New Job" shows a number when imported work orders are waiting for you (to review, approve or add a PDF).
+   - It lists the notifications your IncAtor server sends (work orders from Gmail, ...) plus a few from the app itself,
+     newest first. Tap one to go to it; x removes it; "Clear all" empties the list.
+   - Auto delete: notifications older than N days are deleted by themselves (on by default, 14 days). The same setting
+     is in Settings > Auto Delete and is sent to your server, so the server deletes its old ones too.
+   Only notifications are ever deleted here - never jobs, drafts, PDFs or JobVault files. */
+(function () {
+'use strict';
+if (window.IncNotes) return;
+
+function S(k, d) { try { return (typeof appSettings !== 'undefined' && appSettings && appSettings[k] !== undefined) ? appSettings[k] : d; } catch (e) { return d; } }
+function setS(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ } }
+function toast(m, t) { try { showToast(m, t || 'info'); } catch (e) { /* ignore */ } }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+var LKEY = 'incator:notes';
+
+/* ---------------- settings: auto delete */
+function autoOn() { return S('notesAutoDel', true) !== false; }
+function days() { var n = parseInt(S('notesDays', 14), 10); return n > 0 ? Math.min(3650, n) : 14; }
+function serverOn() { try { return !!(window.IncMail && String(S('woServer', '') || '').trim()); } catch (e) { return false; } }
+function pushPrefs() { if (serverOn()) IncMail.api('/prefs', { retention_on: autoOn(), retention_days: days() }).catch(function () { /* sent again next time */ setS('notesPrefsPending', true); }).then(function (r) { if (r) setS('notesPrefsPending', false); }); }
+function setAuto(v) { setS('notesAutoDel', !!v); pushPrefs(); sweep(); paint(); }
+function setDays(n) { n = Math.max(1, Math.min(3650, parseInt(n, 10) || 14)); setS('notesDays', n); pushPrefs(); sweep(); paint(); return n; }
+function cutoff() { return Date.now() - days() * 86400000; }
+
+/* ---------------- the list: the app's own notifications (this device) + the server's */
+function loadLocal() { try { var a = JSON.parse(appStore.getItem(LKEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function saveLocal(a) { try { appStore.setItem(LKEY, JSON.stringify(a.slice(0, 200))); } catch (e) { /* ignore */ } }
+var serverList = [], serverAt = 0, serverErr = '', serverSignin = false, loading = null;
+function add(n) {
+    var a = loadLocal(), it = { id: 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(), title: String(n.title || ''), body: String(n.body || ''), icon: n.icon || 'bell', go: n.go || '', draft: n.draft || '' };
+    a.unshift(it); saveLocal(a); paint(); return it.id;
+}
+function sweep() {
+    if (!autoOn()) return 0;
+    var c = cutoff(), a = loadLocal(), keep = a.filter(function (n) { return Date.parse(n.at) >= c; });
+    if (keep.length !== a.length) saveLocal(keep);
+    serverList = serverList.filter(function (n) { return Date.parse(n.at) >= c; });
+    return a.length - keep.length;
+}
+function due() { if (!autoOn()) return 0; var c = cutoff(); return loadLocal().filter(function (n) { return Date.parse(n.at) < c; }).length + serverList.filter(function (n) { return Date.parse(n.at) < c; }).length; }
+var ICON = { 1: 'envelope', 2: 'sync-alt', 3: 'file-alt', 4: 'search', 5: 'check', 6: 'copy', 7: 'folder-open', 8: 'clipboard-list', 9: 'exclamation-circle', 10: 'copy', 11: 'refresh', 12: 'check-circle', 13: 'exclamation-triangle', 14: 'exclamation-triangle', 15: 'key' };
+async function loadServer(force) {
+    if (!serverOn()) { serverList = []; serverErr = ''; return; }
+    if (!force && Date.now() - serverAt < 60000) return;
+    if (loading) return loading;
+    loading = (async function () {
+        try {
+            if (S('notesPrefsPending', false)) pushPrefs();
+            var j = await IncMail.api('/notifications');
+            serverList = (j.notifications || []).map(function (n) { var d = n.data || {}; return { id: 's' + n.id, sid: n.id, at: n.created_at, title: n.title || '', body: n.body || '', icon: ICON[n.type] || 'bell', type: n.type, draft: d.draft || '', go: d.go || '', server: true }; });
+            serverAt = Date.now(); serverErr = ''; serverSignin = false; sweep();
+        } catch (e) { serverErr = e.message || 'Could not reach your IncAtor server.'; serverSignin = !!e.signin; }
+        loading = null; paint();
+    })();
+    return loading;
+}
+function all() {
+    var hidden = {}; try { (S('notesHidden', []) || []).forEach(function (id) { hidden[id] = 1; }); } catch (e) { /* ignore */ }
+    return loadLocal().concat(serverList).filter(function (n) { return !hidden[n.id]; }).sort(function (a, b) { return Date.parse(b.at) - Date.parse(a.at); });
+}
+function seenAt() { return Date.parse(S('notesSeenAt', '') || '') || 0; }
+function unread() { var s = seenAt(); return all().filter(function (n) { return Date.parse(n.at) > s; }).length; }
+
+/* ---------------- work orders waiting for you */
+function attention() {
+    try { return window.IncWO ? IncWO.drafts().length : 0; } catch (e) { return 0; }
+}
+function openAttention() {
+    close();
+    if (window.IncMail && IncMail.openDrafts && attention()) { IncMail.openDrafts(); return; }
+    try { var l = IncWO.drafts(); if (l.length) { showPage('add'); IncWO.openSheet(l.map(function (d) { return Object.assign({}, d); })); return; } } catch (e) { /* ignore */ }
+    try { showPage('add'); } catch (e) { /* ignore */ }
+}
+
+/* ---------------- the panel */
+function when(t) {
+    var d = new Date(t), s = (Date.now() - d.getTime()) / 1000;
+    if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+    if (s < 7 * 86400) return d.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+}
+var openSeen = 0, panel = null;
+function open() {
+    if (!panel) {
+        panel = document.createElement('div'); panel.id = 'nc-panel'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Notifications');
+        panel.innerHTML = '<div class="nc-box"><div class="nc-head"><div><h2>Notifications</h2><p id="nc-sub"></p></div><button type="button" class="nc-x" data-nc="close" aria-label="Close"><i class="fas fa-times"></i></button></div>' +
+            '<div id="nc-body" class="nc-body"></div><div id="nc-foot" class="nc-foot"></div></div>';
+        document.body.appendChild(panel);
+        panel.addEventListener('click', onClick);
+        panel.addEventListener('change', function (e) { if (e.target.id === 'nc-days') { var n = setDays(e.target.value); e.target.value = n; toast('Notifications older than ' + n + ' day' + (n === 1 ? '' : 's') + ' are deleted by themselves', 'success'); } });
+        panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); if ((e.key === 'Enter' || e.key === ' ') && e.target.id === 'nc-auto') { e.preventDefault(); e.target.click(); } });
+    }
+    openSeen = seenAt();
+    sweep();
+    panel.classList.add('open'); document.documentElement.classList.add('nc-open');
+    paint();
+    setS('notesSeenAt', new Date().toISOString());                  // opening it = you have seen them (the dots stay until you close)
+    paintBadges();
+    loadServer(true);
+    setTimeout(function () { try { panel.querySelector('.nc-x').focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 50);
+}
+function close() {
+    if (!panel || !panel.classList.contains('open')) return;
+    panel.classList.remove('open'); document.documentElement.classList.remove('nc-open');
+    paintBadges();
+}
+function paint() {
+    paintBadges();
+    if (!panel || !panel.classList.contains('open')) return;
+    var list = all(), att = attention(), body = document.getElementById('nc-body'), foot = document.getElementById('nc-foot'), sub = document.getElementById('nc-sub');
+    sub.textContent = list.length ? list.length + ' notification' + (list.length === 1 ? '' : 's') : 'You are all caught up';
+    var h = '';
+    if (att) h += '<button type="button" class="nc-att" data-nc="att"><span class="nc-ic"><i class="fas fa-clipboard-list"></i></span><span class="nc-tx"><b>' + att + ' imported work order' + (att === 1 ? ' needs' : 's need') + ' you</b><small>Review, approve or add the PDF</small></span><i class="fas fa-chevron-right"></i></button>';
+    if (serverErr) h += '<div class="nc-warn"><i class="fas fa-exclamation-circle"></i><span>' + esc(serverErr) + '</span>' + (serverSignin ? '<button type="button" class="app-btn wo-pri" data-google="1">Continue with Google</button>' : '') + '</div>';
+    if (!list.length) h += '<div class="nc-empty"><i class="fas fa-bell"></i><p>No notifications</p><small>' + (serverOn() ? 'Work orders from Gmail and anything that needs you will show up here.' : 'Add your IncAtor server (Settings &gt; App Behavior &gt; Work Order Email Integration) to get notifications about work orders from Gmail.') + '</small></div>';
+    var day = '';
+    list.forEach(function (n) {
+        var d = new Date(n.at), k = d.toDateString(), lab = k === new Date().toDateString() ? 'Today' : k === new Date(Date.now() - 86400000).toDateString() ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        if (k !== day) { day = k; h += '<div class="nc-day">' + esc(lab) + '</div>'; }
+        var isNew = Date.parse(n.at) > openSeen, act = !!(n.draft || n.go);
+        h += '<div class="nc-it' + (isNew ? ' new' : '') + (act ? ' act' : '') + '" data-id="' + esc(n.id) + '">' +
+            '<span class="nc-ic"><i class="fas fa-' + esc(n.icon || 'bell') + '"></i></span>' +
+            '<button type="button" class="nc-tx" data-nc="go"><b>' + esc(n.title) + '</b>' + (n.body ? '<small>' + esc(n.body) + '</small>' : '') + '<em>' + esc(when(n.at)) + '</em></button>' +
+            '<button type="button" class="nc-del" data-nc="del" aria-label="Remove this notification"><i class="fas fa-times"></i></button></div>';
+    });
+    body.innerHTML = h;
+    var on = autoOn();
+    foot.innerHTML = '<div class="nc-auto"><div><b>Auto delete</b><small>' + (on ? 'Notifications older than this are deleted by themselves.' : 'Off: notifications are kept until you remove them.') + '</small></div>' +
+        '<div class="nc-ctl"><span class="nc-age" style="' + (on ? '' : 'opacity:.4;pointer-events:none') + '"><input id="nc-days" type="number" inputmode="numeric" min="1" max="3650" value="' + days() + '" aria-label="Days to keep notifications"> days</span>' +
+        '<div class="magic-toggle' + (on ? ' active' : '') + '" id="nc-auto" role="switch" tabindex="0" aria-checked="' + on + '" aria-label="Auto delete old notifications"><div class="toggle-orb"></div></div></div></div>' +
+        (list.length ? '<button type="button" class="nc-clear" data-nc="clear"><i class="fas fa-trash-alt"></i> Clear all</button>' : '');
+}
+function hide(id) { var h = (S('notesHidden', []) || []).slice(-300); if (h.indexOf(id) < 0) h.push(id); setS('notesHidden', h); }
+async function onClick(e) {
+    if (e.target === panel) { close(); return; }
+    var b = e.target.closest('[data-nc], #nc-auto'); if (!b) return;
+    if (b.id === 'nc-auto') { setAuto(!autoOn()); toast(autoOn() ? 'Old notifications are deleted after ' + days() + ' days' : 'Auto delete is off - notifications are kept', autoOn() ? 'success' : 'info'); return; }
+    var a = b.getAttribute('data-nc'), row = b.closest('.nc-it'), id = row && row.getAttribute('data-id');
+    if (a === 'close') { close(); return; }
+    if (a === 'att') { openAttention(); return; }
+    if (a === 'del' && id) {
+        var n = all().filter(function (x) { return x.id === id; })[0]; if (!n) return;
+        if (n.server) { serverList = serverList.filter(function (x) { return x.id !== id; }); hide(id); if (serverOn()) IncMail.api('/notifications', { remove: n.sid }).catch(function () { /* hidden here anyway */ }); }
+        else saveLocal(loadLocal().filter(function (x) { return x.id !== id; }));
+        paint(); return;
+    }
+    if (a === 'clear') {
+        var ok = true; try { ok = await showConfirmation({ title: 'Clear all notifications?', message: 'Only the notifications are removed - never jobs, drafts, PDFs or JobVault files.', type: 'danger', confirmText: 'Clear all' }); } catch (er) { ok = true; }
+        if (!ok) return;
+        saveLocal([]); serverList.forEach(function (x) { hide(x.id); }); serverList = [];
+        if (serverOn()) IncMail.api('/notifications', { clear: true }).catch(function () { /* hidden here anyway */ });
+        paint(); toast('Notifications cleared', 'success'); return;
+    }
+    if (a === 'go' && id) {
+        var m = all().filter(function (x) { return x.id === id; })[0]; if (!m) return;
+        if (m.draft) { close(); if (window.IncMail && IncMail.openDrafts) { try { await IncMail.pullDrafts(); } catch (er) { /* ignore */ } IncMail.openDrafts(m.draft); } else openAttention(); return; }
+        if (m.go) { close(); try { showPage(m.go); } catch (er) { /* ignore */ } return; }
+        if (m.type === 15) { close(); try { showPage('settings'); } catch (er) { /* ignore */ } return; }
+    }
+}
+
+/* ---------------- Home: "Create New Job" + bell */
+function badge(el, n) { if (!el) return; el.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : ''; el.parentNode && el.parentNode.classList.toggle('has-badge', n > 0); }
+function paintBadges() {
+    badge(document.getElementById('mh-bell-badge'), unread());
+    var a = attention(), cb = document.getElementById('mh-cta-badge'); badge(cb, a);
+    var cta = document.querySelector('#home-page .mh-cta'); if (cta) cta.setAttribute('aria-label', 'Create New Job' + (a ? ', ' + a + ' imported work order' + (a === 1 ? '' : 's') + ' need you' : ''));
+    var bell = document.getElementById('mh-bell'); if (bell) { var u = unread(); bell.setAttribute('aria-label', 'Notifications' + (u ? ', ' + u + ' new' : '')); }
+}
+function home() {
+    var cta = document.querySelector('#home-page .mh-cta'); if (!cta) return false;
+    if (document.getElementById('mh-bell')) return true;
+    var lab = cta.querySelector('span:not(.mh-cta-icon)'); if (lab) lab.textContent = 'Create New Job';
+    var row = document.createElement('div'); row.className = 'mh-cta-row';
+    cta.parentNode.insertBefore(row, cta); row.appendChild(cta);
+    var b = document.createElement('span'); b.className = 'inc-badge'; b.id = 'mh-cta-badge'; cta.appendChild(b);
+    var bell = document.createElement('button'); bell.type = 'button'; bell.id = 'mh-bell'; bell.className = 'mh-bell'; bell.setAttribute('aria-label', 'Notifications');
+    bell.innerHTML = '<i class="fas fa-bell"></i><span class="inc-badge" id="mh-bell-badge"></span>';
+    bell.addEventListener('click', open);
+    row.appendChild(bell);
+    paintBadges(); return true;
+}
+
+/* ---------------- Settings > Auto Delete row + a button in Settings > Notifications */
+function autodel() {
+    if (!window.IncAutoDel) return false;
+    if (autodel.done) return true;
+    IncAutoDel.add({ id: 'notifs', icon: 'fa-bell', title: 'Old notifications',
+        desc: 'Notifications in the Notification Centre (and on your IncAtor server) older than this are deleted. Only notifications - never jobs, drafts, PDFs or JobVault files.',
+        units: ['days'], max: 3650, on: autoOn, setOn: function (v) { setAuto(v); }, days: days, setDays: function (n) { return setDays(n); }, due: due, sweep: sweep,
+        offNote: 'Off: notifications are kept until you remove them.' });
+    autodel.done = true; return true;
+}
+function settingsBtn() {
+    var nb = document.getElementById('nt-body'); if (!nb) return false;
+    if (!document.getElementById('nc-open-set')) {
+        var d = document.createElement('div'); d.id = 'nc-open-set'; d.className = 'wm-btns';
+        d.innerHTML = '<button type="button" class="app-btn wo-pri" data-ncopen="1"><i class="fas fa-bell mr-2"></i>Open Notification Centre</button>';
+        nb.parentNode.insertBefore(d, nb);
+    }
+    return true;
+}
+document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-ncopen]')) open(); });
+
+var css = [
+'.mh-cta-row { display: flex; align-items: stretch; gap: 10px; width: 100%; margin: 0 0 16px; }',
+'#home-page.active .mh-cta-row { margin: 0 0 clamp(8px, 1.4vh, 16px); }',
+'.mh-cta-row { align-self: stretch; box-sizing: border-box; }',
+'.mh-cta-row .mh-cta, #home-page.active .mh-cta-row .mh-cta { flex: 1 1 auto !important; min-width: 0; width: auto !important; margin: 0 !important; }',
+'.mh-bell { position: relative; flex: 0 0 auto; width: 58px; border-radius: 22px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: #fff; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }',
+'.mh-bell:active { transform: scale(.96); }',
+'.inc-badge { position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #ef4444; color: #fff; font: 700 12px/22px var(--font, sans-serif); text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); pointer-events: none; z-index: 2; }',
+'.inc-badge:empty { display: none; }',
+'html.lm .mh-bell { background: rgba(255,255,255,.75); border-color: rgba(29,23,51,.12); color: #1d1733; }',
+'#nc-panel { position: fixed; inset: 0; z-index: 10640; display: none; background: rgba(0,0,0,.55); }',
+'#nc-panel.open { display: flex; justify-content: center; align-items: flex-end; }',
+'@media (min-width: 700px) { #nc-panel.open { align-items: center; } }',
+'html.nc-open, html.nc-open body { overflow: hidden !important; }',
+'.nc-box { width: 100%; max-width: 560px; height: min(92vh, 900px); display: flex; flex-direction: column; background: rgb(18, 14, 32); color: #fff; border: 1px solid rgba(255,255,255,.12); border-radius: 24px 24px 0 0; overflow: hidden; padding-bottom: env(safe-area-inset-bottom, 0px); animation: ncIn .22s ease-out; }',
+'@media (min-width: 700px) { .nc-box { border-radius: 22px; height: min(84vh, 820px); } }',
+'@keyframes ncIn { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }',
+'.nc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 18px 10px; border-bottom: 1px solid rgba(255,255,255,.08); }',
+'.nc-head h2 { font-size: 1.4rem; font-weight: 700; margin: 0; letter-spacing: -.01em; } .nc-head p { margin: 2px 0 0; font-size: .82rem; color: rgba(255,255,255,.6); }',
+'.nc-x { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: inherit; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }',
+'.nc-body { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 12px 12px; }',
+'.nc-day { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.5); padding: 14px 6px 6px; }',
+'.nc-it { display: flex; align-items: flex-start; gap: 10px; padding: 10px 6px; border-bottom: 1px solid rgba(255,255,255,.07); position: relative; }',
+'.nc-it.new::before { content: ""; position: absolute; left: -4px; top: 22px; width: 7px; height: 7px; border-radius: 50%; background: #60a5fa; }',
+'.nc-ic { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); font-size: .95rem; }',
+'.nc-tx { flex: 1 1 auto; min-width: 0; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 0; cursor: default; }',
+'.nc-it.act .nc-tx { cursor: pointer; }',
+'.nc-tx b { display: block; font-size: .92rem; font-weight: 600; line-height: 1.3; } .nc-tx small { display: block; font-size: .8rem; color: rgba(255,255,255,.7); margin-top: 2px; line-height: 1.35; white-space: pre-line; word-break: break-word; } .nc-tx em { display: block; font-style: normal; font-size: .72rem; color: rgba(255,255,255,.45); margin-top: 4px; }',
+'.nc-del { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: rgba(255,255,255,.45); cursor: pointer; display: flex; align-items: center; justify-content: center; }',
+'.nc-del:active { background: rgba(255,255,255,.08); }',
+'.nc-att { display: flex; align-items: center; gap: 10px; width: 100%; margin: 10px 0 4px; padding: 12px; border-radius: 16px; border: 1px solid rgba(251,191,36,.4); background: rgba(251,191,36,.1); color: inherit; font: inherit; text-align: left; cursor: pointer; }',
+'.nc-att .nc-tx { cursor: pointer; } .nc-att .nc-ic { background: rgba(251,191,36,.2); border-color: rgba(251,191,36,.35); }',
+'.nc-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; padding: 10px 12px; border-radius: 14px; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); font-size: .82rem; }',
+'.nc-warn span { flex: 1 1 200px; } .nc-warn .app-btn { margin: 0; }',
+'.nc-empty { text-align: center; padding: 48px 20px; color: rgba(255,255,255,.6); } .nc-empty i { font-size: 2rem; opacity: .5; } .nc-empty p { margin: 10px 0 4px; font-weight: 600; color: rgba(255,255,255,.85); } .nc-empty small { font-size: .82rem; line-height: 1.4; }',
+'.nc-foot { flex: 0 0 auto; border-top: 1px solid rgba(255,255,255,.08); padding: 12px 18px 14px; }',
+'.nc-auto { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .nc-auto b { display: block; font-size: .9rem; } .nc-auto small { display: block; font-size: .76rem; color: rgba(255,255,255,.6); line-height: 1.35; }',
+'.nc-ctl { display: flex; align-items: center; gap: 10px; flex-shrink: 0; } .nc-age { font-size: .82rem; white-space: nowrap; }',
+'.nc-age input { width: 62px; padding: 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: inherit; font: inherit; font-size: 16px; text-align: center; }',
+'.nc-ctl .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
+'.nc-clear { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 12px; padding: 10px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); background: transparent; color: rgba(255,255,255,.8); font: inherit; font-size: .88rem; cursor: pointer; }',
+/* light mode */
+'html.lm .nc-box { background: #fff; color: #1d1733; border-color: rgba(29,23,51,.1); }',
+'html.lm .nc-head, html.lm .nc-foot { border-color: rgba(29,23,51,.08); } html.lm .nc-head p, html.lm .nc-day, html.lm .nc-tx em, html.lm .nc-del, html.lm .nc-auto small, html.lm .nc-empty { color: rgba(29,23,51,.55); }',
+'html.lm .nc-tx small { color: rgba(29,23,51,.72); } html.lm .nc-it { border-color: rgba(29,23,51,.07); } html.lm .nc-ic, html.lm .nc-x { background: rgba(29,23,51,.05); border-color: rgba(29,23,51,.1); }',
+'html.lm .nc-age input, html.lm .nc-clear { border-color: rgba(29,23,51,.15); background: transparent; color: #1d1733; } html.lm .nc-empty p { color: #1d1733; }',
+/* Sleek: plain and colourless */
+'html[data-theme="sleek"] .nc-box { background: var(--sk-raise, #141416) !important; color: var(--sk-fg, #ededee) !important; border-color: var(--sk-line, rgba(255,255,255,.085)) !important; }',
+'html[data-theme="sleek"] .nc-att, html[data-theme="sleek"] .nc-warn { background: transparent !important; border-color: var(--sk-line2, rgba(255,255,255,.16)) !important; }',
+'html[data-theme="sleek"] .nc-att .nc-ic, html[data-theme="sleek"] .nc-ic { background: transparent !important; border-color: var(--sk-line2, rgba(255,255,255,.16)) !important; }',
+'html[data-theme="sleek"] .nc-it.new::before { background: var(--sk-fg, #ededee) !important; }',
+'html[data-theme="sleek"] .inc-badge { background: var(--sk-fg, #ededee) !important; color: var(--sk-bg, #0b0b0c) !important; box-shadow: 0 0 0 2px var(--sk-bg, #0b0b0c) !important; }',
+'html[data-theme="sleek"] .mh-bell { background: var(--sk-soft, rgba(255,255,255,.045)) !important; border-color: var(--sk-line2, rgba(255,255,255,.16)) !important; color: var(--sk-fg, #ededee) !important; border-radius: 999px !important; }',
+'html[data-theme="sleek"] .mh-bell i { color: var(--sk-fg, #ededee) !important; -webkit-text-fill-color: var(--sk-fg, #ededee) !important; }'
+].join('\n');
+
+function boot() {
+    var st = document.createElement('style'); st.id = 'incator-notes-css'; st.textContent = css; document.head.appendChild(st);
+    var n = 0, tm = setInterval(function () { var a = home(), b = autodel(), c = settingsBtn(); if ((a && b && c) || ++n > 150) clearInterval(tm); }, 200);
+    sweep();
+    setTimeout(function () { loadServer(false); }, 4000);
+    setInterval(function () { if (document.visibilityState === 'visible') { sweep(); loadServer(false); paintBadges(); } }, 60000);
+    setInterval(function () { if (document.visibilityState === 'visible') paintBadges(); }, 4000);   // work orders waiting can change from many places
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { paintBadges(); loadServer(false); } });
+    if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'incator-open' && /#notifications/.test(e.data.url || '')) open(); });   // a phone notification tapped while IncAtor is open
+    if (location.hash === '#notifications') setTimeout(function () { open(); try { history.replaceState(null, '', location.href.replace(/#.*$/, '')); } catch (e) { /* ignore */ } }, 1200);   // a phone notification opened the app here
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+
+window.IncNotes = { open: open, close: close, add: add, all: all, unread: unread, attention: attention, refresh: function () { return loadServer(true); }, sweep: sweep, autoOn: autoOn, days: days, setAuto: setAuto, setDays: setDays, paint: paint };
 })();
 
 </script>
@@ -28322,7 +28641,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v33)';
+var VERSION = '2026.11.13 (v34)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
