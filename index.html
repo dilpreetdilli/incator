@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#1a0b3d">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <title>Incator - Income Tracker</title>
-    <script>(function(){try{var d=document.documentElement,t=localStorage.getItem('incator_theme');if(t&&/^(ocean|emerald|sunset|graphite|neon|gold|rose|arctic|terminal|crimson|terra|business)$/.test(t))d.setAttribute('data-theme',t);var F={"inter": "Inter:wght@400;500;600;700", "roboto": "Roboto:wght@400;500;700", "montserrat": "Montserrat:wght@400;500;600;700", "nunito": "Nunito:wght@400;500;600;700", "lato": "Lato:wght@400;700", "opensans": "Open+Sans:wght@400;500;600;700", "raleway": "Raleway:wght@400;500;600;700", "spacegrotesk": "Space+Grotesk:wght@400;500;600;700", "playfair": "Playfair+Display:wght@400;500;600;700", "merriweather": "Merriweather:wght@400;700", "jetbrains": "JetBrains+Mono:wght@400;500;600;700", "system": ""},f=localStorage.getItem('incator_font');if(f&&F.hasOwnProperty(f)){d.setAttribute('data-font',f);if(F[f]){var l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+F[f]+'&display=swap';document.head.appendChild(l);}}}catch(e){}})();</script>
+    <script>(function(){try{var d=document.documentElement,t=localStorage.getItem('incator_theme');if(t&&/^(ocean|emerald|sunset|graphite|neon|gold|rose|arctic|terminal|crimson|terra|business|sleek)$/.test(t))d.setAttribute('data-theme',t);var F={"inter": "Inter:wght@400;500;600;700", "roboto": "Roboto:wght@400;500;700", "montserrat": "Montserrat:wght@400;500;600;700", "nunito": "Nunito:wght@400;500;600;700", "lato": "Lato:wght@400;700", "opensans": "Open+Sans:wght@400;500;600;700", "raleway": "Raleway:wght@400;500;600;700", "spacegrotesk": "Space+Grotesk:wght@400;500;600;700", "playfair": "Playfair+Display:wght@400;500;600;700", "merriweather": "Merriweather:wght@400;700", "jetbrains": "JetBrains+Mono:wght@400;500;600;700", "system": ""},f=localStorage.getItem('incator_font');if(f&&F.hasOwnProperty(f)){d.setAttribute('data-font',f);if(F[f]){var l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+F[f]+'&display=swap';document.head.appendChild(l);}}}catch(e){}})();</script>
     <link rel="manifest" href="manifest.webmanifest">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -7267,7 +7267,7 @@ var CFG = {
     SCOPES: 'openid email profile https://www.googleapis.com/auth/drive.file',
     DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
     KEEP_VERSIONS: 50,                     // newest backup versions kept in Drive
-    DEBOUNCE_MS: 4000,                     // rapid changes are combined into one upload
+    DEBOUNCE_MS: 1200,                     // changes go up to Google Drive about a second after you make them (rapid changes are combined)
     RETRY_MS: [5000, 15000, 60000, 300000],
     TOKEN_WAIT_MS: 6000                    // how long a silent token request may take
 };
@@ -7356,8 +7356,8 @@ var Cloud = { ready: false, paused: false, uploading: false, pendingAgain: false
               status: { kind: 'boot', text: 'Starting...' }, token: null };
 var appStore = {
     getItem: function (k) { var p = pfx(); return p === null ? null : LS.getItem(p + k); },
-    setItem: function (k, v) { var p = pfx(); if (p === null) return; LS.setItem(p + k, v); if (SYNC_KEYS[k]) localChanged(k); },
-    removeItem: function (k) { var p = pfx(); if (p === null) return; LS.removeItem(p + k); if (SYNC_KEYS[k]) localChanged(k); }
+    setItem: function (k, v) { var p = pfx(); if (p === null) return; if (window.__incSyncReload && SYNC_KEYS[k]) return; LS.setItem(p + k, v); if (SYNC_KEYS[k]) localChanged(k); },
+    removeItem: function (k) { var p = pfx(); if (p === null) return; if (window.__incSyncReload && SYNC_KEYS[k]) return; LS.removeItem(p + k); if (SYNC_KEYS[k]) localChanged(k); }
 };
 window.appStore = appStore;
 
@@ -8022,7 +8022,7 @@ async function performBackup(opts) {
             try { await rawFetch(API + '/' + encodeURIComponent(created.id), { method: 'DELETE' }, token); } catch (e) { /* best effort */ }
             throw ApiError('Upload could not be confirmed', { retry: true });
         }
-        writeMeta({ baseGen: gen, syncedHash: localHash, syncedEntriesHash: await entriesHash(local.entries), lastBackupAt: obj.savedAt, lastBackupId: created.id, lastBackupName: metadata.name });
+        writeMeta({ baseGen: gen, syncedHash: localHash, syncedEntriesHash: await entriesHash(local.entries), lastBackupAt: obj.savedAt, lastBackupId: created.id, lastBackupName: metadata.name, syncedIds: idsOf(local) });
         // another device may have saved the same generation at the same moment
         var after = await listBackups(token, folderId, sess.sub);
         var dup = after.filter(function (f) { return f.gen === gen && f.id !== created.id && f.dev !== deviceId(); });
@@ -8045,7 +8045,7 @@ function localChanged() {
     scheduleBackup(CFG.DEBOUNCE_MS);
 }
 function scheduleBackup(delay) {
-    clearTimeout(Cloud.timer);
+    clearTimeout(Cloud.timer); if (!Cloud.pendingSince) Cloud.pendingSince = Date.now();
     Cloud.timer = setTimeout(function () { runBackup({ auto: true }); }, delay == null ? CFG.DEBOUNCE_MS : delay);
 }
 async function runBackup(o) {
@@ -8059,7 +8059,7 @@ async function runBackup(o) {
     try {
         if (!navigator.onLine) throw NetError('offline');
         result = await performBackup({ allowEmpty: !!o.allowEmpty });
-        Cloud.retryIdx = 0;
+        Cloud.retryIdx = 0; Cloud.autoMerges = 0; Cloud.pendingSince = 0;
         setStatus('ok', '');
         setTimeout(photosChanged, 800);
         if (o.manual) toast(result.uploaded ? 'Backed up to Google Drive' : 'Google Drive already has your latest data', 'success');
@@ -8075,6 +8075,9 @@ async function runBackup(o) {
             setStatus('needs-auth', 'Google Drive is reconnecting in the background');
             armAutoConnect('resume'); setTimeout(quietRenew, 300);
             if (o.manual) toast('Google Drive needs to be reconnected', 'error');
+        } else if (is(e, 'ConflictError') && (Cloud.autoMerges = (Cloud.autoMerges || 0) + 1) <= 3) {
+            setStatus('syncing', 'Bringing in changes from your other device...');      // merged by itself; nothing to decide
+            setTimeout(function () { liveCheck('another device changed Drive', true); }, 200);
         } else if (is(e, 'ConflictError')) {
             Cloud.paused = true;
             setStatus('conflict', 'Backup paused - Drive has other changes');
@@ -8146,6 +8149,19 @@ function mergeData(local, cloudBackup, localChangedAt) {
     var cs = cloudBackup.data.settings || {}, ls = local.settings || {};
     var useLocal = localChangedAt && new Date(localChangedAt) > new Date(cloudBackup.savedAt);
     var settings = Object.assign({}, useLocal ? cs : ls, useLocal ? ls : cs);
+    // typed details (invoice name, address, GST number...): the one typed last wins, and a blank never replaces a filled one
+    var la = (ls._setAt && typeof ls._setAt === 'object') ? ls._setAt : {}, ca = (cs._setAt && typeof cs._setAt === 'object') ? cs._setAt : {}, at = {};
+    Object.keys(Object.assign({}, la, ca)).forEach(function (k) {
+        var a = la[k], b = ca[k], win = !b ? ls : !a ? cs : (a >= b ? ls : cs);
+        if (Object.prototype.hasOwnProperty.call(win, k)) settings[k] = win[k];
+        at[k] = !b ? a : !a ? b : (a >= b ? a : b);
+    });
+    if (Object.keys(at).length) settings._setAt = at;
+    ['invoiceName', 'myAddress', 'soldTo', 'worksafeNumber', 'gstNumber', 'invoicePrefix', 'invoiceNotesDefault', 'userName', 'defaultAddress'].forEach(function (k) {
+        if (at[k]) return;
+        var blank = function (v) { return v == null || String(v).trim() === ''; };
+        if (blank(settings[k])) { var o = !blank(ls[k]) ? ls[k] : cs[k]; if (!blank(o)) settings[k] = o; }
+    });
     settings.nextInvoiceNumber = Math.max(parseInt(cs.nextInvoiceNumber, 10) || 1, parseInt(ls.nextInvoiceNumber, 10) || 1);
     settings.nextQuoteNumber = Math.max(parseInt(cs.nextQuoteNumber, 10) || 1, parseInt(ls.nextQuoteNumber, 10) || 1);
     settings.nextProjectNumber = Math.max(parseInt(cs.nextProjectNumber, 10) || 1, parseInt(ls.nextProjectNumber, 10) || 1);
@@ -8164,7 +8180,7 @@ async function applyCloudLocally(c, why) {
     var local = readLocal();
     if (local.entries.length || local.quotes.length || local.projects.length || local.receipts.length) saveRecovery(why, local);
     writeLocal(c.backup.data.entries, c.backup.data.settings || local.settings, c.backup.data.quotes, c.backup.data.projects, c.backup.data.receipts, c.backup.data.extra);
-    writeMeta({ baseGen: c.gen, syncedHash: c.backup.checksum, syncedEntriesHash: await entriesHash(c.backup.data.entries), lastBackupAt: c.backup.savedAt });
+    writeMeta({ baseGen: c.gen, syncedHash: c.backup.checksum, syncedEntriesHash: await entriesHash(c.backup.data.entries), lastBackupAt: c.backup.savedAt, syncedIds: idsOf(c.backup.data) });
     try { sessionStorage.setItem('incator:restored', JSON.stringify({ at: Date.now(), n: c.backup.data.entries.length, when: c.backup.savedAt })); } catch (e) { /* ignore */ }
 }
 async function applyDecision(d, sess, cloud, opts) {
@@ -8179,7 +8195,7 @@ async function applyDecision(d, sess, cloud, opts) {
         return rs.error ? { kind: 'offline-local', text: 'Settings changed on this device; they will back up when Google Drive is reachable' } : { kind: 'uploaded', text: 'Settings changes were backed up to Google Drive' };
     }
     case 'adopt':
-        writeMeta({ baseGen: c.gen, syncedHash: d.lh, syncedEntriesHash: await entriesHash(local.entries), lastBackupAt: c.backup.savedAt });
+        writeMeta({ baseGen: c.gen, syncedHash: d.lh, syncedEntriesHash: await entriesHash(local.entries), lastBackupAt: c.backup.savedAt, syncedIds: idsOf(local) });
         return { kind: 'in-sync', text: 'This device matches your Google Drive backup' };
     case 'cloud-newer':
         await applyCloudLocally(c, 'before restoring from Google Drive');
@@ -8376,7 +8392,7 @@ async function bootstrap() {
     var restored = null; try { restored = JSON.parse(sessionStorage.getItem('incator:restored')); sessionStorage.removeItem('incator:restored'); } catch (e) { /* ignore */ }
     if (restored && !(Date.now() - restored.at < 60000)) restored = null;
     if (!screenOn) {
-        var msg = restored ? [(restored.merged ? 'Merged with Google Drive' : 'Updated from Google Drive') + ' · ' + restored.n + ' job' + (restored.n === 1 ? '' : 's'), 'ok']
+        var msg = restored ? (restored.live ? ['Synced · changes from your other device are here', 'ok'] : [(restored.merged ? 'Merged with Google Drive' : 'Updated from Google Drive') + ' · ' + restored.n + ' job' + (restored.n === 1 ? '' : 's'), 'ok'])
             : mode === 'offline' ? ['Offline · using the data on this device', 'warn']
             : mode === 'needs-auth' ? ['Google Drive reconnects by itself in a moment', 'info']
             : out.kind === 'paused' ? ['Backup paused · open the account menu to decide', 'warn']
@@ -8454,6 +8470,82 @@ function icReload(why, delay) {
     setTimeout(function () { window.location.reload(); }, delay || 0);
 }
 window.icReload = icReload;
+
+/* ---------------- live sync: what you do on one device shows up on your others by itself ----------------
+   Every 30 seconds while IncAtor is open (and whenever you come back to it), this device asks Google Drive whether
+   another device saved something newer. If this device has no unsaved changes, it simply takes the newer copy. If both
+   changed, the two are merged: new jobs from both stay, an edit keeps the newer version, and something deleted on one
+   device is deleted on the other (it is still in that device's Trash). A safety copy of this device's data is kept first.
+   The page then refreshes on its own, back to where you were - but never while you are typing or in the middle of something. */
+function idsOf(d) { var f = function (l) { return (l || []).map(function (x) { return String(x && x.id); }); }; d = d || {}; return { e: f(d.entries), q: f(d.quotes), p: f(d.projects), r: f(d.receipts) }; }
+function merge3(local, c, base) {
+    var m = mergeData(local, c.backup, readMeta().localChangedAt), cl = idsOf(c.backup.data), lo = idsOf(local);
+    var trash = new Set(((m.extra && m.extra.trash) || []).map(function (t) { return t && t.key; }));
+    function keep(list, k, type) {
+        var b = base ? new Set(base[k] || []) : null, inC = new Set(cl[k]), inL = new Set(lo[k]);
+        return (list || []).filter(function (x) {
+            var id = String(x && x.id);
+            if (b) return !(b.has(id) && (!inC.has(id) || !inL.has(id)));       // was synced, now missing on one side = deleted there
+            return !trash.has(type + ':' + id);                                    // first merge after the update: the Trash says what was deleted
+        });
+    }
+    m.entries = keep(m.entries, 'e', 'entry'); m.quotes = keep(m.quotes, 'q', 'quote'); m.projects = keep(m.projects, 'p', 'project'); m.receipts = keep(m.receipts, 'r', 'receipt');
+    return m;
+}
+function userBusy() {
+    var a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !/^(checkbox|radio|file|button)$/.test(a.type || '')) return true;
+    if (window.editingOriginal) return true;
+    if (document.querySelector('#wo-sheet.open, #wo-viewer, #wo-prog, .modal.active, #confirmation-modal.active, #import-options-modal.active, .rc-cam, .rc-view, #inv-page.open, #inv-page.on, .ic-overlay, .wm-modal, .edit-form')) return true;
+    return false;
+}
+var Live = { busy: false, folder: null, wait: 0 };
+async function liveCheck(why, force) {
+    if (setupMode || !Cloud.ready || (Cloud.paused && !force) || (Cloud.uploading && !force) || Live.busy || !navigator.onLine || window.__incSyncReload) return;
+    var sess = readSession(); if (!sess) return;
+    var meta = readMeta(); if (meta.baseGen == null) return;
+    var token = cachedToken();
+    if (!token) { try { token = await getToken({ interactive: false }); } catch (e) { if (document.visibilityState === 'visible' && !force && !autoArm) armAutoConnect('resume'); return; } }   // asked once; the offer itself then asks less and less often
+    Live.busy = true;
+    try {
+        if (!Live.folder) Live.folder = await ensureFolder(token);
+        var files = await listBackups(token, Live.folder, sess.sub), top = files[0];
+        if (!top || top.gen <= meta.baseGen) { if (force) scheduleBackup(500); return; }
+        var cloud = await findLatestValid(token, sess), c = cloud.latest;
+        if (!c || c.gen <= meta.baseGen) return;
+        if (userBusy()) { clearTimeout(Live.wait); Live.wait = setTimeout(function () { liveCheck('waited until you finished', force); }, 2500); return; }
+        await pullIn(c);
+    } catch (e) {
+        if (is(e, 'AuthError')) { Live.folder = null; setTimeout(quietRenew, 300); }
+    } finally { Live.busy = false; }
+}
+async function pullIn(c) {
+    var local = readLocal(), meta = readMeta();
+    var lh = await dataHash(local.entries, local.settings, local.quotes, local.projects, local.receipts, local.extra);
+    if (lh === c.backup.checksum) { writeMeta({ baseGen: c.gen, syncedHash: lh, syncedEntriesHash: await entriesHash(local.entries), lastBackupAt: c.backup.savedAt, syncedIds: idsOf(local) }); return; }
+    var merged = lh !== meta.syncedHash;                                  // this device changed something too
+    window.__incSyncReload = true; clearTimeout(Cloud.timer);
+    if (!merged) {
+        writeLocal(c.backup.data.entries, c.backup.data.settings || local.settings, c.backup.data.quotes, c.backup.data.projects, c.backup.data.receipts, c.backup.data.extra);
+        writeMeta({ baseGen: c.gen, syncedHash: c.backup.checksum, syncedEntriesHash: await entriesHash(c.backup.data.entries), lastBackupAt: c.backup.savedAt, syncedIds: idsOf(c.backup.data) });
+    } else {
+        var m = merge3(local, c, meta.syncedIds);
+        saveRecovery('before merging changes from another device', local);
+        writeLocal(m.entries, m.settings, m.quotes, m.projects, m.receipts, m.extra);
+        writeMeta({ baseGen: c.gen, syncedHash: '', syncedEntriesHash: '', localChangedAt: nowIso() });
+        try { await performBackup({}); } catch (e) { /* sent on the next try, after the restart */ }
+    }
+    try { sessionStorage.setItem('incator:restored', JSON.stringify({ at: Date.now(), n: (merged ? readLocal() : c.backup.data).entries.length, live: true, merged: merged })); sessionStorage.setItem('incator:quietBoot', '1'); } catch (e) { /* ignore */ }
+    icReload(merged ? 'synced: merged with changes from another device' : 'synced: changes from another device', 0);
+}
+setInterval(function () { if (document.visibilityState === 'visible') liveCheck('every 30 seconds'); }, 30000);
+document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') setTimeout(function () { liveCheck('you came back to IncAtor'); }, 700);
+    else if (Cloud.pendingSince && !Cloud.uploading && Cloud.ready && !Cloud.paused) { clearTimeout(Cloud.timer); runBackup({ auto: true }); }   // leaving: send what is waiting now
+});
+window.addEventListener('focus', function () { setTimeout(function () { liveCheck('window focused'); }, 700); });
+window.addEventListener('pageshow', function (e) { if (e.persisted) setTimeout(function () { liveCheck('reopened'); }, 700); });
+window.IncLive = { check: liveCheck, merge3: merge3, busy: userBusy };
 function connectQuiet() { var s = readSession(); if (!s) return; recover(s).then(function (o) { if (o.reload) quietReload(); else { Cloud.ready = true; setStatus('ok', ''); syncPill('Back online · synced with Google Drive', 'ok'); } }).catch(function () { /* stays offline */ }); }
 var pillEl = null, pillTimer = null;
 function syncPill(text, kind, opt) {
@@ -8707,6 +8799,7 @@ window.IncAtorCloud = {
     setupMode: setupMode,
     photos: { ready: photosReady, list: photoList, upload: photoUpload, download: photoDownload, remove: photoRemove },
     token: function () { if (setupMode || !readSession()) return Promise.resolve(null); return withToken(function (t) { return t; }).catch(function () { return null; }); },   // for your IncAtor server: proves who you are
+    tokenTap: function () { if (setupMode || !readSession()) return Promise.resolve(null); return getTokenFromTap().catch(function () { return null; }); },   // same, from a tap: Google may need you to confirm it is you
     session: readSession,
     status: function () { return Cloud.status; },
     backupNow: backupNow,
@@ -10728,11 +10821,31 @@ bootstrap();
         function round2(v) { return Math.round((v || 0) * 100) / 100; }
 
         // ----- Settings handlers (invoice details, backup reminders) -----
-        function updateTextSetting(key, value, label) {
-            appSettings[key] = String(value).trim();
+        function updateTextSetting(key, value, label, quiet) {
+            var v = String(value == null ? '' : value).trim();
+            if (quiet && (appSettings[key] || '') === v) return;
+            appSettings[key] = v;
+            // when each detail was last typed, so your other devices keep the newest one (and a blank device never wipes it)
+            try { if (!appSettings._setAt || typeof appSettings._setAt !== 'object') appSettings._setAt = {}; appSettings._setAt[key] = new Date().toISOString(); } catch (e) { /* ignore */ }
             saveSettings();
-            showToast(`${label} saved`, 'success');
+            if (!quiet) showToast(`${label} saved`, 'success');
         }
+        /* Settings that are typed in (invoice details and the like) are saved while you type, not only when you leave the
+           box: closing the app or switching away right after typing keeps what you typed. */
+        (function () {
+            var pend = {}, t = 0;
+            function keyOf(el) { var m = (el.getAttribute && el.getAttribute('onchange') || '').match(/updateTextSetting\(\s*'([^']+)'/); return m ? m[1] : null; }
+            function flush() { clearTimeout(t); var p = pend; pend = {}; Object.keys(p).forEach(function (k) { try { updateTextSetting(k, p[k], '', true); } catch (e) { /* ignore */ } }); }
+            document.addEventListener('input', function (e) {
+                var el = e.target; if (!el || !el.closest || !el.closest('#settings-page')) return;
+                var k = keyOf(el); if (!k) return;
+                pend[k] = el.value; clearTimeout(t); t = setTimeout(flush, 700);
+            }, true);
+            document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
+            window.addEventListener('pagehide', flush);
+            window.addEventListener('blur', flush);
+            window.IncSetSave = { flush: flush };
+        })();
 
         function toggleInvoiceServiceDate() {
             appSettings.invoiceShowServiceDate = !appSettings.invoiceShowServiceDate;
@@ -14545,7 +14658,7 @@ var Lens = (function () {
     // Phones (iPhone above all) close a page that uses too much memory, which looks like the app restarting on Home.
     // So the copy is kept small: a few strips, a limited stretch of page, and at most about BUDGET pieces per strip.
     function wantMode() {
-        if (!nav || saverOn() || bend() === 0) return '';
+        if (!nav || saverOn() || bend() === 0 || document.documentElement.getAttribute('data-theme') === 'sleek') return '';   // Sleek: a plain solid bar
         if (backdropOk() && !forced) return 'backdrop';
         if (!forced && !copyOn()) return '';                      // iPhone / iPad / Safari: plain frosted glass unless you turn the copy on
         return typeof Element.prototype.attachShadow === 'function' ? 'copy' : '';
@@ -22857,7 +22970,7 @@ requestAnimationFrame(frame);
     var TK = 'incator_theme', FK = 'incator_font';
     /* Default theme (violet) and default font (Poppins) are defined once in :root, are not editable,
        and "applying" them only removes the data-theme / data-font attribute. */
-    var THEMES = Object.freeze([{"id": "default", "name": "Default", "desc": "The original violet look", "locked": true, "c": ["#1a0b3d", "#8b5cf6", "#f97316"]}, {"id": "ocean", "name": "Ocean", "desc": "Deep blue, soft glass", "locked": false, "c": ["#0b283d", "#5cb6f6", "#22d3ee"]}, {"id": "emerald", "name": "Emerald", "desc": "Forest green and gold", "locked": false, "c": ["#0c3c26", "#60f2ae", "#facc15"]}, {"id": "sunset", "name": "Sunset", "desc": "Warm orange and rose glow", "locked": false, "c": ["#3d170b", "#f6805c", "#fbbf24"]}, {"id": "graphite", "name": "Graphite", "desc": "Flat, quiet, no animations", "locked": false, "c": ["#222426", "#a0a7b2", "#f59e0b"]}, {"id": "neon", "name": "Neon", "desc": "Black with glowing cyan edges", "locked": false, "c": ["#080614", "#00e5ff", "#a3e635"]}, {"id": "gold", "name": "Gold", "desc": "Black and gold, sharp luxury", "locked": false, "c": ["#161006", "#f2c960", "#facc15"]}, {"id": "rose", "name": "Rose", "desc": "Soft pink, very rounded", "locked": false, "c": ["#3d0b20", "#f65c9c", "#fdba74"]}, {"id": "arctic", "name": "Arctic", "desc": "Icy teal, crisp glass", "locked": false, "c": ["#173143", "#85d9ee", "#7dd3fc"]}, {"id": "terminal", "name": "Terminal", "desc": "Green phosphor, square edges", "locked": false, "c": ["#020c06", "#22c55e", "#a3e635"]}, {"id": "crimson", "name": "Crimson", "desc": "Bold red and gold", "locked": false, "c": ["#390f16", "#fa586e", "#facc15"]}, {"id": "terra", "name": "Terra", "desc": "Earthy, matte, calm", "locked": false, "c": ["#2d2018", "#d7a67b", "#becd64"]}, {"id": "business", "name": "Business", "desc": "Quiet blue, tight corners", "locked": false, "c": ["#172034", "#6f92e3", "#38bdf8"]}]);
+    var THEMES = Object.freeze([{"id": "default", "name": "Default", "desc": "The original violet look", "locked": true, "c": ["#1a0b3d", "#8b5cf6", "#f97316"]}, {"id": "ocean", "name": "Ocean", "desc": "Deep blue, soft glass", "locked": false, "c": ["#0b283d", "#5cb6f6", "#22d3ee"]}, {"id": "emerald", "name": "Emerald", "desc": "Forest green and gold", "locked": false, "c": ["#0c3c26", "#60f2ae", "#facc15"]}, {"id": "sunset", "name": "Sunset", "desc": "Warm orange and rose glow", "locked": false, "c": ["#3d170b", "#f6805c", "#fbbf24"]}, {"id": "graphite", "name": "Graphite", "desc": "Flat, quiet, no animations", "locked": false, "c": ["#222426", "#a0a7b2", "#f59e0b"]}, {"id": "neon", "name": "Neon", "desc": "Black with glowing cyan edges", "locked": false, "c": ["#080614", "#00e5ff", "#a3e635"]}, {"id": "gold", "name": "Gold", "desc": "Black and gold, sharp luxury", "locked": false, "c": ["#161006", "#f2c960", "#facc15"]}, {"id": "rose", "name": "Rose", "desc": "Soft pink, very rounded", "locked": false, "c": ["#3d0b20", "#f65c9c", "#fdba74"]}, {"id": "arctic", "name": "Arctic", "desc": "Icy teal, crisp glass", "locked": false, "c": ["#173143", "#85d9ee", "#7dd3fc"]}, {"id": "terminal", "name": "Terminal", "desc": "Green phosphor, square edges", "locked": false, "c": ["#020c06", "#22c55e", "#a3e635"]}, {"id": "crimson", "name": "Crimson", "desc": "Bold red and gold", "locked": false, "c": ["#390f16", "#fa586e", "#facc15"]}, {"id": "terra", "name": "Terra", "desc": "Earthy, matte, calm", "locked": false, "c": ["#2d2018", "#d7a67b", "#becd64"]}, {"id": "business", "name": "Business", "desc": "Quiet blue, tight corners", "locked": false, "c": ["#172034", "#6f92e3", "#38bdf8"]}, {"id": "sleek", "name": "Sleek", "desc": "Plain and calm: no colours, no cards", "locked": false, "c": ["#0b0b0c", "#f2f2f2", "#7a7a7a"]}]);
     var FONTS = Object.freeze([{"id": "poppins", "name": "Poppins", "stack": "'Poppins', sans-serif", "q": null, "desc": "Default - rounded and friendly", "locked": true}, {"id": "inter", "name": "Inter", "stack": "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif", "q": "Inter:wght@400;500;600;700", "desc": "Clean and neutral", "locked": false}, {"id": "roboto", "name": "Roboto", "stack": "'Roboto', system-ui, 'Segoe UI', Arial, sans-serif", "q": "Roboto:wght@400;500;700", "desc": "Familiar Android look", "locked": false}, {"id": "montserrat", "name": "Montserrat", "stack": "'Montserrat', 'Segoe UI', Arial, sans-serif", "q": "Montserrat:wght@400;500;600;700", "desc": "Wide and modern", "locked": false}, {"id": "nunito", "name": "Nunito", "stack": "'Nunito', 'Segoe UI', Arial, sans-serif", "q": "Nunito:wght@400;500;600;700", "desc": "Soft rounded", "locked": false}, {"id": "lato", "name": "Lato", "stack": "'Lato', 'Segoe UI', Arial, sans-serif", "q": "Lato:wght@400;700", "desc": "Warm and professional", "locked": false}, {"id": "opensans", "name": "Open Sans", "stack": "'Open Sans', 'Segoe UI', Arial, sans-serif", "q": "Open+Sans:wght@400;500;600;700", "desc": "Easy to read", "locked": false}, {"id": "raleway", "name": "Raleway", "stack": "'Raleway', 'Segoe UI', Arial, sans-serif", "q": "Raleway:wght@400;500;600;700", "desc": "Elegant and light", "locked": false}, {"id": "spacegrotesk", "name": "Space Grotesk", "stack": "'Space Grotesk', 'Segoe UI', Arial, sans-serif", "q": "Space+Grotesk:wght@400;500;600;700", "desc": "Techy", "locked": false}, {"id": "playfair", "name": "Playfair Display", "stack": "'Playfair Display', Georgia, 'Times New Roman', serif", "q": "Playfair+Display:wght@400;500;600;700", "desc": "Classic serif", "locked": false}, {"id": "merriweather", "name": "Merriweather", "stack": "'Merriweather', Georgia, 'Times New Roman', serif", "q": "Merriweather:wght@400;700", "desc": "Sturdy serif", "locked": false}, {"id": "jetbrains", "name": "JetBrains Mono", "stack": "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace", "q": "JetBrains+Mono:wght@400;500;600;700", "desc": "Monospace", "locked": false}, {"id": "system", "name": "System", "stack": "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif", "q": "", "desc": "Your device's own font, fastest", "locked": false}]);
     var TIDS = THEMES.map(function (t) { return t.id; }), FIDS = FONTS.map(function (f) { return f.id; });
     var root = document.documentElement;
@@ -23465,6 +23578,8 @@ function mode() { var v = S('uiMode', 'dark'); return v === 'light' || v === 'au
 function phoneLight() { try { return matchMedia('(prefers-color-scheme: light)').matches; } catch (e) { return false; } }
 function isLight() { var m = mode(); return m === 'light' || (m === 'auto' && phoneLight()); }
 function keepBg() { return S('lightKeepBg', false) === true; }
+function isSleek() { return document.documentElement.getAttribute('data-theme') === 'sleek'; }   // the Sleek theme: no colours anywhere
+var LIGHT = false, SLEEK = false;                                         // what the made styles are made for right now
 
 /* ---------- colours ---------- */
 var NAMED = { white: [255, 255, 255, 1], black: [0, 0, 0, 1], transparent: [0, 0, 0, 0] };
@@ -23504,17 +23619,37 @@ function lineC(c) {
     if (x[2] < 0.2) return out(rgb(x[0], x[1], 0.85), a);
     return null;
 }
+// Sleek: every colour becomes a grey of the same brightness (so text stays readable), see-through stays see-through
+function grayC(c) {
+    var y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    var sat = Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]);
+    if (sat > 40) y = y < 128 ? Math.max(y, 70) : Math.min(255, y + 18);  // a coloured thing keeps standing out a little from the plain background
+    var v = Math.round(y); return [v, v, v, c[3]];
+}
+function compose(fn) {
+    return function (c, onlyGray) {
+        var r = LIGHT && !onlyGray ? fn(c) : null;
+        if (!SLEEK) return r;
+        var b = r != null ? parse(r) : c; if (!b) return r;
+        var g = grayC(b);
+        if (r == null && g[0] === c[0] && g[1] === c[1] && g[2] === c[2]) return null;
+        return out(g.slice(0, 3), g[3]);
+    };
+}
+var tC = compose(function (c) { return textC(c); }), fC = compose(function (c) { return fillC(c); }), lC = compose(function (c) { return lineC(c); });
 var COL = /(#[0-9a-fA-F]{3,8}\b|rgba?\([^()]*\)|\bwhite\b|\bblack\b)/g;
-function mapColors(val, fn) { var changed = false; var v = val.replace(COL, function (m) { var c = parse(m); if (!c) return m; var r = fn(c); if (r == null) return m; changed = true; return r; }); return changed ? v : null; }
+function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, function (m) { var c = parse(m); if (!c) return m; var r = fn(c, og); if (r == null) return m; changed = true; return r; }); return changed ? v : null; }
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
 var SKIP = /\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
+var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
+function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
-function declFor(st) {
+function declFor(st, og) {
     var out1 = [], seen = {}, clipText = /text/.test(st.getPropertyValue('-webkit-background-clip') + st.getPropertyValue('background-clip'));
     function put(p, v, kind, imp) {
-        var fn = kind === 'text' ? textC : kind === 'fill' ? (clipText ? textC : fillC) : lineC, r = mapColors(v, fn);
+        var fn = kind === 'text' ? tC : kind === 'fill' ? (clipText ? tC : fC) : lC, r = mapColors(v, fn, og);
         if (r != null) { out1.push(p + ': ' + r + imp); seen[p] = 1; }
     }
     // shorthands that use the theme's colour variables cannot be read as parts, so they are handled whole
@@ -23529,37 +23664,40 @@ function declFor(st) {
     return out1.join('; ');
 }
 function scope(sel) {
+    var P = (LIGHT ? '.lm' : '') + (SLEEK ? '[data-theme="sleek"]' : '');
     return sel.split(',').map(function (x) {
         x = x.trim(); if (!x) return x;
-        if (/^:root\b/.test(x)) return x.replace(/^:root/, ':root.lm');
-        if (/^html\b/.test(x)) return x.replace(/^html/, 'html.lm');
-        return 'html.lm ' + x;
+        if (/^:root\b/.test(x)) return x.replace(/^:root(\.lm)?/, ':root' + P);
+        if (/^html\b/.test(x)) return x.replace(/^html(\.lm)?/, 'html' + P);
+        return 'html' + P + ' ' + x;
     }).join(', ');
 }
-function walk(rules, acc) {
+var OTHER_THEME = /html\[data-theme(?!="sleek")/;
+function walk(rules, acc, og) {
     for (var i = 0; i < rules.length; i++) {
         var r = rules[i];
         if (r.type === 1) {
-            if (SKIP.test(r.selectorText)) continue;
-            var d = declFor(r.style); if (d) acc.push(scope(r.selectorText) + ' { ' + d + '; }');
+            var o2 = og || (SLEEK && LIGHT && /html\.lm/.test(r.selectorText));    // light-only rules from other parts: already light, only made grey
+            if (skipped(r.selectorText, o2)) continue;
+            var d = declFor(r.style, o2); if (d) acc.push(scope(r.selectorText) + ' { ' + d + '; }');
         } else if (r.type === 4) {                                       // @media
-            var inner = []; walk(r.cssRules, inner); if (inner.length) acc.push('@media ' + r.conditionText + ' { ' + inner.join('\n') + ' }');
+            var inner = []; walk(r.cssRules, inner, og); if (inner.length) acc.push('@media ' + r.conditionText + ' { ' + inner.join('\n') + ' }');
         } else if (r.type === 12 && r.cssRules) {                        // @supports
-            var in2 = []; walk(r.cssRules, in2); if (in2.length) acc.push('@supports ' + r.conditionText + ' { ' + in2.join('\n') + ' }');
+            var in2 = []; walk(r.cssRules, in2, og); if (in2.length) acc.push('@supports ' + r.conditionText + ' { ' + in2.join('\n') + ' }');
         }
     }
 }
 /* shorthands that use the theme's colour variables (e.g. background: linear-gradient(#fff, rgb(var(--pr2)))) are not
    readable from the browser's style objects, so they are found in the style text itself */
 var SH_RE = /(?:^|;|\{)\s*(background|border|border-color|border-top|border-right|border-bottom|border-left|outline)\s*:\s*([^;{}]*?var\([^;{}]*?)\s*(!important)?\s*(?=;|\}|$)/g;
-function textRules(txt, acc, media) {
+function textRules(txt, acc, media, og) {
     var i = 0, n = txt.length;
     while (i < n) {
         var open = txt.indexOf('{', i); if (open < 0) break;
         var head = txt.slice(i, open).replace(/\/\*[\s\S]*?\*\//g, '').trim();
         if (/^@(media|supports)/.test(head)) {                          // walk inside
             var depth = 1, j = open + 1; while (j < n && depth) { var ch = txt[j]; if (ch === '{') depth++; else if (ch === '}') depth--; j++; }
-            var inner = []; textRules(txt.slice(open + 1, j - 1), inner, head);
+            var inner = []; textRules(txt.slice(open + 1, j - 1), inner, head, og);
             if (inner.length) acc.push(head + ' { ' + inner.join('\n') + ' }');
             i = j; continue;
         }
@@ -23569,10 +23707,11 @@ function textRules(txt, acc, media) {
             var d2 = 1, k = open + 1; while (k < n && d2) { var c2 = txt[k]; if (c2 === '{') d2++; else if (c2 === '}') d2--; k++; } i = k; continue;
         }
         var body = txt.slice(open + 1, close);
-        if (head && body.indexOf('var(') >= 0 && !SKIP.test(head)) {
+        var og2 = og || (SLEEK && LIGHT && /html\.lm/.test(head));
+        if (head && body.indexOf('var(') >= 0 && !skipped(head, og2)) {
             var clipText = /background-clip\s*:\s*text/.test(body), out1 = [], m; SH_RE.lastIndex = 0;
             while ((m = SH_RE.exec(body))) {
-                var kind = SHORT[m[1]], fn = kind === 'fill' ? (clipText ? textC : fillC) : lineC, r = mapColors(m[2], fn);
+                var kind = SHORT[m[1]], fn = kind === 'fill' ? (clipText ? tC : fC) : lC, r = mapColors(m[2], fn, og2);
                 if (r != null) out1.push(m[1] + ': ' + r + (m[3] ? ' !important' : ''));
             }
             if (out1.length) {
@@ -23588,14 +23727,18 @@ var sheet = null, sig = '';
 function build() {
     var acc = [], n = 0;
     Array.prototype.forEach.call(document.styleSheets, function (sh) {
-        if (sh.ownerNode && (sh.ownerNode.id === 'incator-light-css' || sh.ownerNode.id === 'incator-light-fix')) return;
+        var id = sh.ownerNode && sh.ownerNode.id;
+        if (id === 'incator-light-css' || id === 'incator-sleek-css' || id === 'incator-light-vars') return;
+        var og = id === 'incator-light-fix';                              // the hand-made light touches: already light, only made grey (Sleek)
+        if (og && !(SLEEK && LIGHT)) return;
         var rs; try { rs = sh.cssRules; } catch (e) { return; }
-        n += rs.length; walk(rs, acc);
-        if (sh.ownerNode && sh.ownerNode.textContent && sh.ownerNode.textContent.indexOf('var(') >= 0) textRules(sh.ownerNode.textContent, acc, '');
+        n += rs.length; walk(rs, acc, og);
+        if (sh.ownerNode && sh.ownerNode.textContent && sh.ownerNode.textContent.indexOf('var(') >= 0) textRules(sh.ownerNode.textContent, acc, '', og);
     });
     if (!sheet) { sheet = document.createElement('style'); sheet.id = 'incator-light-css'; document.head.appendChild(sheet); }
     sheet.textContent = acc.join('\n');
     var fx = document.getElementById('incator-light-fix'); if (fx) document.head.appendChild(fx);   // the hand-made fixes stay last
+    var sk = document.getElementById('incator-sleek-css'); if (sk) document.head.appendChild(sk);   // and Sleek's own look after them
     sig = n + ':' + document.styleSheets.length;
 }
 /* inline colours written by the app (style="color:#fff") */
@@ -23606,12 +23749,12 @@ function fixInline(el) {
     var s = el.style, ch = false;
     for (var i = 0; i < s.length; i++) {
         var p = s[i], v = s.getPropertyValue(p), r = null;
-        if (TEXT.indexOf(p) >= 0) r = mapColors(v, textC); else if (FILL.indexOf(p) >= 0) r = mapColors(v, fillC); else if (LINE.indexOf(p) >= 0) r = mapColors(v, lineC);
+        if (TEXT.indexOf(p) >= 0) r = mapColors(v, tC); else if (FILL.indexOf(p) >= 0) r = mapColors(v, fC); else if (LINE.indexOf(p) >= 0) r = mapColors(v, lC);
         if (r != null) { s.setProperty(p, r, s.getPropertyPriority(p)); ch = true; }
     }
     el.setAttribute('data-lm-done', el.getAttribute('style'));
 }
-var SKIPEL = '.bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
+var SKIPEL = '.theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
 function fixAll(root) { Array.prototype.forEach.call((root || document).querySelectorAll('[style]'), fixInline); }
 function undoInline() { Array.prototype.forEach.call(document.querySelectorAll('[' + ORIG + ']'), function (el) { el.setAttribute('style', el.getAttribute(ORIG)); el.removeAttribute(ORIG); el.removeAttribute('data-lm-done'); }); }
 var mo = null, hm = null, t = 0;
@@ -23626,7 +23769,7 @@ function watch(on) {
         });
         mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
         hm = new MutationObserver(function (ms) {                       // a part of the app added its styles: include them
-            if (ms.some(function (m) { return Array.prototype.some.call(m.addedNodes, function (n) { return n.nodeName === 'STYLE' && n.id !== 'incator-light-css' && n.id !== 'incator-light-fix'; }) || (m.target.nodeName === 'STYLE' && m.target.id !== 'incator-light-css' && m.target.id !== 'incator-light-fix'); })) { clearTimeout(t); t = setTimeout(build, 300); }
+            if (ms.some(function (m) { return Array.prototype.some.call(m.addedNodes, function (n) { return n.nodeName === 'STYLE' && n.id !== 'incator-light-css' && n.id !== 'incator-light-fix' && n.id !== 'incator-sleek-css'; }) || (m.target.nodeName === 'STYLE' && m.target.id !== 'incator-light-css' && m.target.id !== 'incator-light-fix'); })) { clearTimeout(t); t = setTimeout(build, 300); }
         });
         hm.observe(document.head, { childList: true, subtree: true, characterData: true });
     } else if (!on && mo) { mo.disconnect(); hm.disconnect(); mo = hm = null; }
@@ -23648,12 +23791,16 @@ function deepVars() {
     vsh.disabled = false;
 }
 function apply() {
-    var on = isLight(), r = document.documentElement;
-    if (on) { build(); fixAll(); watch(true); } else { watch(false); undoInline(); if (sheet) sheet.textContent = ''; }
+    var on = isLight(), r = document.documentElement, sl = isSleek(), was = LIGHT || SLEEK;
+    if (was && (on !== LIGHT || sl !== SLEEK)) undoInline();             // made for another look: start again from the app's own colours
+    LIGHT = on; SLEEK = sl;
+    if (on || sl) { build(); fixAll(); watch(true); } else { watch(false); undoInline(); if (sheet) sheet.textContent = ''; }
     r.classList.toggle('lm', on);
     deepVars();
     r.classList.toggle('lm-sky', on && !keepBg());
-    var mc = document.querySelector('meta[name="theme-color"]'); if (mc) { if (!mc.hasAttribute('data-orig')) mc.setAttribute('data-orig', mc.getAttribute('content') || ''); mc.setAttribute('content', on ? '#f4f1ff' : mc.getAttribute('data-orig')); }
+    var want = on ? (sl ? '#fafafa' : '#f4f1ff') : null;                   // the phone's top bar: light in light mode, else the theme's background
+    function bar() { var mc = document.querySelector('meta[name="theme-color"]'); if (!mc) return; var c = want; if (!c) { var v = getComputedStyle(r).getPropertyValue('--bg1').trim().split(/[ ,]+/).map(Number); if (v.length < 3 || v.some(isNaN)) return; c = 'rgb(' + v[0] + ',' + v[1] + ',' + v[2] + ')'; } if (mc.getAttribute('content') !== c) mc.setAttribute('content', c); }
+    bar(); setTimeout(bar, 0); setTimeout(bar, 120);
     paint();
     try { window.dispatchEvent(new Event('incmode')); } catch (e) { /* ignore */ }
 }
@@ -23712,15 +23859,201 @@ function inject() {
     paint(); return true;
 }
 function boot() {
-    if (isLight()) { document.documentElement.classList.add('lm'); setTimeout(apply, 0); }
-    setTimeout(function () { if (isLight()) build(); }, 1800);             // parts of the app that add their styles a little later
+    if (isLight()) document.documentElement.classList.add('lm');
+    if (isLight() || isSleek()) setTimeout(apply, 0);
+    setTimeout(function () { if (LIGHT || SLEEK) build(); }, 1800);             // parts of the app that add their styles a little later
     var n = 0, tm = setInterval(function () { if (inject() || ++n > 80) clearInterval(tm); }, 250);
-    try { new MutationObserver(function () { clearTimeout(vT); vT = setTimeout(deepVars, 60); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) { /* ignore */ }
+    try { new MutationObserver(function () { clearTimeout(vT); vT = setTimeout(function () { if (isSleek() !== SLEEK) apply(); else deepVars(); }, 60); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) { /* ignore */ }
     window.addEventListener('incglow', function () { deepVars(); });
     try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', function () { if (mode() === 'auto') apply(); }); } catch (e) { /* older phones */ }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncMode = { mode: function (v) { if (v) { save('uiMode', v); apply(); } return mode(); }, light: isLight, keepBg: function (v) { if (v !== undefined) { save('lightKeepBg', !!v); apply(); } return keepBg(); }, rebuild: build, apply: apply };
+window.IncMode = { mode: function (v) { if (v) { save('uiMode', v); apply(); } return mode(); }, light: isLight, sleek: isSleek, keepBg: function (v) { if (v !== undefined) { save('lightKeepBg', !!v); apply(); } return keepBg(); }, rebuild: build, apply: apply };
+})();
+
+</script>
+<script id="incator-sleek">
+/* Sleek theme (Settings > Appearance > Themes > Sleek).
+   A plain, quiet look: one solid background (near-black in dark mode, off-white in light mode), no colours anywhere,
+   and no cards on the pages - lists and settings sit straight on the page, divided by thin lines, like a regular
+   website. Home keeps its tiles (only made plain). Big left-aligned page titles, small spaced-out labels,
+   numbers in even columns. The colours themselves are turned to greys by the light/dark engine (mode.js);
+   this file adds the layout and the finishing touches. */
+(function () {
+'use strict';
+if (window.IncSleek) return;
+var T = 'html[data-theme="sleek"]';
+var PAGES = T + ' .page:not(#home-page)';
+var CARDS = ['.stunning-form-container', '.iconic-entry-card', '.summary-ledger', '.magic-calc-display', '.financial-item', '.chart-container', '.monthly-tile',
+    '.gf-box', '.rc-hero', '.rc-scan', '.rc-row', '.rc-recbar', '.rc-modes', '.ins-card', '.bz-card', '.bz-row', '.acc-section', '.setting-item', '.ap-item',
+    '.sky-opt', '.live-calc-display', '.glass-card', '.mo-card', '.ledger-grand', '.ts-meter', '.ts-line', '.ye-card', '.rc-hero', '.rc-scan', '.wo-drop', '.wo-card', '.qt-card', '.pj-card', '.entry-summary-line', '.filter-bar', '.ad-row', '.nt-type'];
+function on(list) { return list.map(function (c) { return PAGES + ' ' + c; }).join(',\n'); }
+var CSS = [
+/* ---- the palette: greys only ---- */
+T + ' { --sk-bg: #0b0b0c; --sk-raise: #141416; --sk-fg: #ededee; --sk-mut: #8d8d93; --sk-faint: #5b5b61; --sk-line: rgba(255,255,255,.085); --sk-line2: rgba(255,255,255,.16); --sk-soft: rgba(255,255,255,.045); --sk-press: rgba(255,255,255,.08); color-scheme: dark;' +
+    ' --pr: 168, 168, 172; --pr2: 206, 206, 210; --pr3: 136, 136, 140; --pr4: 156, 156, 160; --pr5: 112, 112, 116; --deep: 58, 58, 62; --deep2: 66, 66, 70; --ind: 120, 120, 124; --ind2: 186, 186, 190; --ind3: 150, 150, 154;' +
+    ' --lav: 222, 222, 225; --lav2: 238, 238, 240; --lav3: 238, 238, 240; --lav4: 222, 222, 225; --panel: 20, 20, 22; --bg1: 11, 11, 12; --bg2: 11, 11, 12; --bg3: 11, 11, 12; --bg4: 20, 20, 22; --bgd: 16, 16, 18; --bgdd: 11, 11, 12;' +
+    ' --acc: 236, 236, 238; --acc2: 170, 170, 174; --primary: #ededee; --primary-dark: #cfcfd2; --secondary: #a8a8ac; --accent: #ededee; --dark: #0b0b0c; --darker: #070708; }',
+'html.lm[data-theme="sleek"] { --sk-bg: #fafaf9; --sk-raise: #ffffff; --sk-fg: #111113; --sk-mut: #6a6a70; --sk-faint: #a2a2a8; --sk-line: rgba(0,0,0,.085); --sk-line2: rgba(0,0,0,.16); --sk-soft: rgba(0,0,0,.035); --sk-press: rgba(0,0,0,.06); color-scheme: light;' +
+    ' --pr: 90, 90, 94; --pr2: 60, 60, 64; --pr3: 110, 110, 114; --pr4: 96, 96, 100; --pr5: 40, 40, 44; --acc: 17, 17, 19; --acc2: 80, 80, 84; --lav: 50, 50, 54; --lav2: 30, 30, 34; --lav3: 30, 30, 34; --lav4: 50, 50, 54; --ind2: 60, 60, 64; --light: #111113; }',
+T + ':not([data-font]) { --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }',
+/* ---- one plain background, nothing moving behind the app ---- */
+T + ', ' + T + ' body, html.lm' + '[data-theme="sleek"], html.lm[data-theme="sleek"] body { background: var(--sk-bg) !important; background-image: none !important; }',
+T + ' body { color: var(--sk-fg); -webkit-font-smoothing: antialiased; }',
+T + ' #inc-stars, ' + T + ' #inc-shoot, ' + T + ' #inc-sky, ' + T + ' .floating-bubbles, ' + T + ' .floating-orb, ' + T + ' .icon-glow, ' + T + ' .btn-bg-effect, ' + T + ' .sparkle, ' + T + ' .lgx-lens, ' + T + ' .cb-layer, ' + T + ' .bgx, ' + T + ' .orb-ring, ' + T + ' .magic-particles { display: none !important; }',
+T + ' *, ' + T + ' *::before, ' + T + ' *::after { text-shadow: none !important; }',
+T + ' .page:not(#home-page) *, ' + T + ' .floating-nav, ' + T + ' .notification, ' + T + ' .modal-content { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }',
+/* ---- the greeting at the top ---- */
+T + ' #main-header, ' + T + ' .wx-greet, ' + T + ' #main-header * { background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; font-weight: 600 !important; letter-spacing: -0.01em; }',
+/* ---- pages: no cards ---- */
+on(CARDS) + ' { background: transparent !important; background-image: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }',
+on(CARDS.map(function (c) { return c + '::before'; }).concat(CARDS.map(function (c) { return c + '::after'; }))) + ' { display: none !important; }',
+PAGES + ' .stunning-form-container { padding: 4px 2px 24px !important; margin-top: 0 !important; overflow: visible !important; }',
+/* rows sit on the page and are split by a thin line */
+on(['.iconic-entry-card', '.setting-item', '.rc-row', '.bz-row', '.financial-item', '.monthly-tile', '.ins-card', '.bz-card', '.ap-item', '.sky-opt', '.ad-row', '.nt-type', '.wo-card', '.qt-card', '.pj-card']) +
+    ' { border-bottom: 1px solid var(--sk-line) !important; padding-left: 2px !important; padding-right: 2px !important; margin-top: 0 !important; margin-bottom: 0 !important; }',
+on(['.iconic-entry-card:active', '.ap-item:active', '.rc-row:active', '.bz-row:active']) + ' { background: var(--sk-soft) !important; }',
+PAGES + ' .space-y-4 > :not([hidden]) ~ :not([hidden]), ' + PAGES + ' .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 0 !important; }',
+/* sections in Settings: a small spaced-out label and a line, nothing boxed */
+on(['.acc-section', '.magic-calc-display']) + ' { border-top: 1px solid var(--sk-line) !important; padding: 0 !important; margin: 0 !important; }',
+PAGES + ' .acc-head, ' + PAGES + ' .live-calc-header { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 16px 2px !important; }',
+PAGES + ' .acc-head h3, ' + PAGES + ' .live-calc-header h3, ' + PAGES + ' .live-calc-title, ' + PAGES + ' .acc-title { font-size: .95rem !important; font-weight: 600 !important; letter-spacing: -0.005em; color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; background: none !important; }',
+/* ---- page titles: big, left, plain ---- */
+PAGES + ' .magical-header { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--sk-line) !important; box-shadow: none !important; padding: 18px 2px 14px !important; margin: 0 0 14px !important; border-radius: 0 !important; overflow: visible !important; }',
+PAGES + ' .magical-header .header-content { display: block !important; text-align: left !important; }',
+PAGES + ' .magical-header .magic-icon { display: none !important; }',
+PAGES + ' .magic-title { font-size: 2rem !important; line-height: 1.1 !important; font-weight: 700 !important; letter-spacing: -0.035em !important; text-align: left !important; margin: 0 !important; background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; animation: none !important; }',
+PAGES + ' .magic-subtitle { text-align: left !important; color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; font-size: .82rem !important; margin-top: 6px !important; letter-spacing: 0 !important; }',
+T + ' .gradient-text, ' + T + ' .breathing-text, ' + T + ' .entry-title, ' + T + ' h1, ' + T + ' h2, ' + T + ' h3, ' + T + ' h4 { background: none !important; -webkit-text-fill-color: currentColor !important; animation: none !important; }',
+T + ' .page:not(#home-page) h3, ' + T + ' .page:not(#home-page) h4, ' + T + ' .entry-title, ' + T + ' .setting-title { color: var(--sk-fg) !important; }',
+T + ' .setting-description, ' + T + ' .entry-meta, ' + T + ' .magic-subtitle, ' + T + ' .text-gray-400, ' + T + ' .text-gray-300, ' + T + ' .text-gray-500 { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+T + ' label, ' + T + ' .form-label, ' + T + ' .input-label { letter-spacing: .02em; }',
+/* icons: plain line icons in the text colour, no boxes */
+PAGES + ' .setting-icon, ' + PAGES + ' .entry-main-icon, ' + PAGES + ' .wo-dic, ' + PAGES + ' .rc-ic, ' + PAGES + ' .acc-ic, ' + PAGES + ' .live-calc-icon { background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--sk-mut) !important; }',
+T + ' i.fas, ' + T + ' i.far, ' + T + ' i.fab { -webkit-text-fill-color: currentColor !important; text-shadow: none !important; filter: none !important; }',
+T + ' .page:not(#home-page) i.fas, ' + T + ' .page:not(#home-page) i.far { color: inherit; }',
+/* ---- fields ---- */
+T + ' input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), ' + T + ' select, ' + T + ' textarea, ' + T + ' .app-input { background: var(--sk-soft) !important; background-image: none !important; border: 1px solid var(--sk-line) !important; border-radius: 10px !important; box-shadow: none !important; color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; transition: border-color .15s ease !important; }',
+T + ' input:focus, ' + T + ' select:focus, ' + T + ' textarea:focus, ' + T + ' .app-input:focus { border-color: var(--sk-fg) !important; outline: none !important; box-shadow: 0 0 0 3px var(--sk-press) !important; }',
+T + ' input::placeholder, ' + T + ' textarea::placeholder { color: var(--sk-faint) !important; -webkit-text-fill-color: var(--sk-faint) !important; }',
+T + ' input[type=checkbox], ' + T + ' input[type=radio], ' + T + ' input[type=range] { accent-color: var(--sk-fg); filter: grayscale(1); }',
+/* ---- buttons: quiet outline; the main action is solid ---- */
+T + ' .app-btn, ' + T + ' .magic-btn, ' + T + ' .secondary-magic, ' + T + ' .ic-btn, ' + T + ' .confirmation-btn, ' + T + ' .entry-action-btn, ' + T + ' .wo-seg button { background: transparent !important; background-image: none !important; border: 1px solid var(--sk-line2) !important; border-radius: 999px !important; box-shadow: none !important; color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; transform: none !important; animation: none !important; }',
+T + ' .app-btn:active, ' + T + ' .magic-btn:active, ' + T + ' .ic-btn:active, ' + T + ' .confirmation-btn:active { background: var(--sk-press) !important; }',
+T + ' .primary-magic, ' + T + ' .wo-pri, ' + T + ' .ic-btn.primary, ' + T + ' .confirmation-btn.primary, ' + T + ' .rf-main, ' + T + ' .mh-cta, ' + T + ' button[type=submit], ' + T + ' .wo-seg button.on, ' + T + ' .rc-cam-btn.go { background: var(--sk-fg) !important; background-image: none !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; border-color: var(--sk-fg) !important; box-shadow: none !important; }',
+T + ' .primary-magic *, ' + T + ' .wo-pri *, ' + T + ' .ic-btn.primary *, ' + T + ' .confirmation-btn.primary *, ' + T + ' .rf-main *, ' + T + ' .mh-cta *, ' + T + ' button[type=submit] *, ' + T + ' .wo-seg button.on * { color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; background: none !important; }',
+T + ' .delete-btn, ' + T + ' .edit-xdel { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+T + ' .wo-seg { background: var(--sk-soft) !important; border: 1px solid var(--sk-line) !important; border-radius: 999px !important; }',
+T + ' .wo-seg button { border-color: transparent !important; }',
+T + ' .es-chip, ' + T + ' .wo-badge, ' + T + ' .badge, ' + T + ' .nm-seg { background: transparent !important; border: 1px solid var(--sk-line2) !important; color: var(--sk-mut) !important; box-shadow: none !important; }',
+T + ' .es-chip b, ' + T + ' .es-chip.total { color: var(--sk-fg) !important; }',
+T + ' .nm-seg button[aria-pressed="true"] { background: var(--sk-fg) !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+T + ' .wo-drop { border: 1px dashed var(--sk-line2) !important; border-radius: 14px !important; background: transparent !important; }',
+/* switches: black and white */
+T + ' .magic-toggle { background: var(--sk-line2) !important; box-shadow: none !important; border: 0 !important; }',
+T + ' .magic-toggle.active { background: var(--sk-fg) !important; }',
+T + ' .magic-toggle .toggle-orb { background: var(--sk-bg) !important; box-shadow: none !important; }',
+T + ' .magic-toggle:not(.active) .toggle-orb { background: var(--sk-fg) !important; }',
+/* the small switches in SlipVault */
+T + ' .rc-tgs { background: var(--sk-line2) !important; } ' + T + ' .rc-tgs > span { background: var(--sk-fg) !important; }',
+T + ' .rc-tg.on .rc-tgs, ' + T + ' .rc-cam-auto.on .rc-tgs { background: var(--sk-fg) !important; } ' + T + ' .rc-tg.on .rc-tgs > span, ' + T + ' .rc-cam-auto.on .rc-tgs > span { background: var(--sk-bg) !important; }',
+T + ' .rc-tg { background: transparent !important; border-color: var(--sk-line2) !important; color: var(--sk-fg) !important; }',
+/* the chosen tab or option: solid */
+T + ' .rc-mode.on, ' + T + ' .bz-tab.on, ' + T + ' .wv-tabs .on, ' + T + ' .page [aria-pressed="true"]:not(.theme-card):not(.magic-toggle), ' + T + ' .page [aria-selected="true"] { background: var(--sk-fg) !important; background-image: none !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; border-color: var(--sk-fg) !important; box-shadow: none !important; }',
+T + ' .rc-mode.on *, ' + T + ' .bz-tab.on *, ' + T + ' .wv-tabs .on *, ' + T + ' .page [aria-pressed="true"]:not(.theme-card):not(.magic-toggle) * { color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+T + ' .rc-mode, ' + T + ' .bz-tab { border-radius: 999px !important; }',
+/* drawings and icon tiles: grey line drawings */
+T + ' .page svg, ' + T + ' .empty-state img, ' + T + ' .es-art { filter: grayscale(1); }',
+T + ' .rc-hi, ' + T + ' .rc-hn, ' + T + ' .rc-reci, ' + T + ' .rc-tic, ' + T + ' .rc-ic, ' + T + ' .mo-ic, ' + T + ' .financial-icon, ' + T + ' .live-calc-icon, ' + T + ' .ap-ic, ' + T + ' .ins-ic { background: transparent !important; background-image: none !important; border: 1px solid var(--sk-line2) !important; box-shadow: none !important; color: var(--sk-fg) !important; }',
+T + ' .rc-hi *, ' + T + ' .rc-hn *, ' + T + ' .rc-reci *, ' + T + ' .rc-tic *, ' + T + ' .mo-ic *, ' + T + ' .financial-icon *, ' + T + ' .live-calc-icon * { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+T + ' .ie-glow { display: none !important; } ' + T + ' .ie-scene, ' + T + ' .empty-illus { filter: grayscale(1); }',
+/* numbers line up */
+T + ' .entry-compact-total, ' + T + ' .ledger-grand, ' + T + ' .lc-total, ' + T + ' .total-amount, ' + T + ' .financial-value, ' + T + ' .es-chip, ' + T + ' .bz-amt, ' + T + ' .rc-a, ' + T + ' .stats-value { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; background: none !important; }',
+/* ---- the bar at the bottom: solid, one thin line ---- */
+T + ' .floating-nav { background: var(--sk-raise) !important; background-image: none !important; border: 1px solid var(--sk-line) !important; box-shadow: 0 1px 0 var(--sk-line), 0 10px 30px rgba(0,0,0,.25) !important; }',
+'html.lm[data-theme="sleek"] .floating-nav { box-shadow: 0 8px 24px rgba(0,0,0,.08) !important; }',
+T + ' .floating-nav .nav-item, ' + T + ' .floating-nav .nav-item i { color: var(--sk-faint) !important; -webkit-text-fill-color: var(--sk-faint) !important; text-shadow: none !important; filter: none !important; }',
+T + ' .floating-nav .nav-item.active, ' + T + ' .floating-nav .nav-item.active i { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+T + ' .floating-nav::before, ' + T + ' .floating-nav::after, ' + T + ' .floating-nav .nav-glow { display: none !important; }',
+T + ' .floating-nav .nav-indicator, ' + T + ' .floating-nav .nav-item.active::before { background: var(--sk-press) !important; background-image: none !important; box-shadow: none !important; border: 0 !important; }',
+T + ' .floating-nav .nav-item::after { display: none !important; }',
+/* ---- messages, menus and windows ---- */
+T + ' .notification { background: var(--sk-raise) !important; background-image: none !important; color: var(--sk-fg) !important; border: 1px solid var(--sk-line2) !important; box-shadow: 0 12px 32px rgba(0,0,0,.28) !important; border-radius: 14px !important; }',
+T + ' .notification *, ' + T + ' .ic-pill * { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+T + ' .notification [class*="progress"], ' + T + ' .notification-progress { background: var(--sk-fg) !important; opacity: .35; }',
+T + ' .notification [class*="icon"] { background: transparent !important; border: 1px solid var(--sk-line2) !important; box-shadow: none !important; }',
+T + ' .ic-pill { background: var(--sk-raise) !important; border: 1px solid var(--sk-line2) !important; box-shadow: 0 10px 28px rgba(0,0,0,.25) !important; }',
+T + ' .modal-content, ' + T + ' .confirmation-content, ' + T + ' .ic-dialog, ' + T + ' .nm-sheet, ' + T + ' .entry-menu, ' + T + ' .inc-mini-in, ' + T + ' #wo-sheet .wo-panel { background: var(--sk-raise) !important; background-image: none !important; border: 1px solid var(--sk-line) !important; box-shadow: 0 20px 60px rgba(0,0,0,.4) !important; color: var(--sk-fg) !important; }',
+T + ' .modal, ' + T + ' .ic-dialog-layer { background: rgba(0,0,0,.55) !important; }',
+/* ---- Home keeps its tiles, just plain ---- */
+T + ' .mh-tile, ' + T + ' .home-card { background: var(--sk-soft) !important; background-image: none !important; border: 1px solid var(--sk-line) !important; box-shadow: none !important; animation: none !important; }',
+T + ' .mh-tile::before, ' + T + ' .mh-tile::after, ' + T + ' .home-card::before, ' + T + ' .home-card::after { display: none !important; }',
+T + ' .mh-tile:active, ' + T + ' .home-card:active { background: var(--sk-press) !important; }',
+T + ' .mh-tile-icon, ' + T + ' .home-card .card-icon, ' + T + ' .home-card-icon { background: transparent !important; background-image: none !important; border: 1px solid var(--sk-line2) !important; box-shadow: none !important; }',
+T + ' .mh-tile-icon i, ' + T + ' .home-card i { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+T + ' .mh-tile *, ' + T + ' .home-card * { text-shadow: none !important; }',
+T + ' .mh-cta-wrap { background: none !important; box-shadow: none !important; border: 0 !important; }',
+T + ' .mh-cta { border-radius: 999px !important; }',
+T + ' .mh-brand { background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; letter-spacing: .02em; }',
+T + ' .mh-orb, ' + T + ' .mh-orb-wrap { background: transparent !important; background-image: none !important; box-shadow: none !important; animation: none !important; border-color: var(--sk-line2) !important; }',
+T + ' .mh-orb { border: 1px solid var(--sk-line2) !important; }',
+T + ' .mh-orb i { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; filter: none !important; }',
+T + ' .mh-orb-wrap::before, ' + T + ' .mh-orb-wrap::after { display: none !important; }',
+T + ' .mh-orb::before, ' + T + ' .mh-orb::after { display: none !important; }',
+/* ---- scrollbars and selection ---- */
+T + ' ::selection { background: var(--sk-fg); color: var(--sk-bg); }',
+T + ' ::-webkit-scrollbar-thumb { background: var(--sk-line2) !important; }'
+].join('\n');
+/* Anything else on a page that is drawn as a box (a card made by a newer part of the app) is found and made plain too */
+var FLAT = '.sk-flat';
+CSS += '\n' + T + ' .sk-flat { background: transparent !important; background-image: none !important; border-color: transparent !important; box-shadow: none !important; border-radius: 0 !important; }' +
+       '\n' + T + ' .sk-flat::before, ' + T + ' .sk-flat::after { display: none !important; }' +
+       '\n' + T + ' .sk-flat.sk-line { border-bottom: 1px solid var(--sk-line) !important; }';
+var KEEP = 'button, input, select, textarea, label, a, i, svg, img, canvas, video, .magic-toggle, .wo-drop, .modal, .modal-content, [role="dialog"], .notification, .ic-pill, .nm-sheet, .entry-menu, .rc-cam, .rc-view, .jp-view, #wo-sheet, .floating-nav, .es-chip, .theme-prev, .theme-card, .bgx, .inc-mini-in';
+var seen = new WeakSet(), scanT = 0;
+function isOn() { return document.documentElement.getAttribute('data-theme') === 'sleek'; }
+function scan() {
+    if (!isOn()) return;
+    var page = document.querySelector('.page.active:not(#home-page)'); if (!page) return;
+    var W = page.clientWidth || innerWidth;
+    var all = page.querySelectorAll('div, section, article, li, aside, header, footer, details');
+    for (var i = 0; i < all.length; i++) {
+        var el = all[i]; if (seen.has(el)) continue; seen.add(el);
+        if (el.closest(KEEP)) continue;
+        var r = el.getBoundingClientRect(); if (r.width < 90 || r.height < 40) { seen.delete(el); continue; }   // not drawn yet: looked at again later
+        var cs = getComputedStyle(el), rad = parseFloat(cs.borderTopLeftRadius) || 0;
+        if (rad < 6 || cs.position === 'fixed') continue;
+        if (/url\(/.test(cs.backgroundImage)) continue;                  // a photo or a picture
+        var bg = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent', img = cs.backgroundImage !== 'none';
+        var bd = parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none' && cs.borderTopStyle !== 'dashed';
+        if (!(bg || img || bd || cs.boxShadow !== 'none')) continue;
+        el.classList.add('sk-flat');
+        if (r.width > W * 0.7) el.classList.add('sk-line');               // a wide box becomes a section with a thin line under it
+    }
+}
+function later() { clearTimeout(scanT); scanT = setTimeout(scan, 160); }
+function unflat() { Array.prototype.forEach.call(document.querySelectorAll('.sk-flat'), function (el) { el.classList.remove('sk-flat', 'sk-line'); }); seen = new WeakSet(); }
+var mo = null;
+function watch() {
+    if (isOn() && !mo) {
+        mo = new MutationObserver(later);
+        mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        later(); setTimeout(scan, 900); setTimeout(scan, 2000);
+    } else if (!isOn() && mo) { mo.disconnect(); mo = null; unflat(); }
+}
+function inject() {
+    var st = document.getElementById('incator-sleek-css');
+    if (!st) { st = document.createElement('style'); st.id = 'incator-sleek-css'; }
+    st.textContent = CSS;
+    document.head.appendChild(st);                                       // last, so it has the final say
+}
+inject();
+document.addEventListener('DOMContentLoaded', inject);
+window.addEventListener('load', function () { setTimeout(inject, 0); watch(); });
+try { new MutationObserver(watch).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
+if (document.readyState !== 'loading') setTimeout(watch, 0); else document.addEventListener('DOMContentLoaded', watch);
+window.addEventListener('scroll', function () { if (mo) later(); }, { passive: true });
+window.IncSleek = { on: isOn, scan: scan };
 })();
 
 </script>
@@ -26021,8 +26354,10 @@ async function readPdf(file, n, total) {
         if (i === 1) { try { setThumb(kept.meta.id, await canvasBlob(await renderPage(pg, 320), 'image/jpeg', 0.7)); } catch (e) { /* no picture */ } }
         if (chars < 25 && window.RcptStore && RcptStore.ocrEach) {      // a scanned page: read the picture
             Prog.show('Reading scanned page ' + i + ' of ' + doc.numPages + '...', kept.meta.name);
-            var img = await canvasBlob(await renderPage(pg, 2000), 'image/png');
-            var t = (await RcptStore.ocrEach([img]))[0] || ''; lines = C.toLines(t); scanned++;
+            try {
+                var img = await canvasBlob(await renderPage(pg, 2000), 'image/png');
+                var t = (await RcptStore.ocrEach([img]))[0] || ''; lines = C.toLines(t); scanned++;
+            } catch (e) { /* the picture reader could not run (offline?): this page is skipped, the rest is still read */ }
         }
         pages.push(lines); texts.push(lines.map(function (l) { return l.text; }).join('\n'));
     }
@@ -26575,11 +26910,19 @@ var SUGGEST = ['Work Order', 'Workorder', 'Service Request', 'Job Assignment', '
 
 /* ---------------------------------------------------------------- talking to the server */
 function server() { return String(S('woServer', '') || '').trim().replace(/\/+$/, ''); }
+var SIGNIN = 'Google needs a quick tap to confirm it is you (your sign-in is renewed about every hour).';
 async function token() {
-    if (!window.IncAtorCloud || !IncAtorCloud.token) throw Object.assign(new Error('Sign in with Google first (Settings > Backup & Sync).'), { signin: true });
-    var t = await IncAtorCloud.token(); if (!t) throw Object.assign(new Error('Sign in with Google first (Settings > Backup & Sync).'), { signin: true });
+    if (!window.IncAtorCloud || !IncAtorCloud.token) throw Object.assign(new Error(SIGNIN), { signin: true });
+    var t = await IncAtorCloud.token(); if (!t) throw Object.assign(new Error(SIGNIN), { signin: true });
     return t;
 }
+function googleBtn() { return '<button type="button" class="app-btn wo-pri" data-google="1" style="margin-top:8px"><i class="fas fa-sync-alt mr-2"></i>Continue with Google</button>'; }
+async function continueGoogle() {                                // straight from the tap, so iPhone lets the Google window open
+    var t = window.IncAtorCloud && IncAtorCloud.tokenTap ? await IncAtorCloud.tokenTap() : null;
+    if (!t) { toast('Google sign-in did not finish. Please try again.', 'error'); return; }
+    toast('Signed in', 'success'); refresh(true);
+}
+document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-google]')) continueGoogle(); });
 async function api(path, body, raw) {
     var base = server(); if (!base) throw Object.assign(new Error('Add your IncAtor server address first (Settings > App Behavior > Work Order Email Integration).'), { noserver: true });
     var r;
@@ -26629,7 +26972,7 @@ function paintMail() {
     var body = document.getElementById('wm-body'), note = document.getElementById('wm-server-note'); if (!body) return;
     if (!server()) { note.textContent = 'Not set up yet. Without it, you can still import work orders by uploading them on Create Job.'; body.innerHTML = ''; return; }
     if (!status) { note.textContent = 'Checking the server...'; body.innerHTML = ''; return; }
-    if (status.error) { note.innerHTML = '<span class="wm-bad">' + esc(status.error) + '</span>'; body.innerHTML = ''; return; }
+    if (status.error) { note.innerHTML = '<span class="wm-bad">' + esc(status.error) + '</span>' + (status.signin ? '<br>' + googleBtn() : ''); body.innerHTML = ''; return; }
     note.innerHTML = '<span class="wm-good">Connected to your server</span>' + (status.browser ? '' : ' · <span class="wm-warn">no Browserless key: work order links that need a browser will wait for you</span>');
     var g = status.gmail, s = status.settings || {}, f = filtersOf();
     var gm = !g ? '<p class="wm-note">Use the Gmail account that receives your work orders. It can be different from the account you sign in to IncAtor with and the one used for Google Drive backup.</p><button type="button" class="app-btn wo-pri" data-wm="connect"><i class="fas fa-envelope mr-2"></i>Connect Gmail</button>'
@@ -26774,7 +27117,7 @@ var watching = null;
 async function checkNow() {
     if (watching) return;
     if (!status || status.error) await refresh(true);
-    if (!status || status.error) { toast(status && status.error || 'Your IncAtor server is not reachable', 'error'); return; }
+    if (!status || status.error) { if (status && status.signin) showLive({ status: 'failed', error: status.error, signin: true }); else toast(status && status.error || 'Your IncAtor server is not reachable', 'error'); return; }
     if (!status.gmail) { toast('Connect your work order Gmail first: Settings > App Behavior > Work Order Email Integration', 'info'); return; }
     try { var j = await api('/check', {}); watchRun(j.run, 'Checking Gmail'); } catch (e) { showLive({ status: e.reconnect ? 'reconnect' : 'failed', error: e.message }); }
 }
@@ -26789,7 +27132,7 @@ function showLive(run, title) {
     el.innerHTML = '<div class="wm-lh">' + head + '</div>' + (nums ? '<div class="wm-nums">' + nums + '</div>' : '') +
         (ev.length ? '<ol class="wm-ev">' + ev.slice(-6).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ol>' : '') +
         (!fin ? '<p class="wm-note">You can leave this page - the check carries on on your server.</p>' : '') +
-        (fin && run.error ? '<p class="wm-note wm-bad">' + esc(run.error) + '</p>' : '') +
+        (fin && run.error ? '<p class="wm-note wm-bad">' + esc(run.error) + '</p>' + (run.signin ? googleBtn() : '') : '') +
         (fin && run.status === 'reconnect' ? '<button type="button" class="app-btn" onclick="IncMail.reconnect()"><i class="fas fa-sync-alt mr-2"></i>Reconnect Gmail</button>' : '') +
         (fin ? '<button type="button" class="app-btn" onclick="document.getElementById(\'wm-live\').hidden=true">Close</button>' : '');
 }
@@ -26838,7 +27181,7 @@ async function pullDrafts(open) {
         }
         if (added.length) IncWO.saveDrafts(IncWO.drafts().concat(added.map(function (d) { var o = { id: d.id, at: d.at, wo: d.wo, files: d.files, src: d.src }; if (d.needsPdf) { o.needsPdf = true; o.link = d.link; o.email = d.email; } return o; })));
         try { appStore.setItem('woServerTaken', JSON.stringify(taken.slice(-500))); } catch (e2) { /* ignore */ }
-    } catch (e) { /* tried again next time */ }
+    } catch (e) { try { console.warn('IncAtor: work orders from Gmail could not be fetched yet:', e && e.message); } catch (x) { /* ignore */ } }   // tried again next time
     finally { pulling = false; }
     if (added.length && open) { var h = /#wo-draft=([\w-]+)/.exec(location.hash); openDrafts(h ? h[1] : null); }
     return added.length;
@@ -26911,7 +27254,7 @@ function notifSection() {
 async function paintNotif() {
     var body = document.getElementById('nt-body'); if (!body) return;
     if (!server()) { body.innerHTML = '<p class="wm-note">Notifications come from your IncAtor server. Add its address first in App Behavior &gt; Work Order Email Integration.</p>'; return; }
-    if (!status || status.error) { body.innerHTML = '<p class="wm-note ' + (status && status.error ? 'wm-bad' : '') + '">' + esc(status && status.error || 'Checking the server...') + '</p>'; return; }
+    if (!status || status.error) { body.innerHTML = '<p class="wm-note ' + (status && status.error ? 'wm-bad' : '') + '">' + esc(status && status.error || 'Checking the server...') + '</p>' + (status && status.signin ? googleBtn() : ''); return; }
     var ps = pushSupport(), sub = ps.ok ? await mySub() : null, p = status.prefs, mine = sub && status.devices.some(function (d) { return sub.endpoint.slice(-24) === d.endpoint; });
     var permTxt = !ps.ok ? ps.why : ps.perm === 'granted' ? 'Allowed' : ps.perm === 'denied' ? 'Blocked - allow notifications for IncAtor in your browser or phone settings' : 'Not asked yet';
     body.innerHTML =
@@ -27979,7 +28322,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v32)';
+var VERSION = '2026.11.13 (v33)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
