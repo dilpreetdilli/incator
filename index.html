@@ -24215,7 +24215,8 @@ var PAL_DARK = { '--sk-bg': '#0b0b0c', '--sk-raise': '#141416', '--sk-fg': '#ede
     '--acc': '236, 236, 238', '--acc2': '170, 170, 174', '--primary': '#ededee', '--primary-dark': '#cfcfd2', '--secondary': '#a8a8ac', '--accent': '#ededee', '--dark': '#0b0b0c', '--darker': '#070708' };
 var PAL_LIGHT = { '--sk-bg': '#fafaf9', '--sk-raise': '#ffffff', '--sk-fg': '#111113', '--sk-mut': '#6a6a70', '--sk-faint': '#a2a2a8', '--sk-line': 'rgba(0,0,0,.085)', '--sk-line2': 'rgba(0,0,0,.16)', '--sk-soft': 'rgba(0,0,0,.035)', '--sk-press': 'rgba(0,0,0,.06)',
     '--pr': '90, 90, 94', '--pr2': '60, 60, 64', '--pr3': '110, 110, 114', '--pr4': '96, 96, 100', '--pr5': '40, 40, 44', '--acc': '17, 17, 19', '--acc2': '80, 80, 84', '--lav': '50, 50, 54', '--lav2': '30, 30, 34', '--lav3': '30, 30, 34', '--lav4': '50, 50, 54', '--ind2': '60, 60, 64',
-    '--bg1': '250, 250, 249', '--bg2': '250, 250, 249', '--bg3': '250, 250, 249', '--bg4': '255, 255, 255', '--bgd': '244, 244, 243', '--bgdd': '250, 250, 249', '--panel': '255, 255, 255', '--light': '#111113' };
+    '--bg1': '250, 250, 249', '--bg2': '250, 250, 249', '--bg3': '250, 250, 249', '--bg4': '255, 255, 255', '--bgd': '244, 244, 243', '--bgdd': '250, 250, 249', '--panel': '255, 255, 255', '--light': '#111113',
+    '--primary': '#111113', '--primary-dark': '#2a2a2e', '--secondary': '#55555b', '--accent': '#111113', '--dark': '#111113', '--darker': '#000000' };
 /* How light the light mode is and how dark the dark mode is: two sliders in Settings > Appearance (only with Sleek).
    Dark: 0 = deep black ... 100 = soft charcoal (default 50, not too black). Light: 0 = bright white ... 100 = warm off-white (default 50). */
 function SS(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
@@ -24322,7 +24323,36 @@ CSS += '\n' + [
     try { new MutationObserver(function () { tune(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
     setInterval(tune, 2000);
 })();
-window.IncSleek = { on: isOn, scan: scan, paint: function () { painted = null; paintVars(); }, palette: palette };
+/* Text that another theme paints with a see-through colour gradient (titles, big totals): in Sleek it is plain solid text,
+   found in every style of the app so none can end up invisible (the invoice keeps its own colours). */
+var solidSig = '';
+function solidText() {
+    var sels = [];
+    Array.prototype.forEach.call(document.styleSheets, function (sh) {
+        var id = sh.ownerNode && sh.ownerNode.id; if (id === 'incator-sleek-solid' || id === 'incator-light-css') return;
+        var rs; try { rs = sh.cssRules; } catch (e) { return; }
+        (function walk(list) {
+            for (var i = 0; i < list.length; i++) {
+                var r = list[i];
+                if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
+                if (!r.style || !r.selectorText) continue;
+                var f = (r.style.getPropertyValue('-webkit-text-fill-color') || '').trim(), c = (r.style.getPropertyValue('color') || '').trim();
+                if (f !== 'transparent' && !(c === 'transparent' && /text/.test(r.style.getPropertyValue('-webkit-background-clip') + r.style.getPropertyValue('background-clip')))) continue;
+                r.selectorText.split(',').forEach(function (x) {
+                    x = x.trim(); if (!x || /::|#inv-|\.iv-|\.theme-prev|\.mh-orb|\.mh-ring|:hover/.test(x)) return;
+                    if (/^(html|:root)\b/.test(x)) { var k = x.indexOf(' '); if (k < 0) return; x = x.slice(k + 1).trim(); }
+                    if (x && sels.indexOf(x) < 0) sels.push(x);
+                });
+            }
+        })(rs);
+    });
+    var sig = sels.join('|'); if (sig === solidSig) return; solidSig = sig;
+    var st = document.getElementById('incator-sleek-solid'); if (!st) { st = document.createElement('style'); st.id = 'incator-sleek-solid'; document.head.appendChild(st); }
+    st.textContent = sels.map(function (x) { return 'html[data-theme="sleek"][data-theme] body ' + x + ' { background-image: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; animation: none !important; }'; }).join('\n');
+}
+window.addEventListener('load', function () { setTimeout(solidText, 1500); setTimeout(solidText, 6000); });
+try { new MutationObserver(function () { if (isOn()) solidText(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
+window.IncSleek = { on: isOn, scan: scan, paint: function () { painted = null; paintVars(); }, palette: palette, solid: solidText };
 })();
 
 </script>
@@ -29296,7 +29326,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v36)';
+var VERSION = '2026.11.13 (v37)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
