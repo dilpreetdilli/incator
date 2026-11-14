@@ -24096,7 +24096,7 @@ function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, 
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /#inv-sheet|\.iv-|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
+var SKIP = /#inv-sheet|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
 function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
@@ -26771,10 +26771,70 @@ function fromEmail(msg) {
     return out;
 }
 
+/* ---------- Auto Import schedule: which days and hours the Gmail check runs ----------
+   sched = { on, days: [0..6] (0 = Sunday), from: 'HH:MM', to: 'HH:MM', tz: 'America/Vancouver' }
+   Off (or missing) = all the time. From later than To = overnight (e.g. 22:00 to 06:00, counted from the start day).
+   From equal to To = the whole day on the chosen days. */
+var TZF = {};
+function tzParts(ms, tz) {
+    var key = tz || '';
+    var fmt = TZF[key];
+    if (!fmt) {
+        try { fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz || undefined, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }); }
+        catch (e) { fmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }); }
+        TZF[key] = fmt;
+    }
+    var o = {}; fmt.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });
+    var dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(o.weekday);
+    var h = +o.hour % 24, m = +o.minute;
+    return { dow: dow < 0 ? new Date(ms).getDay() : dow, min: h * 60 + m };
+}
+function hm(v, d) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '')); if (!m) return d; var h = +m[1], mi = +m[2]; return h > 23 || mi > 59 ? d : h * 60 + mi; }
+function schedClean(s) {
+    if (!s || typeof s !== 'object') return { on: false, days: [1, 2, 3, 4, 5], from: '07:00', to: '19:00', tz: '' };
+    var days = (Array.isArray(s.days) ? s.days : []).map(Number).filter(function (d, i, a) { return d >= 0 && d <= 6 && d === Math.floor(d) && a.indexOf(d) === i; }).sort();
+    var f = hm(s.from, null), t = hm(s.to, null);
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; }, fm = function (n) { return p2(Math.floor(n / 60)) + ':' + p2(n % 60); };
+    return { on: !!s.on, days: days, from: fm(f == null ? 420 : f), to: fm(t == null ? 1140 : t), tz: String(s.tz || '').slice(0, 60) };
+}
+function schedActive(s, ms) {
+    if (!s || !s.on) return true;
+    var days = Array.isArray(s.days) ? s.days : []; if (!days.length) return false;
+    var p = tzParts(ms, s.tz), f = hm(s.from, 420), t = hm(s.to, 1140);
+    var has = function (d) { return days.indexOf(d) >= 0; };
+    if (f === t) return has(p.dow);
+    if (f < t) return has(p.dow) && p.min >= f && p.min < t;
+    return (has(p.dow) && p.min >= f) || (has((p.dow + 6) % 7) && p.min < t);
+}
+function schedNext(s, ms) {                                       // when checking starts again (null = checking now, or never)
+    if (schedActive(s, ms)) return null;
+    if (!s.days || !s.days.length) return null;
+    var step = 5 * 60000, t = Math.floor(ms / 60000) * 60000 + 60000, end = ms + 8 * 86400000;
+    for (; t <= end; t += step) {
+        if (schedActive(s, t)) { var b = t - step + 60000; if (b < ms) b = Math.floor(ms / 60000) * 60000 + 60000; for (; b < t; b += 60000) if (schedActive(s, b)) return b; return t; }
+    }
+    return null;
+}
+function schedText(s) {
+    if (!s || !s.on) return 'All the time';
+    var N = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], d = (s.days || []).slice().sort(), txt;
+    if (!d.length) return 'No days chosen';
+    var order = [1, 2, 3, 4, 5, 6, 0].filter(function (x) { return d.indexOf(x) >= 0; });
+    if (order.length === 7) txt = 'Every day';
+    else if (order.join() === '1,2,3,4,5') txt = 'Mon–Fri';
+    else if (order.join() === '1,2,3,4,5,6') txt = 'Mon–Sat';
+    else if (order.join() === '6,0') txt = 'Weekends';
+    else txt = order.map(function (x) { return N[x]; }).join(', ');
+    var t12 = function (v) { var n = hm(v, 0), h = Math.floor(n / 60), m = n % 60; return ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m + (h < 12 ? ' AM' : ' PM'); };
+    if (s.from === s.to) return txt + ', all day';
+    return txt + ', ' + t12(s.from) + ' – ' + t12(s.to) + (hm(s.from, 0) > hm(s.to, 0) ? ' (overnight)' : '');
+}
+
 var API = {
     version: 1, parseMoney: parseMoney, parseDate: parseDate, moneyTokens: moneyTokens, toLines: toLines, linesFromItems: linesFromItems,
     extract: extract, extractOne: extractOne, findNotes: findNotes, addrKey: addrKey, normWo: normWo, compare: compare, diff: diff, mergeBatch: mergeBatch,
-    checkAi: checkAi, AI_PROMPT: AI_PROMPT, fromEmail: fromEmail, filterMatch: filterMatch, workOrderLinks: workOrderLinks, pdfLinksInPage: pdfLinksInPage, looksLikeLogin: looksLikeLogin, isPdfBytes: isPdfBytes
+    checkAi: checkAi, AI_PROMPT: AI_PROMPT, fromEmail: fromEmail, filterMatch: filterMatch, workOrderLinks: workOrderLinks, pdfLinksInPage: pdfLinksInPage, looksLikeLogin: looksLikeLogin, isPdfBytes: isPdfBytes,
+    schedClean: schedClean, schedActive: schedActive, schedNext: schedNext, schedText: schedText
 };
 root.IncWOCore = API;
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
@@ -27582,6 +27642,57 @@ async function refresh(force) {
     paintAll(); return status;
 }
 
+/* ---------------------------------------------------------------- Auto Import schedule (days of the week + hours)
+   Saved on your server, which only checks Gmail inside these hours. Auto import itself stays on until you turn it off;
+   outside the hours it is asleep, and wakes up by itself. "Check Gmail" by hand works at any time. */
+var DAYN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], DAYO = [1, 2, 3, 4, 5, 6, 0];
+function core() { return window.IncWOCore || null; }
+function myTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
+function sched() {
+    var c = core(), raw = status && status.schedule;
+    if (c && c.schedClean) return c.schedClean(raw);
+    return raw || { on: false, days: [1, 2, 3, 4, 5], from: '07:00', to: '19:00', tz: '' };
+}
+function autoOn() { return !!(status && !status.error && status.settings && status.settings.auto_on); }
+function sleeping() { var c = core(), s = sched(); return autoOn() && !!s.on && !!(c && c.schedActive) && !c.schedActive(s, Date.now()); }
+function wakeAt() { var c = core(); return sleeping() && c && c.schedNext ? c.schedNext(sched(), Date.now()) : null; }
+function wakeStr(t) {
+    if (!t) return 'you choose a day';
+    var d = new Date(t), n = new Date(), tm = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    var day0 = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime(), dd = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - day0) / 86400000);
+    return dd === 0 ? tm + ' today' : dd === 1 ? tm + ' tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long' }) + ' ' + tm;
+}
+function schedText(s) { var c = core(); return c && c.schedText ? c.schedText(s) : (s.on ? 'On a schedule' : 'All the time'); }
+var schedT = 0;
+function saveSched(s, quiet) {
+    s.tz = myTz() || s.tz || '';
+    if (status && !status.error) status.schedule = s;
+    paintMail(); paintButton();
+    clearTimeout(schedT);
+    schedT = setTimeout(async function () {
+        if (s.on && !s.days.length) { toast('Choose at least one day, or turn the schedule off', 'error'); return; }
+        try { var j = await api('/settings', { schedule: s }); if (j && j.schedule && status) status.schedule = j.schedule; if (!quiet) toast('Auto Import schedule saved: ' + schedText(s), 'success'); }
+        catch (err) { toast(err.message, 'error'); refresh(true); return; }
+        paintButton();
+    }, 500);
+}
+function t12(v) { var m = /^(\d+):(\d+)$/.exec(v || ''); if (!m) return v; var h = +m[1]; return ((h % 12) || 12) + ':' + m[2] + (h < 12 ? ' AM' : ' PM'); }
+function schedHtml() {
+    var s = sched(), tz = myTz(), other = s.tz && tz && s.tz !== tz;
+    var c = core(), awake = !s.on || !c || c.schedActive(s, Date.now());
+    var chips = DAYO.map(function (d) { var on = s.days.indexOf(d) >= 0; return '<button type="button" class="wm-day' + (on ? ' on' : '') + '" data-wm="sday" data-d="' + d + '" aria-pressed="' + on + '">' + DAYN[d] + '</button>'; }).join('');
+    var night = s.on && s.from > s.to, allday = s.on && s.from === s.to;
+    return '<div class="wm-sched" id="wm-sched"><div class="wm-cath"><div><b><i class="fas fa-calendar-alt"></i> Schedule</b><small id="wm-sched-sum">' + esc(s.on ? schedText(s) : 'Off: checks all the time, every day') + '</small></div>' + tog('wm-son', s.on, 'Only check for work orders on certain days and hours') + '</div>' +
+        '<div class="wm-sbody"' + (s.on ? '' : ' hidden') + '>' +
+            '<p class="wm-note">Days to check</p><div class="wm-days" role="group" aria-label="Days to check">' + chips + '</div>' +
+            '<div class="wm-quick"><button type="button" class="wm-sug" data-wm="squick" data-q="wk">Mon–Fri</button><button type="button" class="wm-sug" data-wm="squick" data-q="ms">Mon–Sat</button><button type="button" class="wm-sug" data-wm="squick" data-q="all">Every day</button></div>' +
+            '<div class="wm-times"><label><span>From</span><input type="time" class="app-input" id="wm-sfrom" value="' + esc(s.from) + '" step="300"></label><label><span>To</span><input type="time" class="app-input" id="wm-sto" value="' + esc(s.to) + '" step="300"></label></div>' +
+            '<p class="wm-note">' + (allday ? 'Same start and end time: checks all day on the chosen days.' : night ? 'Overnight: from ' + esc(t12(s.from)) + ' until ' + esc(t12(s.to)) + ' the next morning.' : 'Checks every 5 minutes from ' + esc(t12(s.from)) + ' to ' + esc(t12(s.to)) + '.') +
+            ' Outside these hours Auto Import sleeps and wakes up by itself. It stays on until you turn it off. Check Gmail by hand works any time.' + (other ? '<br><span class="wm-warn">Times are in ' + esc(s.tz) + ' time. Change any setting here to switch them to this device (' + esc(tz) + ').</span>' : '') + '</p>' +
+            (autoOn() ? '<p class="wm-note ' + (awake ? 'wm-good' : '') + '">' + (awake ? 'Awake now: checking for work orders.' : 'Asleep now. Wakes up ' + esc(wakeStr(wakeAt())) + '.') + '</p>' : '') +
+        '</div></div>';
+}
+
 /* ---------------------------------------------------------------- Settings > App Behavior > Work Order Email Integration */
 function section() {
     var anchor = document.getElementById('wo-settings'); if (!anchor) return false;
@@ -27610,6 +27721,7 @@ function filtersOf() {
 }
 function paintMail() {
     var body = document.getElementById('wm-body'), note = document.getElementById('wm-server-note'); if (!body) return;
+    var ae = document.activeElement; if (ae && ae.type === 'time' && body.contains(ae)) return;          // you are choosing a time
     if (!server()) { note.textContent = 'Not set up yet. Without it, you can still import work orders by uploading them on Create Job.'; body.innerHTML = ''; return; }
     if (!status) { note.textContent = 'Checking the server...'; body.innerHTML = ''; return; }
     if (status.error) { note.innerHTML = '<span class="wm-bad">' + esc(status.error) + '</span>' + (status.signin ? '<br>' + googleBtn() : ''); body.innerHTML = ''; return; }
@@ -27629,7 +27741,7 @@ function paintMail() {
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-envelope"></i></div><div class="setting-content"><h4 class="setting-title">Gmail Connection</h4></div></div>' + gm + '</div>' +
         (g ? '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-inbox"></i></div><div class="setting-content"><h4 class="setting-title">Automatic Work Order Import</h4>' +
             '<p class="setting-description">' + (s.auto_on ? 'On: checking emails received from <b>' + esc(dayStr(s.start_at)) + '</b>, every few minutes, even when IncAtor is closed.' : 'Off. Checking Gmail by hand and uploading still work.') + '</p></div></div>' +
-            '<div class="setting-control">' + tog('wm-auto', s.auto_on, 'Automatic Work Order Import') + '</div>' +
+            '<div class="setting-control">' + tog('wm-auto', s.auto_on, 'Automatic Work Order Import') + '</div>' + schedHtml() +
             ((s.start_log || []).length ? '<details class="wm-hist"><summary>Start date history</summary>' + s.start_log.slice().reverse().map(function (h) { return '<div>' + esc(dayStr(h.at)) + ': from ' + esc(dayStr(h.start_at)) + '</div>'; }).join('') + '</details>' : '') + '</div>' +
           '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">Email Filters</h4>' +
             '<p class="setting-description">An email is imported when it matches ANY word in each list that is on, and EVERY list that is on and has words. A work order PDF (attached or behind a work order link) is always needed.</p></div></div>' +
@@ -27665,6 +27777,9 @@ async function onClick(e) {
         if (!ok) return; try { await api('/gmail/disconnect', {}); toast('Gmail disconnected', 'info'); } catch (err) { toast(err.message, 'error'); } refresh(true); return;
     }
     if (t.id === 'wm-auto') { await toggleAuto(); return; }
+    if (t.id === 'wm-son') { var s0 = sched(); s0.on = !s0.on; if (s0.on && !s0.days.length) s0.days = [1, 2, 3, 4, 5]; saveSched(s0); return; }
+    if (a === 'sday') { var s1 = sched(), d = +t.getAttribute('data-d'), at = s1.days.indexOf(d); if (at >= 0) s1.days.splice(at, 1); else s1.days.push(d); s1.days.sort(); saveSched(s1, true); return; }
+    if (a === 'squick') { var s2 = sched(), q = t.getAttribute('data-q'); s2.days = q === 'wk' ? [1, 2, 3, 4, 5] : q === 'ms' ? [1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6]; saveSched(s2, true); return; }
     if (t.id === 'wm-fon') { var f0 = filtersOf(); f0.on = !(f0.on !== false); saveFilters(f0); return; }
     if (t.id && t.id.indexOf('wm-cat-') === 0) { var f1 = filtersOf(), k = t.id.slice(7); f1[k].on = !(f1[k].on !== false); saveFilters(f1); return; }
     if (a === 'wadd') { addWord(t.closest('.wm-add')); return; }
@@ -27678,7 +27793,14 @@ async function onClick(e) {
     }
     if (a === 'pick') { pickEmail(); return; }
 }
-function onChange() { /* inputs are saved with their buttons */ }
+function onChange(e) {                                            // other inputs are saved with their buttons
+    var id = e && e.target && e.target.id;
+    if (id === 'wm-sfrom' || id === 'wm-sto') {
+        var v = e.target.value; if (!/^\d{2}:\d{2}$/.test(v)) return;
+        var s = sched(); if (id === 'wm-sfrom') s.from = v; else s.to = v;
+        e.target.blur(); saveSched(s);
+    }
+}
 
 var HWORD = { imported: ['Work order found', 'y'], 'needs-pdf': ['PDF could not be downloaded', 'n'], filtered: ['Skipped by the filters', ''], 'before-start': ['Before the start date', ''], 'no-pdf': ['No work order PDF', ''], duplicate: ['Already imported', ''], retry: ['Will try again', 'n'], processing: ['Being read now', ''] };
 async function loadHistory() {
@@ -27750,6 +27872,7 @@ function addButton() {
     var b = document.createElement('div'); b.id = 'wm-checkbox';
     b.innerHTML = '<div class="wm-autorow"><div class="wm-autotx"><b>Auto import</b><small id="wm-auto-sub"></small></div>' +
         '<div class="magic-toggle" id="wm-auto2" role="switch" tabindex="0" aria-checked="false" aria-label="Auto import work orders from Gmail"><div class="toggle-orb"></div></div></div>' +
+        '<div class="wm-sleep" id="wm-sleep" hidden role="status">' + SLEEPER + '<div class="wm-sltx"><b>Auto Import is sleeping</b><small id="wm-sleep-sub"></small></div></div>' +
         '<div class="wm-last" id="wm-last" role="status"></div>' +
         '<button type="button" class="app-btn" id="wm-check"><i class="fas fa-envelope mr-2"></i>Check Gmail for New Work Orders</button><div id="wm-live" hidden></div>' +
         '<div id="wm-hist" class="wm-hist" hidden></div>';
@@ -27760,6 +27883,18 @@ function addButton() {
     tg.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuto(); } });
     paintButton(); return true;
 }
+/* the sleeping boy: pillow, blanket that breathes, and z z z floating up */
+var SLEEPER = '<div class="wm-zzz" aria-hidden="true"><svg viewBox="0 0 120 64" class="wm-boy">' +
+    '<rect class="zb-pil" x="4" y="30" width="38" height="22" rx="11"/>' +
+    '<g class="zb-head"><circle class="zb-skin" cx="27" cy="34" r="13"/>' +
+    '<path class="zb-hair" d="M14.6 30.5c1.2-7.6 7.4-11.6 13.6-11.4 5.6.2 10.4 3.6 11.6 9.2-3.2-2.4-6.6-3-9.6-2.2-1.4-2.2-3.6-3.2-6-2.4.6 1.4.6 2.6 0 3.8-3-.8-6.4.2-9.6 3z"/>' +
+    '<path class="zb-eye" d="M20.5 36.2q2.6 2.2 5.2 0"/><path class="zb-eye" d="M29.5 36.2q2.6 2.2 5.2 0"/>' +
+    '<ellipse class="zb-cheek" cx="20" cy="40.5" rx="2.4" ry="1.4"/><ellipse class="zb-cheek" cx="35" cy="40.5" rx="2.4" ry="1.4"/>' +
+    '<path class="zb-mouth" d="M25.6 43.2q1.8 1.2 3.6 0"/></g>' +
+    '<path class="zb-blank" d="M36 52c0-12 10-19 24-19h30c14 0 26 6 26 15v4z"/>' +
+    '<path class="zb-fold" d="M38 41c8-3 18-3 28 0"/>' +
+    '<rect class="zb-bed" x="2" y="51" width="116" height="6" rx="3"/></svg>' +
+    '<span class="z z1">z</span><span class="z z2">z</span><span class="z z3">Z</span></div>';
 function ago(t) {
     var s = (Date.now() - Date.parse(t)) / 1000; if (!(s >= 0)) return '';
     if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' d ago';
@@ -27773,6 +27908,10 @@ function paintButton() {
     if (tg) { tg.classList.toggle('active', on); tg.setAttribute('aria-checked', on ? 'true' : 'false'); }
     if (sub) sub.textContent = !status || status.error ? (status && status.signin ? 'Sign in with Google to see it' : 'Your IncAtor server is not reachable right now') : !status.gmail ? 'Connect your work order Gmail in Settings first' :
         on ? 'On: Gmail is checked every 5 minutes, even when IncAtor is closed' + (status.settings.start_at ? ' (emails from ' + dayStr(status.settings.start_at) + ')' : '') : 'Off: check by hand with the button below';
+    var zz = b.querySelector('#wm-sleep'), sl = sleeping(), sc = sched();
+    if (zz) { zz.hidden = !sl; var zs = zz.querySelector('#wm-sleep-sub'); if (zs && sl) zs.textContent = 'Outside your schedule (' + schedText(sc) + '). Wakes up ' + wakeStr(wakeAt()) + '. You can still check by hand below.'; }
+    b.classList.toggle('wm-asleep', sl);
+    if (sub && on && status && status.gmail && sc.on) sub.textContent = sl ? 'On, sleeping now: ' + schedText(sc) : 'On: checking every 5 minutes · ' + schedText(sc);
     var lc = status && status.gmail && status.gmail.last_check;
     if (last) last.innerHTML = '<i class="fas fa-clock"></i><span>Last checked: <b>' + (lc ? esc(stamp(lc)) + '</b> <em>(' + esc(ago(lc)) + ')</em>' : 'never</b>') + '</span>';
     var list = (status && status.checks) || [];
@@ -27984,6 +28123,31 @@ var css = [
 '.wm-hr { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; font-size: .78rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); } .wm-hr time { white-space: nowrap; opacity: .85; } .wm-hr em { font-style: normal; font-size: .68rem; opacity: .55; } .wm-hr .ok { font-weight: 600; } .wm-hr .bad { color: #f87171; }',
 'html.lm .wm-autorow { border-color: rgba(29,23,51,.12); background: rgba(29,23,51,.03); } html.lm .wm-hist, html.lm .wm-hr { border-color: rgba(29,23,51,.08); } html.lm .wm-hr .bad { color: #b91c1c; }',
 '#wm-live { margin-top: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); text-align: left; } .wm-lh { display: flex; align-items: center; gap: 8px; } .wm-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: .84rem; } .wm-ev { margin: 6px 0 4px 18px; font-size: .8rem; color: rgba(255,255,255,.8); }',
+'.wm-sched { margin-top: 12px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }',
+'.wm-sched .wm-cath b { display: block; font-size: .9rem; } .wm-sched .wm-cath b i { opacity: .7; margin-right: 4px; } .wm-sched .wm-cath small { display: block; font-size: .76rem; opacity: .75; margin-top: 2px; }',
+'.wm-sched .wm-cath .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
+'.wm-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; } .wm-day { padding: 8px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: transparent; color: inherit; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; } .wm-day.on { background: rgba(var(--pr2, 196, 181, 253), .3); border-color: rgba(var(--pr2, 196, 181, 253), .7); }',
+'.wm-quick { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }',
+'.wm-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; } .wm-times label span { display: block; font-size: .74rem; font-weight: 600; opacity: .75; margin-bottom: 3px; } .wm-times .app-input { width: 100%; font-size: 16px; min-height: 44px; box-sizing: border-box; }',
+'html.lm .wm-sched { background: rgba(29,23,51,.03); border-color: rgba(29,23,51,.1); } html.lm .wm-day { border-color: rgba(29,23,51,.18); } html.lm .wm-day.on { background: rgba(var(--pr1, 124, 58, 237), .14); border-color: rgba(var(--pr1, 124, 58, 237), .55); }',
+'html[data-theme="sleek"] .wm-day.on { background: var(--sk-fg) !important; color: var(--sk-bg) !important; border-color: var(--sk-fg) !important; }',
+/* sleeping boy */
+'.wm-sleep { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; margin: 0 0 8px; border-radius: 14px; background: linear-gradient(135deg, rgba(49,46,129,.35), rgba(30,27,75,.2)); border: 1px solid rgba(165,180,252,.22); }',
+'.wm-sleep[hidden] { display: none; } .wm-sltx { min-width: 0; } .wm-sltx b { display: block; font-size: .9rem; } .wm-sltx small { display: block; font-size: .76rem; opacity: .78; line-height: 1.35; margin-top: 2px; }',
+'.wm-zzz { position: relative; flex: 0 0 auto; width: 92px; height: 56px; } .wm-boy { position: absolute; left: 0; bottom: 0; width: 92px; height: 49px; overflow: visible; }',
+'.zb-pil { fill: #e0e7ff; } .zb-skin { fill: #f6c9a1; } .zb-hair { fill: #4a3426; } .zb-eye, .zb-mouth { fill: none; stroke: #4a3426; stroke-width: 1.5; stroke-linecap: round; } .zb-cheek { fill: #f59e9e; opacity: .55; }',
+'.zb-blank { fill: #6366f1; transform-box: fill-box; transform-origin: 50% 100%; animation: zbBreath 3.2s ease-in-out infinite; } .zb-fold { fill: none; stroke: rgba(255,255,255,.35); stroke-width: 1.6; stroke-linecap: round; } .zb-bed { fill: rgba(255,255,255,.18); }',
+'.zb-head { transform-box: fill-box; transform-origin: 50% 90%; animation: zbNod 3.2s ease-in-out infinite; }',
+'.wm-zzz .z { position: absolute; left: 34px; top: 10px; font-weight: 800; font-family: var(--font, sans-serif); color: #c7d2fe; opacity: 0; animation: zbFloat 3s ease-in infinite; pointer-events: none; }',
+'.wm-zzz .z1 { font-size: 11px; animation-delay: 0s; } .wm-zzz .z2 { font-size: 14px; animation-delay: 1s; } .wm-zzz .z3 { font-size: 18px; animation-delay: 2s; }',
+'@keyframes zbFloat { 0% { opacity: 0; transform: translate(0, 0) rotate(-8deg) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(26px, -30px) rotate(12deg) scale(1.15); } }',
+'@keyframes zbBreath { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.07); } }',
+'@keyframes zbNod { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-3deg); } }',
+'@media (prefers-reduced-motion: reduce) { .wm-zzz .z { animation-duration: 6s; } .zb-blank, .zb-head { animation: none; } }',
+'#wm-checkbox.wm-asleep .wm-last { opacity: .65; }',
+'html.lm .wm-sleep { background: linear-gradient(135deg, rgba(224,231,255,.9), rgba(238,242,255,.7)); border-color: rgba(99,102,241,.25); } html.lm .wm-zzz .z { color: #6366f1; } html.lm .zb-pil { fill: #c7d2fe; } html.lm .zb-bed { fill: rgba(29,23,51,.1); }',
+'html[data-theme="sleek"] .wm-sleep { background: var(--sk-raise, #141416) !important; border-color: var(--sk-line2, rgba(255,255,255,.16)) !important; }',
+'html[data-theme="sleek"] .wm-zzz .z { color: var(--sk-fg, #ededee) !important; -webkit-text-fill-color: currentColor !important; } html[data-theme="sleek"] .zb-blank { fill: var(--sk-mut, #8d8d93); } html[data-theme="sleek"] .zb-pil { fill: var(--sk-line2, #3a3a3c); } html[data-theme="sleek"] .zb-bed { fill: var(--sk-line, rgba(255,255,255,.1)); }',
 '.nt-types { display: grid; gap: 4px; margin-top: 8px; } .nt-type { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.08); font-size: .88rem; }',
 '.wm-dev { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; } .wm-dev small { display: block; font-size: .76rem; color: rgba(255,255,255,.65); }'
 ].join('\n');
@@ -28011,7 +28175,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     try { new MutationObserver(function () { if (onAdd()) tick(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
     setInterval(function () { if (onAdd()) { if (Date.now() - statusAt > 60000) tick(); else paintButton(); } }, 30000);
 })();
-window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart };
+window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
 })();
 
 </script>
@@ -28312,6 +28476,29 @@ var css = [
 '  body[data-pg]:not([data-pg="home"]) #main-header { padding: max(10px, env(safe-area-inset-top, 0px)) 0 0 !important; margin: 0 0 4px !important; min-height: 0 !important; }',
 '  html.hdr-set body[data-pg]:not([data-pg="home"]) #main-header { padding-top: max(10px, env(safe-area-inset-top, 0px)) !important; margin-top: 0 !important; }',
 '}',
+/* ---- phone: the page title lives in the header ---- */
+'#pg-head { display: none; }',
+'@media (max-width: 700px) {',
+'  html.ph-docked #pg-head:not([hidden]) { display: flex; align-items: center; gap: 12px; margin: 0 16px; padding: 6px 52px 6px 2px; min-height: 48px; text-align: left; }',
+'  #pg-head { color: #fff; }',
+'  html.ph-docked body[data-pg]:not([data-pg="home"]) .page.active .magical-header, html.ph-docked body[data-pg]:not([data-pg="home"]) #receipts-page .rc-top, html.ph-docked .page .magical-header, html.ph-docked #receipts-page .rc-top { display: none !important; }',
+'  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header { padding: max(12px, calc(env(safe-area-inset-top, 0px) + 6px)) 0 0 !important; margin: 0 0 10px !important; }',
+'  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header > .max-w-5xl { display: none !important; }',
+'  #pg-head .ph-ic { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; background: linear-gradient(135deg, rgb(var(--pr4, 139, 92, 246)), rgb(var(--acc2, 236, 72, 153))); box-shadow: inset 0 1px 1px rgba(255,255,255,.35), 0 6px 16px rgba(0,0,0,.28); }',
+'  #pg-head .ph-tx { flex: 1 1 auto; min-width: 0; display: block; }',
+'  #pg-head .ph-t { display: block; font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+'  #pg-head .ph-s { display: block; font-size: .76rem; line-height: 1.3; margin-top: 2px; opacity: .68; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+'  #pg-head.ph-back .ph-ic, #pg-head.ph-back .ph-t { cursor: pointer; } #pg-head.ph-back .ph-ic { position: relative; margin-left: 12px; } #pg-head.ph-back .ph-ic::after { content: ""; position: absolute; left: -12px; top: 50%; width: 7px; height: 7px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-50%) rotate(45deg); opacity: .75; color: #fff; }',
+'  #pg-head .ph-yr { flex: 0 0 auto; } #pg-head .ph-yr[hidden] { display: none; }',
+'  #pg-head .ph-sel { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); font-size: .8rem; }',
+'  #pg-head .ph-sel i { opacity: .7; font-size: .8rem; } #pg-head .ph-sel select, html #pg-head .ph-sel select { -webkit-appearance: none !important; appearance: none !important; border: 0 !important; background: transparent !important; box-shadow: none !important; min-height: 0 !important; width: auto !important; color: inherit !important; font: inherit; font-size: 16px; font-weight: 700; padding: 2px 4px; outline: none; max-width: 92px; }',
+'  #pg-head .ph-sel select option { color: #111; }',
+'  html.lm #pg-head { color: #1d1733; } html.lm #pg-head .ph-sel { border-color: rgba(29,23,51,.15); background: rgba(29,23,51,.04); } html.lm #pg-head .ph-ic { box-shadow: inset 0 1px 1px rgba(255,255,255,.35), 0 6px 14px rgba(29,23,51,.14); }',
+'  html[data-theme="sleek"] #pg-head { color: var(--sk-fg) !important; } html[data-theme="sleek"] #pg-head .ph-t { -webkit-text-fill-color: currentColor !important; background: none !important; }',
+'  html[data-theme="sleek"] #pg-head .ph-ic { background: var(--sk-raise) !important; color: var(--sk-fg) !important; box-shadow: inset 0 0 0 1px var(--sk-line2) !important; }',
+'  html[data-theme="sleek"][data-sk-orb="full"] #pg-head .ph-ic { background: linear-gradient(135deg, rgb(139, 92, 246), rgb(236, 72, 153)) !important; color: #fff !important; box-shadow: none !important; }',
+'  html[data-theme="sleek"] #pg-head .ph-sel { border-color: var(--sk-line2) !important; background: transparent !important; } html[data-theme="sleek"] #pg-head.ph-back .ph-ic::after { color: var(--sk-fg); }',
+'}',
 /* ---- Analytics > Income Trend Chart: room above the tallest bar for its amount ---- */
 '#income-chart { height: auto !important; min-height: 16rem; }',
 '#income-chart .chart-container { height: auto !important; padding-top: 44px !important; }',
@@ -28379,7 +28566,78 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 function inject() { var st = document.getElementById('incator-layout-css'); if (!st) { st = document.createElement('style'); st.id = 'incator-layout-css'; } st.textContent = css; document.head.appendChild(st); }
 inject();
 window.addEventListener('load', function () { setTimeout(inject, 0); });
-window.IncLayout = { css: css };
+
+/* ---- Phone: each page's title sits up in the header (where the greeting is on Home) ----
+   The page keeps its own heading (pages rebuild it); the header shows a live copy of it and the original is hidden on
+   phones only. SlipVault's year picker and its "back" tap work from the header too. Computer: nothing changes. */
+var PH = window.matchMedia ? window.matchMedia('(max-width: 700px)') : { matches: false };
+function curPage() { var b = document.body; return b ? (b.getAttribute('data-pg') || '') : ''; }
+function headOf(pg) {
+    var page = document.getElementById(pg + '-page'); if (!page) return null;
+    return page.querySelector('.rc-top') || page.querySelector('.magical-header');
+}
+function slot() {
+    var h = document.getElementById('main-header'); if (!h) return null;
+    var el = document.getElementById('pg-head');
+    if (!el) {
+        el = document.createElement('div'); el.id = 'pg-head'; el.setAttribute('role', 'heading'); el.setAttribute('aria-level', '1');
+        el.innerHTML = '<span class="ph-ic" aria-hidden="true"></span><span class="ph-tx"><b class="ph-t"></b><small class="ph-s"></small></span><span class="ph-yr"></span>';
+        h.insertBefore(el, h.firstChild);
+        el.addEventListener('click', function (e) {
+            if (e.target.closest('.ph-yr')) return;
+            var src = headOf(curPage()); if (!src) return;
+            var t = src.querySelector('.rc-top h2, h2'); if (t && src.classList.contains('rc-top')) t.click();     // SlipVault: back to its start
+        });
+        el.addEventListener('change', function (e) {
+            if (!e.target.matches('select')) return;
+            var o = document.getElementById(e.target.getAttribute('data-for')); if (!o) return;
+            o.value = e.target.value; o.dispatchEvent(new Event('change', { bubbles: true })); o.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+    return el;
+}
+var lastSig = '';
+function sync() {
+    var pg = curPage(), on = PH.matches && pg && pg !== 'home', src = on ? headOf(pg) : null;
+    document.documentElement.classList.toggle('ph-docked', !!src);
+    var el = slot(); if (!el) return;
+    if (!src) { el.hidden = true; lastSig = ''; return; }
+    var t = src.querySelector('h2, .magic-title'), s = src.querySelector('p, .magic-subtitle'), ic = src.querySelector('.rc-tic i, .magic-icon i');
+    var title = t ? t.textContent.trim() : '', sub = s ? s.textContent.trim() : '', icls = ic ? ic.className : 'fas fa-circle';
+    var yrRow = src.querySelector('.rc-yrow'), sel = yrRow && getComputedStyle(yrRow).display !== 'none' ? yrRow.querySelector('select') : null;
+    var back = !!src.closest('.rc-insub');
+    var opts = sel ? Array.prototype.map.call(sel.options, function (o) { return o.value + '=' + o.textContent; }).join('|') + '@' + sel.value : '';
+    var sig = [pg, title, sub, icls, opts, back].join('\u0001');
+    el.hidden = false;
+    if (sig === lastSig) return; lastSig = sig;
+    el.setAttribute('data-for', pg); el.classList.toggle('ph-back', back);
+    el.querySelector('.ph-ic').innerHTML = '<i class="' + icls.replace(/"/g, '') + '"></i>';
+    el.querySelector('.ph-t').textContent = title; el.querySelector('.ph-s').textContent = sub;
+    el.setAttribute('aria-label', title);
+    var yr = el.querySelector('.ph-yr');
+    if (sel) {
+        if (!sel.id) sel.id = 'ph-src-' + pg;
+        var c = yr.querySelector('select');
+        if (!c) { yr.innerHTML = '<label class="ph-sel"><i class="fas fa-calendar-alt" aria-hidden="true"></i><select aria-label="Year"></select></label>'; c = yr.querySelector('select'); }
+        c.setAttribute('data-for', sel.id); c.innerHTML = sel.innerHTML; c.value = sel.value; yr.hidden = false;
+    } else { yr.innerHTML = ''; yr.hidden = true; }
+}
+var queued = 0;
+function soon() { if (queued) return; queued = (window.requestAnimationFrame || setTimeout)(function () { queued = 0; sync(); }); }
+function watch() {
+    if (!document.body) return;
+    try { new MutationObserver(soon).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+    var pages = document.querySelectorAll('.page');
+    Array.prototype.forEach.call(pages, function (p) { try { new MutationObserver(function () { if (p.id === curPage() + '-page') soon(); }).observe(p, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ } });
+    document.addEventListener('change', function (e) { if (e.target && e.target.closest && !e.target.closest('#pg-head') && e.target.matches('select')) soon(); }, true);
+    if (PH.addEventListener) PH.addEventListener('change', soon); else if (PH.addListener) PH.addListener(soon);
+    window.addEventListener('resize', soon);
+    sync();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
+window.addEventListener('load', function () { setTimeout(soon, 50); });
+
+window.IncLayout = { css: css, syncHead: sync };
 })();
 
 </script>
@@ -29737,7 +29995,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v40)';
+var VERSION = '2026.11.13 (v41)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
