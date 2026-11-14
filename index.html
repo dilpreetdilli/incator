@@ -23784,7 +23784,7 @@ function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, 
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
+var SKIP = /#inv-sheet|\.iv-|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
 function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
@@ -23899,7 +23899,7 @@ function fixInline(el) {
     }
     el.setAttribute('data-lm-done', el.getAttribute('style'));
 }
-var SKIPEL = '.theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
+var SKIPEL = '#inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
 function fixAll(root) { Array.prototype.forEach.call((root || document).querySelectorAll('[style]'), fixInline); }
 function undoInline() { Array.prototype.forEach.call(document.querySelectorAll('[' + ORIG + ']'), function (el) { el.setAttribute('style', el.getAttribute(ORIG)); el.removeAttribute(ORIG); el.removeAttribute('data-lm-done'); }); }
 var mo = null, hm = null, t = 0;
@@ -28407,7 +28407,7 @@ function read(group, o) {
         allPaid: allPaid, paidOn: allPaid ? group.map(function (e) { return e.paidDate || ''; }).sort().pop() : '',
         co: S('invoiceName', '') || S('userName', '') || '', coAddr: S('myAddress', ''),
         billTo: o.billTo || '', no: o.invoiceNo || '', date: dt(o.invoiceDate), due: o.dueDate ? dt(o.dueDate) : '',
-        wantLogo: o.showLogo !== false
+        wantLogo: o.showLogo !== false, gstNo: S('gstNumber', ''), wsNo: S('worksafeNumber', '')
     };
 }
 
@@ -28441,28 +28441,78 @@ function text(group, o) {
     return out.join('\n');
 }
 
-/* ------------------------------------------------------------------ the company logo, flattened onto the teal band */
-function logoJpeg() {
+/* ------------------------------------------------------------------ the design: navy and blue waves (shared with the on-screen sheet)
+   Everything is measured in millimetres on an A4 page (210 x 297), from the top-left corner. */
+var ART = {
+    navy: '#0b2a6b', navyD: '#071d4f', blue: '#1f6fe5', blueL: '#3d8bff', ink: '#16244a', grey: '#5d6a82', line: '#e3e8f1', rule: '#a9b8d3',
+    top: [
+        ['#3d8bff', 'M122 0 L131 0 C118 26 92 42 58 47 C34 50 14 50 0 56 L0 52 C14 47 34 46 56 43 C88 38 110 22 122 0 Z'],
+        ['#0b2a6b', 'M0 0 L122 0 C110 22 88 38 56 43 C34 46 14 47 0 52 Z'],
+        ['#1f6fe5', 'M70 53 C110 49 140 31 172 31 C190 31 202 37 210 43 L210 59 C200 48 186 41 168 42 C138 44 108 56 70 53 Z'],
+        ['#0b2a6b', 'M118 46 C148 33 182 31 210 35 L210 39 C182 36 150 38 118 46 Z']
+    ],
+    bottom: [
+        ['#3d8bff', 'M0 233 C35 241 62 257 100 265 C140 273 178 271 210 261 L210 269 C178 281 138 283 98 275 C60 267 32 251 0 243 Z'],
+        ['#0b2a6b', 'M0 241 C32 253 60 267 98 275 C138 283 178 281 210 269 L210 297 L0 297 Z'],
+        ['#1f6fe5', 'M0 263 C42 269 84 283 134 297 L120 297 C78 287 40 275 0 269 Z'],
+        ['#071d4f', 'M0 279 C28 283 56 291 76 297 L0 297 Z'],
+        ['#3d8bff', 'M150 297 C170 289 190 283 210 281 L210 284 C192 286 172 291 156 297 Z']
+    ],
+    cols: [['No.', 14, 29, 'blue'], ['Description', 30.5, 113, 'navy'], ['Price', 114.5, 142, 'blue'], ['Qty', 143.5, 160, 'blue'], ['Amount', 161.5, 196, 'navy']]
+};
+function rgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255]; }
+var MM = 72 / 25.4;
+function X(mm) { return mm * MM; }
+function Y(mm) { return PH - mm * MM; }
+Page.prototype.path = function (d, colour) {                        // an SVG-style path (M, L, C, Z) in millimetres, filled
+    var t = d.replace(/([MLCZ])/g, ' $1 ').trim().split(/[\s,]+/), out = [], i = 0, c;
+    while (i < t.length) {
+        c = t[i++];
+        if (c === 'M' || c === 'L') { out.push(X(+t[i]).toFixed(2) + ' ' + Y(+t[i + 1]).toFixed(2) + (c === 'M' ? ' m' : ' l')); i += 2; }
+        else if (c === 'C') { out.push([0, 2, 4].map(function (k) { return X(+t[i + k]).toFixed(2) + ' ' + Y(+t[i + k + 1]).toFixed(2); }).join(' ') + ' c'); i += 6; }
+        else if (c === 'Z') out.push('h');
+    }
+    this.fill(rgb(colour)); this.ops.push(out.join(' ') + ' f'); return this;
+};
+Page.prototype.rrect = function (x, y, w, h, r, colour) {           // a rounded box, in millimetres (y = top edge)
+    var k = 0.5523 * r, x2 = x + w, y2 = y + h;
+    var d = 'M ' + (x + r) + ' ' + y + ' L ' + (x2 - r) + ' ' + y + ' C ' + (x2 - r + k) + ' ' + y + ' ' + x2 + ' ' + (y + r - k) + ' ' + x2 + ' ' + (y + r) +
+        ' L ' + x2 + ' ' + (y2 - r) + ' C ' + x2 + ' ' + (y2 - r + k) + ' ' + (x2 - r + k) + ' ' + y2 + ' ' + (x2 - r) + ' ' + y2 +
+        ' L ' + (x + r) + ' ' + y2 + ' C ' + (x + r - k) + ' ' + y2 + ' ' + x + ' ' + (y2 - r + k) + ' ' + x + ' ' + (y2 - r) +
+        ' L ' + x + ' ' + (y + r) + ' C ' + x + ' ' + (y + r - k) + ' ' + (x + r - k) + ' ' + y + ' ' + (x + r) + ' ' + y + ' Z';
+    return this.path(d, colour);
+};
+Page.prototype.t = function (s, xmm, ymm, size, o) {                 // text in millimetres (y = the baseline)
+    o = o || {}; var c = o.colour ? rgb(o.colour) : rgb(ART.ink);
+    return this.text(s, X(xmm), Y(ymm), size, { bold: o.bold, align: o.align, colour: c });
+};
+function mmw(s, size, bold) { return width(plain(s), size, bold) / MM; }
+function mwrap(s, size, bold, maxmm) { return wrap(String(s == null ? '' : s).split('\n').map(plain).join('\n'), size, bold, maxmm * MM).filter(function (l) { return l !== ''; }); }
+
+/* ------------------------------------------------------------------ your logo (Settings > Invoice Details > Invoice logo) */
+function logoSrc() {
+    var a = [S('invoiceLogo', ''), S('quoteLogo', ''), S('homeLogo', '')];
+    for (var i = 0; i < a.length; i++) if (typeof a[i] === 'string' && a[i].indexOf('data:image/') === 0) return a[i];
+    return '';
+}
+function logoJpeg() {                                                 // flattened onto white (a PDF photo keeps no see-through parts)
     return new Promise(function (done) {
-        var src = S('homeLogo', '');
-        if (typeof src !== 'string' || src.indexOf('data:image/') !== 0) { done(null); return; }
+        var src = logoSrc(), fin = false;
+        var give = function (v) { if (!fin) { fin = true; done(v); } };
+        if (!src) { give(null); return; }
         var img = new Image();
-        var give = function (v) { done(v); };
         img.onerror = function () { give(null); };
         img.onload = function () {
             try {
-                var side = 240, c = document.createElement('canvas');
-                c.width = side; c.height = side;
-                var g = c.getContext('2d');
-                g.fillStyle = '#35778c'; g.fillRect(0, 0, side, side);   // a JPEG keeps no transparency, so the band colour goes behind it
-                var k = Math.min(side / img.width, side / img.height) * 0.94;
-                var w = img.width * k, h = img.height * k;
-                g.drawImage(img, (side - w) / 2, (side - h) / 2, w, h);
+                var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height; if (!iw || !ih) { give(null); return; }
+                var k = Math.min(1, 600 / Math.max(iw, ih)), w = Math.max(1, Math.round(iw * k)), h = Math.max(1, Math.round(ih * k));
+                var c = document.createElement('canvas'); c.width = w; c.height = h;
+                var g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
                 var url = c.toDataURL('image/jpeg', 0.92);
                 if (url.indexOf('data:image/jpeg') !== 0) { give(null); return; }
                 var raw = atob(url.slice(url.indexOf(',') + 1)), u8 = new Uint8Array(raw.length);
                 for (var i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i) & 255;
-                give({ bytes: u8, w: side, h: side });
+                give({ bytes: u8, w: w, h: h });
             } catch (e) { give(null); }
         };
         try { img.src = src; } catch (e) { give(null); }
@@ -28472,93 +28522,100 @@ function logoJpeg() {
 
 /* ------------------------------------------------------------------ the layout */
 function draw(d, logo) {
-    var p = new Page();
+    var p = new Page(), A = ART;
     p.rect(0, 0, PW, PH, WHITE);
+    A.top.forEach(function (s) { p.path(s[1], s[0]); });
 
-    /* the teal band across the top */
-    var bandH = 112, bandY = PH - bandH;
-    p.rect(0, bandY, PW, bandH, TEAL);
-    var wordX = L;
-    if (d.wantLogo) {
-        if (logo) p.image(L, bandY + 30, 42, 42); else p.mark(L, bandY + 30, 42);
-        wordX = L + 54;
+    /* INVOICE, white on the navy wave */
+    p.t('INVOICE', 14, 25, 30, { bold: true, colour: '#ffffff' });
+    p.rrect(14.5, 29, 34, 0.9, 0.4, '#ffffff'); p.rrect(48.5, 29, 13, 0.9, 0.4, A.blueL);
+
+    /* you: logo, then your name and address, top right (a clear block the waves never reach) */
+    var hasLogo = !!(d.wantLogo && logo), tx = hasLogo ? 149 : 130, tmax = 196 - tx;
+    if (hasLogo) {
+        var bh = 18, bw = 18, k = Math.min(bw / logo.w, bh / logo.h), lw = logo.w * k, lh = logo.h * k;
+        p.image(X(128 + (bw - lw) / 2), Y(9 + (bh - lh) / 2 + lh), X(lw), X(lh));
     }
-    p.text('Invoice', wordX, bandY + 42, 27, { bold: true, colour: WHITE });
-    var ry = PH - 34;
-    if (d.co) { p.text(d.co, R, ry, 13, { bold: true, colour: WHITE, align: 'right' }); ry -= 15; }
-    wrap(d.coAddr, 8.5, false, 230).forEach(function (ln) { p.text(ln, R, ry, 8.5, { colour: WHITE, align: 'right' }); ry -= 11; });
+    var nm = mwrap(d.co, 10.5, true, tmax).slice(0, 2), addr = mwrap(d.coAddr, 7.4, false, tmax), ty = 12.5;
+    var al = hasLogo ? {} : { align: 'right' }, ax = hasLogo ? tx : 196;
+    nm.forEach(function (ln) { p.t(ln, ax, ty, 10.5, Object.assign({ bold: true, colour: A.navy }, al)); ty += 4.2; });
+    addr.slice(0, Math.max(2, 5 - nm.length)).forEach(function (ln) { p.t(ln, ax, ty, 7.4, Object.assign({ colour: A.grey }, al)); ty += 3.3; });
 
-    /* who it is for, and which invoice this is */
-    var y = bandY - 26;
-    p.text('BILL TO:', L, y, 7.5, { bold: true, colour: GREY });
-    var by = y - 15;
-    wrap(d.billTo, 10.5, false, 250).forEach(function (ln) { p.text(ln, L, by, 10.5, {}); by -= 13; });
-
-    var ny = y, pair = function (lab, val) {
-        p.text(lab, R, ny, 7.5, { bold: true, colour: GREY, align: 'right' }); ny -= 14;
-        p.text(val, R, ny, 10.5, { align: 'right' }); ny -= 16;
+    /* who it is for */
+    var y = 70;
+    p.t('Invoice To:', 14, y, 9, { colour: A.grey });
+    var bill = String(d.billTo || '').split('\n').filter(function (l) { return l.trim(); }), by = y + 7.5;
+    if (bill.length) {
+        mwrap(bill[0], 15, true, 98).forEach(function (ln, i) { p.t(ln, 14, by, 15, { bold: true, colour: i ? A.blue : A.navy }); by += 6; });
+        bill.slice(1).forEach(function (l) { mwrap(l, 8.6, false, 98).forEach(function (ln) { p.t(ln, 14, by, 8.6, { colour: A.ink }); by += 4; }); });
+    }
+    /* which invoice */
+    var ny = y - 4.6, pill = function (lab, val) {
+        p.t(lab, 140, ny + 5, 10, { bold: true, colour: A.ink, align: 'right' });
+        p.rrect(144, ny, 52, 7, 1.8, A.navy);
+        p.t(val, 170, ny + 4.9, 9, { bold: true, colour: '#ffffff', align: 'center' });
+        ny += 10;
     };
-    pair('INVOICE #', d.no);
-    pair('DATE', d.date);
-    if (d.due) pair('INVOICE DUE DATE', d.due);
+    pill('Invoice:', '#' + String(d.no || '').replace(/^#/, ''));
+    pill('Date:', d.date);
+    if (d.due) pill('Due:', d.due);
 
     /* the table */
-    var top = Math.min(by, ny) - 14;
-    var cQty = 400, cPrice = 476, cAmt = R - 6;
-    p.rect(L, top - 21, W, 21, TEAL);
-    p.text('DESCRIPTION', L + 6, top - 14, 7.5, { bold: true, colour: WHITE });
-    p.text('QUANTITY', cQty, top - 14, 7.5, { bold: true, colour: WHITE, align: 'center' });
-    p.text('PRICE', cPrice, top - 14, 7.5, { bold: true, colour: WHITE, align: 'right' });
-    p.text('AMOUNT', cAmt, top - 14, 7.5, { bold: true, colour: WHITE, align: 'right' });
-    var ry2 = top - 21;
-    d.rows.forEach(function (r) {
-        var ls = wrap(r.desc, 9.5, false, 290);
-        var h = Math.max(20, 7 + ls.length * 12 + (r.sub ? 11 : 0));
-        var ty = ry2 - 14;
-        ls.forEach(function (ln) { p.text(ln, L + 6, ty, 9.5, {}); ty -= 12; });
-        if (r.sub) p.text(r.sub, L + 6, ty, 7.5, { colour: GREY });
-        p.text('1', cQty, ry2 - 14, 9.5, { align: 'center' });
-        p.text(money(r.amount), cPrice, ry2 - 14, 9.5, { align: 'right' });
-        p.text(money(r.amount), cAmt, ry2 - 14, 9.5, { align: 'right' });
-        ry2 -= h;
-        p.line(L, ry2, R, ry2, RULE, 0.6);
+    var top = Math.max(by + 6, ny + 6, 100);
+    var room = 222 - top - 34 - (d.extras > 0 ? 10 : 0), rh = 9, fs = 9;
+    var need = d.rows.reduce(function (a, r) { return a + (r.sub ? 2.6 : 0); }, 0) + d.rows.length * rh;
+    if (need > room && d.rows.length) { rh = Math.max(6, (room - d.rows.filter(function (r) { return r.sub; }).length * 2.6) / d.rows.length); fs = rh < 7.5 ? 7.6 : 8.4; }
+    A.cols.forEach(function (c) {
+        p.rrect(c[1], top, c[2] - c[1], 8, 1.6, A[c[3]]);
+        p.t(c[0], (c[1] + c[2]) / 2, top + 5.3, 8.6, { bold: true, colour: '#ffffff', align: 'center' });
     });
+    var ry = top + 8 + 1.5;
+    d.rows.forEach(function (r, i) {
+        var h = rh + (r.sub ? 2.6 : 0), base = ry + Math.min(rh, 9) * 0.62;
+        var desc = mwrap(r.desc, fs, false, 78)[0] || '';
+        p.t(String(i + 1), 21.5, base, fs, { colour: A.ink, align: 'center' });
+        p.t(desc, 33.5, base, fs, { colour: A.ink });
+        if (r.sub) p.t(r.sub, 33.5, base + 3.4, fs - 1.6, { colour: A.grey });
+        p.t(money(r.amount), 128.25, base, fs, { colour: A.ink, align: 'center' });
+        p.t('1', 151.75, base, fs, { colour: A.ink, align: 'center' });
+        p.t(money(r.amount), 178.75, base, fs, { colour: A.ink, align: 'center' });
+        ry += h;
+        p.line(X(14), Y(ry), X(196), Y(ry), rgb(A.line), 0.5);
+    });
+    ry += 3;
+    p.line(X(14), Y(ry), X(196), Y(ry), rgb(A.rule), 0.8);
 
-    /* what it adds up to */
-    var ay = ry2 - 20, add = function (lab, val, bold) {
-        p.text(lab, cPrice, ay, 9.5, { bold: !!bold, align: 'right' });
-        p.text(val, cAmt, ay, 9.5, { bold: !!bold, align: 'right' });
-        ay -= 16;
+    /* the totals, right */
+    var ay = ry + 8, add = function (lab, val) {
+        p.t(lab, 126, ay, 9.2, { bold: true, colour: A.ink });
+        p.t(val, 196, ay, 9.2, { colour: A.ink, align: 'right' }); ay += 6;
     };
-    if (d.extras > 0) { add('Services', money(d.services)); add('Additional services', money(d.extras)); }
-    add('Subtotal', money(d.sub));
-    add('GST' + (d.rate != null ? ' (' + d.rate + '%)' : ''), money(d.gst));
-    if (d.allPaid) {
-        p.text('PAID' + (d.paidOn ? '  -  ' + dt(d.paidOn) : ''), L, ay + 6, 11, { bold: true, colour: TEAL });
-    }
+    if (d.extras > 0) { add('Services:', money(d.services)); add('Additional services:', money(d.extras)); }
+    add('Sub Total:', money(d.sub));
+    add('GST' + (d.rate != null ? ' (' + d.rate + '%)' : '') + ':', money(d.gst));
+    p.rrect(122, ay - 3.2, 74, 10, 2.2, A.navy);
+    p.t(d.allPaid ? 'TOTAL PAID' : 'TOTAL', 127, ay + 3.2, 9.5, { bold: true, colour: '#ffffff' });
+    p.t(money(d.total), 191, ay + 3.6, 13, { bold: true, colour: '#ffffff', align: 'right' });
+    ay += 12;
+    if (d.allPaid) { p.rrect(122, ay - 2, 74, 7, 1.8, A.blue); p.t('PAID' + (d.paidOn ? '  -  ' + dt(d.paidOn) : ''), 159, ay + 2.8, 8.6, { bold: true, colour: '#ffffff', align: 'center' }); ay += 9; }
 
-    /* the notes, and the total that has to be easy to find */
-    var bTop = ay - 10, boxH = 50, boxW = 196, boxX = R - boxW;
-    p.rect(boxX, bTop - boxH, boxW, boxH, TEAL);
-    p.text(d.allPaid ? 'TOTAL PAID' : 'TOTAL', boxX + 14, bTop - 20, 8.5, { bold: true, colour: WHITE });
-    p.text(money(d.total), R - 14, bTop - 38, 17, { bold: true, colour: WHITE, align: 'right' });
-    var nBot = bTop - boxH;
+    /* notes and your numbers, left */
+    var ly = ry + 8;
     if (d.notes.length) {
-        var y2 = bTop - 10;
-        p.text('NOTES:', L, y2, 7.5, { bold: true, colour: GREY }); y2 -= 13;
+        p.t('Notes', 14, ly, 11, { bold: true, colour: A.navy }); ly += 5;
         d.notes.forEach(function (n) {
-            if (n.who) { p.text(n.who + ':', L, y2, 9, { bold: true }); y2 -= 11; }
-            wrap(n.body, 9, false, 300).forEach(function (ln) { p.text(ln, L, y2, 9, { colour: INK }); y2 -= 11; });
-            y2 -= 4;
+            if (n.who) { p.t(n.who + ':', 14, ly, 8, { bold: true, colour: A.ink }); ly += 3.6; }
+            mwrap(n.body, 8, false, 98).forEach(function (ln) { if (ly < 236) { p.t(ln, 14, ly, 8, { colour: A.grey }); ly += 3.6; } });
+            ly += 1.5;
         });
-        nBot = Math.min(nBot, y2);
+        ly += 2;
     }
+    if (d.gstNo) { p.t('GST Number:', 14, ly, 8.6, { bold: true, colour: A.navy }); p.t(d.gstNo, 14 + mmw('GST Number: ', 8.6, true), ly, 8.6, { colour: A.ink }); ly += 4.6; }
+    if (d.wsNo) { p.t('WorkSafe Number:', 14, ly, 8.6, { bold: true, colour: A.navy }); p.t(d.wsNo, 14 + mmw('WorkSafe Number: ', 8.6, true), ly, 8.6, { colour: A.ink }); ly += 4.6; }
 
-    /* the thank you at the foot of the work, not at the foot of the paper */
-    var fy = nBot - 24;
-    p.line(L, fy + 14, R, fy + 14, RULE, 0.6);
-    p.text('Thanks for your business!', PW / 2, fy - 4, 11.5, { bold: true, colour: TEAL_D, align: 'center' });
-    if (d.fine.length) p.text(d.fine.join('  -  '), PW / 2, fy - 20, 8, { colour: GREY, align: 'center' });
+    /* the waves at the foot, and the thank you just above them */
+    A.bottom.forEach(function (s) { p.path(s[1], s[0]); });
+    p.t('Thank you for your business!', 196, 254, 10.5, { bold: true, colour: A.navy, align: 'right' });
     return p;
 }
 
@@ -28620,7 +28677,7 @@ function file(group, o) {
     });
 }
 
-window.IncInvPdf = { blob: blob, file: file, name: name, text: text, width: width, wrap: wrap };
+window.IncInvPdf = { blob: blob, file: file, name: name, text: text, width: width, wrap: wrap, art: ART, logoSrc: logoSrc };
 })();
 
 </script>
@@ -28638,7 +28695,13 @@ function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } cat
 function money(v) { var c = S('currency', '$'); return c + (Math.round((+v || 0) * 100) / 100).toFixed(2); }
 function dt(d) { try { return formatDate(d); } catch (e) { return String(d || ''); } }
 
-/* ---------------------------------------------------------------- the sheet */
+/* ---------------------------------------------------------------- the sheet: navy and blue waves (the same design as the PDF) */
+function art() { return (window.IncInvPdf && IncInvPdf.art) || null; }
+function waves(list, vb, cls) {
+    if (!list) return '';
+    return '<svg class="' + cls + '" viewBox="' + vb + '" preserveAspectRatio="none" aria-hidden="true">' + list.map(function (s) { return '<path fill="' + s[0] + '" d="' + s[1] + '"/>'; }).join('') + '</svg>';
+}
+function logoSrc() { return window.IncInvPdf && IncInvPdf.logoSrc ? IncInvPdf.logoSrc() : ''; }
 function sheetHtml(group, o) {
     var sum = function (k) { return Math.round(group.reduce(function (a, e) { return a + (+e[k] || 0); }, 0) * 100) / 100; };
     var services = sum('amount'), extras = sum('extras'), sub = sum('baseAmount'), gst = sum('gst'), total = sum('total');
@@ -28647,65 +28710,68 @@ function sheetHtml(group, o) {
     var allPaid = group.length > 0 && group.every(function (e) { return e.paid; });
     var paidOn = allPaid ? group.map(function (e) { return e.paidDate || ''; }).sort().pop() : '';
     var showSvc = !!o.showServiceDate;
-    var rowTax = function (e) { return e.baseAmount > 0 ? Math.round((e.gst / e.baseAmount) * 1000) / 10 : (oneRate == null ? 0 : oneRate); };
+    var A = art() || {};
 
-    var rows = '';
+    var rows = '', n = 0;
+    var row = function (desc, sub2, amt) {
+        n++;
+        rows += '<tr><td class="iv-c">' + n + '</td><td class="iv-de">' + desc + (sub2 ? '<small>' + sub2 + '</small>' : '') + '</td><td class="iv-c">' + money(amt) + '</td><td class="iv-c">1</td><td class="iv-c">' + money(amt) + '</td></tr>';
+    };
     group.forEach(function (e) {
         var svc = (o.serviceDates && o.serviceDates[e.id]) || e.invoiceServiceDate || e.date;
-        var desc = 'Services at ' + esc(e.address) + (showSvc ? '<small>' + esc(dt(svc)) + '</small>' : '');
-        rows += '<tr><td class="iv-de">' + desc + '</td><td class="iv-c">1</td><td class="iv-r">' + money(e.amount) + '</td><td class="iv-r">' + money(e.amount) + '</td></tr>';
+        row('Services at ' + esc(e.address), showSvc ? esc(dt(svc)) : '', e.amount);
         var list = (e.extrasList && e.extrasList.length) ? e.extrasList : (e.extras > 0 ? [e.extras] : []);
-        list.forEach(function (v, k) {
-            rows += '<tr><td class="iv-de">Additional service' + (list.length > 1 ? ' ' + (k + 1) : '') + '</td><td class="iv-c">1</td><td class="iv-r">' + money(v) + '</td><td class="iv-r">' + money(v) + '</td></tr>';
-        });
+        list.forEach(function (v, k) { row('Additional service' + (list.length > 1 ? ' ' + (k + 1) : ''), '', v); });
     });
 
     var jobNotes = o.includeJobNotes ? group.filter(function (e) { return e.notes; }) : [];
     var noteBody = '';
     if (o.notes && o.notes.trim()) noteBody += '<p>' + lines(o.notes) + '</p>';
     jobNotes.forEach(function (e) { noteBody += '<p><b>' + esc(e.address) + ':</b> ' + lines(e.notes) + '</p>'; });
-
     var showNotes = o.showNotes !== false && !!noteBody;
-    var fine = [];
-    if (S('gstNumber', '')) fine.push('GST # ' + esc(S('gstNumber', '')));
-    if (S('worksafeNumber', '')) fine.push('WorkSafe # ' + esc(S('worksafeNumber', '')));
 
-    var logo = S('homeLogo', ''), wantLogo = o.showLogo !== false;
-    var mark = !wantLogo ? ''
-        : (typeof logo === 'string' && logo.indexOf('data:image/') === 0)
-        ? '<img class="iv-logo" alt="" src="' + logo + '">'
-        : '<svg class="iv-logo" viewBox="0 0 48 48" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="24" cy="24" r="19"/><path d="M6 20h16M26 20h16M6 28h12M22 28h20"/><circle cx="24" cy="20" r="3.4" fill="#35778c"/><circle cx="20" cy="28" r="3.4" fill="#35778c"/></svg>';
+    var logo = logoSrc(), wantLogo = o.showLogo !== false && !!logo;
+    var co = S('invoiceName', '') || S('userName', ''), addr = S('myAddress', '');
+    var bill = String(o.billTo || '').split('\n').filter(function (l) { return l.trim(); });
+    var pill = function (lab, val) { return '<div class="iv-pr"><span class="iv-pl">' + lab + '</span><span class="iv-pv">' + esc(val) + '</span></div>'; };
+    var nums = '';
+    if (S('gstNumber', '')) nums += '<div class="iv-num"><b>GST Number:</b> ' + esc(S('gstNumber', '')) + '</div>';
+    if (S('worksafeNumber', '')) nums += '<div class="iv-num"><b>WorkSafe Number:</b> ' + esc(S('worksafeNumber', '')) + '</div>';
 
     return '' +
-    '<div class="iv-head">' +
-      '<div class="iv-brand">' + mark + '<div class="iv-word">Invoice</div></div>' +
-      '<div class="iv-from"><div class="iv-co">' + (esc(S('invoiceName', '') || S('userName', '')) || '&nbsp;') + '</div>' +
-        (S('myAddress', '') ? '<div class="iv-ad">' + lines(S('myAddress', '')) + '</div>' : '') + '</div>' +
+    waves(A.top, '0 0 210 60', 'iv-wtop') +
+    '<div class="iv-top">' +
+      '<div class="iv-title">INVOICE<i></i></div>' +
+      '<div class="iv-me' + (wantLogo ? ' logo' : '') + '">' +
+        (wantLogo ? '<img class="iv-logo" alt="" src="' + logo + '">' : '') +
+        '<div class="iv-met"><div class="iv-co">' + (esc(co) || '&nbsp;') + '</div>' + (addr ? '<div class="iv-ad">' + lines(addr) + '</div>' : '') + '</div>' +
+      '</div>' +
     '</div>' +
     '<div class="iv-body">' +
       '<div class="iv-meta">' +
-        '<div class="iv-bill"><div class="iv-lab">BILL TO:</div><div class="iv-who">' + (lines(o.billTo) || '&nbsp;') + '</div></div>' +
-        '<div class="iv-nums">' +
-          '<div class="iv-lab">INVOICE #</div><div class="iv-val">' + esc(o.invoiceNo) + '</div>' +
-          '<div class="iv-lab">DATE</div><div class="iv-val">' + esc(dt(o.invoiceDate)) + '</div>' +
-          (o.dueDate ? '<div class="iv-lab">INVOICE DUE DATE</div><div class="iv-val">' + esc(dt(o.dueDate)) + '</div>' : '') +
+        '<div class="iv-bill"><div class="iv-lab">Invoice To:</div>' +
+          (bill.length ? '<div class="iv-who">' + esc(bill[0]) + '</div>' + (bill.length > 1 ? '<div class="iv-wad">' + bill.slice(1).map(esc).join('<br>') + '</div>' : '') : '<div class="iv-who">&nbsp;</div>') +
+        '</div>' +
+        '<div class="iv-nums">' + pill('Invoice:', '#' + String(o.invoiceNo || '').replace(/^#/, '')) + pill('Date:', dt(o.invoiceDate)) + (o.dueDate ? pill('Due:', dt(o.dueDate)) : '') + '</div>' +
+      '</div>' +
+      '<table class="iv-tb"><thead><tr><th class="b">No.</th><th class="n">Description</th><th class="b">Price</th><th class="b">Qty</th><th class="n">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="iv-rule"></div>' +
+      '<div class="iv-end">' +
+        '<div class="iv-left">' +
+          (showNotes ? '<div class="iv-nh">Notes</div><div class="iv-notes">' + noteBody + '</div>' : '') +
+          nums +
+        '</div>' +
+        '<div class="iv-adds">' +
+          (extras > 0 ? '<div class="iv-ar"><span>Services:</span><span>' + money(services) + '</span></div><div class="iv-ar"><span>Additional services:</span><span>' + money(extras) + '</span></div>' : '') +
+          '<div class="iv-ar"><span>Sub Total:</span><span>' + money(sub) + '</span></div>' +
+          '<div class="iv-ar"><span>GST' + (oneRate != null ? ' (' + oneRate + '%)' : '') + ':</span><span>' + money(gst) + '</span></div>' +
+          '<div class="iv-total"><span>' + (allPaid ? 'TOTAL PAID' : 'TOTAL') + '</span><b>' + money(total) + '</b></div>' +
+          (allPaid ? '<div class="iv-paid">PAID' + (paidOn ? ' &middot; ' + esc(dt(paidOn)) : '') + '</div>' : '') +
         '</div>' +
       '</div>' +
-      '<table class="iv-tb"><thead><tr><th>DESCRIPTION</th><th class="iv-c">QUANTITY</th><th class="iv-r">PRICE</th><th class="iv-r">AMOUNT</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<div class="iv-adds">' +
-        (extras > 0 ? '<div class="iv-ar"><span>Services</span><span>' + money(services) + '</span></div><div class="iv-ar"><span>Additional services</span><span>' + money(extras) + '</span></div>' : '') +
-        '<div class="iv-ar"><span>Subtotal</span><span>' + money(sub) + '</span></div>' +
-        '<div class="iv-ar"><span>GST' + (oneRate != null ? ' (' + oneRate + '%)' : '') + '</span><span>' + money(gst) + '</span></div>' +
-      '</div>' +
-      (allPaid ? '<div class="iv-paid">PAID' + (paidOn ? ' &middot; ' + esc(dt(paidOn)) : '') + '</div>' : '') +
     '</div>' +
-    '<div class="iv-bottom' + (showNotes ? '' : ' nonotes') + '">' +
-      (showNotes ? '<div class="iv-notes"><div class="iv-lab">NOTES:</div>' + noteBody + '</div>' : '') +
-      '<div class="iv-total"><div class="iv-tlab">' + (allPaid ? 'TOTAL PAID' : 'TOTAL') + '</div><div class="iv-tval">' + money(total) + '</div></div>' +
-    '</div>' +
-    '<div class="iv-foot"><div class="iv-thanks">Thanks for your business!</div>' +
-      (fine.length ? '<div class="iv-fine">' + fine.join(' &middot; ') + '</div>' : '') + '</div>' +
-    '<div class="iv-tail"></div>';
+    '<div class="iv-thanks">Thank you for your business!</div>' +
+    waves(A.bottom, '0 232 210 65', 'iv-wbot');
 }
 
 /* ---------------------------------------------------------------- the page it lives on */
@@ -28764,42 +28830,52 @@ var CSS = [
 '#inv-sheet { transform-origin: top left; }',
 '#inv-sheet * { box-sizing: border-box; }',
 '#inv-sheet p { margin: 0 0 6px; }',
-'.iv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12mm; padding: 10mm 12mm 9mm; background: ' + TEAL + '; color: #fff; }',
-'.iv-brand { display: flex; flex-direction: column; gap: 4mm; }',
-'.iv-logo { width: 17mm; height: 17mm; display: block; object-fit: contain; border-radius: 50%; }',
-'.iv-word { font-size: 25pt; font-weight: 400; line-height: 1; letter-spacing: .5px; }',
-'.iv-from { text-align: right; }',
-'.iv-co { font-size: 13.5pt; font-weight: 700; }',
-'.iv-ad { margin-top: 2mm; font-size: 8.5pt; color: rgba(255,255,255,.88); line-height: 1.55; }',
-'.iv-body { padding: 8mm 12mm 0; }',
-'.iv-meta { display: flex; justify-content: space-between; gap: 10mm; padding-bottom: 5mm; border-bottom: 1px solid #e3e8ec; }',
-'.iv-lab { font-size: 7.5pt; letter-spacing: .6px; color: #8a97a0; text-transform: uppercase; }',
-'.iv-who { margin-top: 1mm; font-size: 11.5pt; color: #2f3b44; line-height: 1.4; }',
-'.iv-nums { text-align: right; min-width: 45mm; }',
-'.iv-nums .iv-val { margin: 0 0 1.8mm; font-size: 9.5pt; color: #5b6872; }',
-'.iv-tb { width: 100%; border-collapse: collapse; margin-top: 5mm; }',
-'.iv-tb th { padding: 0 2mm 2.2mm; font-size: 7.5pt; font-weight: 400; letter-spacing: .6px; color: #8a97a0; text-align: left; border-bottom: 1px solid #e3e8ec; }',
-'.iv-tb td { padding: 2.6mm 2mm; font-size: 9.5pt; color: #5b6872; vertical-align: top; }',
+'#inv-sheet { position: relative; overflow: hidden; color: #16244a; }',
+'.iv-wtop { position: absolute; left: 0; top: 0; width: 210mm; height: 60mm; display: block; }',
+'.iv-wbot { position: absolute; left: 0; bottom: 0; width: 210mm; height: 65mm; display: block; }',
+'.iv-top { position: relative; height: 56mm; }',
+'.iv-title { position: absolute; left: 14mm; top: 12.6mm; color: #fff; font-size: 30pt; font-weight: 700; line-height: 1; letter-spacing: .3px; }',
+'.iv-title i { display: block; margin-top: 3mm; width: 47mm; height: .9mm; border-radius: .5mm; background: linear-gradient(90deg, #fff 0 72%, #3d8bff 72% 100%); }',
+'.iv-me { position: absolute; left: 130mm; right: 14mm; top: 8.6mm; display: flex; justify-content: flex-end; text-align: right; }',
+'.iv-me.logo { left: 128mm; justify-content: flex-start; text-align: left; gap: 3mm; }',
+'.iv-logo { flex: 0 0 18mm; width: 18mm; height: 18mm; object-fit: contain; display: block; }',
+'.iv-met { min-width: 0; }',
+'.iv-co { font-size: 10.5pt; font-weight: 700; color: #0b2a6b; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }',
+'.iv-ad { margin-top: .6mm; font-size: 7.4pt; color: #5d6a82; line-height: 1.35; overflow: hidden; max-height: 13.5mm; }',
+'.iv-body { position: relative; padding: 4mm 14mm 72mm; }',
+'.iv-meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; }',
+'.iv-bill { min-width: 0; flex: 1 1 auto; }',
+'.iv-lab { font-size: 9pt; color: #5d6a82; }',
+'.iv-who { margin-top: 1.2mm; font-size: 15pt; font-weight: 700; color: #0b2a6b; line-height: 1.2; }',
+'.iv-wad { margin-top: 1mm; font-size: 8.6pt; color: #16244a; line-height: 1.4; }',
+'.iv-nums { flex: 0 0 auto; display: grid; gap: 3mm; margin-top: -1mm; }',
+'.iv-pr { display: flex; align-items: center; justify-content: flex-end; gap: 4mm; }',
+'.iv-pl { font-size: 10pt; font-weight: 700; color: #16244a; }',
+'.iv-pv { width: 52mm; height: 7mm; border-radius: 1.8mm; background: #0b2a6b; color: #fff; font-size: 9pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }',
+'.iv-tb { width: 100%; border-collapse: separate; border-spacing: 1.5mm 0; margin: 8mm -1.5mm 0; width: calc(100% + 3mm); }',
+'.iv-tb th { height: 8mm; padding: 0 1mm; font-size: 8.6pt; font-weight: 700; color: #fff; text-align: center; border-radius: 1.6mm; }',
+'.iv-tb th.b { background: #1f6fe5; } .iv-tb th.n { background: #0b2a6b; }',
+'.iv-tb th:nth-child(1) { width: 15mm; } .iv-tb th:nth-child(3) { width: 27.5mm; } .iv-tb th:nth-child(4) { width: 16.5mm; } .iv-tb th:nth-child(5) { width: 34.5mm; }',
+'.iv-tb td { padding: 2.6mm 1mm; font-size: 9pt; color: #16244a; vertical-align: top; border-bottom: .5pt solid #e3e8f1; }',
+'.iv-tb tbody tr:first-child td { padding-top: 3.6mm; }',
 '.iv-tb tbody tr { page-break-inside: avoid; break-inside: avoid; }',
 '.iv-tb .iv-c { text-align: center; white-space: nowrap; }',
-'.iv-tb .iv-r { text-align: right; white-space: nowrap; }',
-'.iv-it { color: #6b7780; white-space: nowrap; }',
-'.iv-de small { display: block; margin-top: 1mm; font-size: 8pt; color: #93a0a8; }',
-'.iv-adds { margin: 4mm 0 0; margin-left: auto; width: 68mm; border-top: 1px solid #e3e8ec; padding-top: 2.5mm; }',
-'.iv-ar { display: flex; justify-content: space-between; gap: 6mm; padding: 1.1mm 0; font-size: 9.5pt; color: #5b6872; }',
-'.iv-paid { margin-top: 4mm; display: inline-block; padding: 2mm 5mm; border: 2px solid #1f9d55; color: #1f9d55; border-radius: 2mm; font-weight: 700; letter-spacing: 1px; }',
-'.iv-bottom { display: flex; align-items: stretch; margin-top: 9mm; }',
-'.iv-notes { flex: 1 1 auto; padding: 6mm 9mm; background: ' + TEAL_L + '; color: #37474f; font-size: 8.5pt; }',
-'.iv-notes .iv-lab { color: #4f6b78; margin-bottom: 2mm; }',
-'.iv-total { flex: 0 0 62mm; padding: 6mm 9mm; background: ' + TEAL_D + '; color: #fff; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }',
-'.iv-bottom.nonotes { justify-content: flex-end; }',
-'.iv-bottom.nonotes .iv-total { flex: 0 0 auto; min-width: 62mm; }',
-'.iv-tlab { font-size: 7.5pt; letter-spacing: .8px; color: rgba(255,255,255,.85); }',
-'.iv-tval { margin-top: 1mm; font-size: 19pt; font-weight: 700; line-height: 1.1; }',
-'.iv-foot { padding: 5mm 12mm 7mm; text-align: center; }',
-'.iv-tail { flex: 1 1 auto; }',                                   // the empty paper below, so the page is still A4
-'.iv-thanks { font-size: 10.5pt; color: #4a5a63; }',
-'.iv-fine { margin-top: 2mm; font-size: 8pt; color: #93a0a8; }',
+'.iv-tb .iv-de { padding-left: 3mm; }',
+'.iv-de small { display: block; margin-top: .6mm; font-size: 7.4pt; color: #5d6a82; }',
+'.iv-rule { height: 0; border-top: .8pt solid #a9b8d3; margin-top: 3mm; }',
+'.iv-end { display: flex; justify-content: space-between; gap: 10mm; margin-top: 5mm; page-break-inside: avoid; break-inside: avoid; }',
+'.iv-left { flex: 1 1 auto; min-width: 0; max-width: 100mm; }',
+'.iv-nh { font-size: 11pt; font-weight: 700; color: #0b2a6b; margin-bottom: 1.5mm; }',
+'.iv-notes { font-size: 8pt; color: #5d6a82; line-height: 1.45; margin-bottom: 3mm; }',
+'.iv-notes p { margin: 0 0 1.5mm; } .iv-notes b { color: #16244a; }',
+'.iv-num { font-size: 8.6pt; color: #16244a; margin-top: 1.2mm; } .iv-num b { color: #0b2a6b; }',
+'.iv-adds { flex: 0 0 74mm; }',
+'.iv-ar { display: flex; justify-content: space-between; gap: 4mm; padding: 1.2mm 0 1.2mm 4mm; font-size: 9.2pt; color: #16244a; }',
+'.iv-ar span:first-child { font-weight: 700; }',
+'.iv-total { margin-top: 2mm; height: 10mm; border-radius: 2.2mm; background: #0b2a6b; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 5mm; }',
+'.iv-total span { font-size: 9.5pt; font-weight: 700; letter-spacing: .3px; } .iv-total b { font-size: 13pt; }',
+'.iv-paid { margin-top: 2mm; height: 7mm; border-radius: 1.8mm; background: #1f6fe5; color: #fff; font-size: 8.6pt; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: .5px; }',
+'.iv-thanks { position: absolute; right: 14mm; bottom: 41.5mm; font-size: 10.5pt; font-weight: 700; color: #0b2a6b; }',
 /* printing: the whole app steps aside and only the sheet is put on the paper */
 '@page { size: A4; margin: 0; }',
 '@media print {',
@@ -28883,6 +28959,7 @@ function open(o) {
         d.addEventListener('toggle', function () { setTimeout(fit, 60); });
         f.style.display = '';
     } else f.style.display = 'none';
+    f.insertBefore(logoBar(), f.firstChild); f.style.display = '';
     paint();
     el.classList.add('on');
     document.documentElement.classList.add('inv-open');
@@ -29052,8 +29129,92 @@ function doShare(act, btn) {
     }).then(function () { if (btn) btn.classList.remove('busy'); });
 }
 
+/* ---------------------------------------------------------------- your invoice logo
+   Settings > Invoice Details > Invoice logo, or the Logo button on the invoice itself. Any photo or picture works
+   (PNG keeps a see-through background). If you never add one, your quote logo or Home screen logo is used. */
+function readLogo(file) {
+    return new Promise(function (ok, bad) {
+        if (!file) { bad(new Error('No picture chosen')); return; }
+        if (file.type && !/^image\//.test(file.type) && !/\.(heic|heif)$/i.test(file.name || '')) { bad(new Error('Please choose a picture (PNG or JPG)')); return; }
+        var url = URL.createObjectURL(file), img = new Image(), done = false;
+        var fail = function () { if (done) return; done = true; URL.revokeObjectURL(url); bad(new Error('This phone could not open that picture. Try a PNG or JPG (or a screenshot of your logo).')); };
+        img.onerror = fail;
+        img.onload = function () {
+            if (done) return; done = true;
+            try {
+                var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height; if (!iw || !ih) { fail(); return; }
+                var k = Math.min(1, 800 / Math.max(iw, ih)), w = Math.max(1, Math.round(iw * k)), h = Math.max(1, Math.round(ih * k));
+                var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+                var png = /png|webp|gif|svg/i.test(file.type || ''), out = c.toDataURL(png ? 'image/png' : 'image/jpeg', 0.9);
+                if (out.length > 900000) out = c.toDataURL('image/jpeg', 0.82);                         // keep your settings small (they sync)
+                URL.revokeObjectURL(url);
+                if (out.indexOf('data:image/') !== 0) { bad(new Error('Could not read that picture')); return; }
+                ok(out);
+            } catch (e) { URL.revokeObjectURL(url); bad(new Error('Could not read that picture')); }
+        };
+        img.src = url;
+        setTimeout(fail, 15000);
+    });
+}
+function setLogo(v) {
+    try { appSettings.invoiceLogo = v || ''; if (v) appSettings.invoiceShowLogo = true; saveSettings(); } catch (e) { /* ignore */ }
+    paintLogoUi(); if (ctx && el && el.classList.contains('on')) paint();
+}
+function pickLogo() {
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.addEventListener('change', function () {
+        var f = inp.files && inp.files[0]; inp.remove(); if (!f) return;
+        readLogo(f).then(function (u) { setLogo(u); try { showToast('Logo added to your invoices', 'success'); } catch (e) { /* ignore */ } })
+            .catch(function (e) { try { showToast(e.message, 'error'); } catch (er) { /* ignore */ } });
+    });
+    inp.click();
+}
+function ownLogo() { var v = S('invoiceLogo', ''); return typeof v === 'string' && v.indexOf('data:image/') === 0 ? v : ''; }
+function logoBar() {
+    var b = document.createElement('div'); b.id = 'inv-logobar';
+    b.innerHTML = '<span class="ilb-prev"></span><span class="ilb-tx"><b>Logo</b><small></small></span><button type="button" class="app-btn" data-ilb="pick"></button><button type="button" class="app-btn" data-ilb="rm" aria-label="Remove the invoice logo"><i class="fas fa-trash-alt"></i></button>';
+    b.addEventListener('click', function (e) { var t = e.target.closest('[data-ilb]'); if (!t) return; if (t.getAttribute('data-ilb') === 'pick') pickLogo(); else setLogo(''); });
+    setTimeout(paintLogoUi, 0);
+    return b;
+}
+function paintLogoUi() {
+    var own = ownLogo(), any = logoSrc(), show = S('invoiceShowLogo', true) !== false;
+    Array.prototype.forEach.call(document.querySelectorAll('#inv-logobar, #inv-logo-row'), function (b) {
+        var pv = b.querySelector('.ilb-prev'); if (pv) pv.innerHTML = any ? '<img alt="" src="' + any + '">' : '<i class="fas fa-image"></i>';
+        var sm = b.querySelector('.ilb-tx small'); if (sm) sm.textContent = !show ? 'Turned off (Settings > Invoice Details)' : own ? 'Your invoice logo' : any ? 'Using your ' + (S('quoteLogo', '') ? 'quote' : 'Home screen') + ' logo - add one just for invoices' : 'No logo yet';
+        var pk = b.querySelector('[data-ilb=pick]'); if (pk) pk.innerHTML = '<i class="fas fa-upload mr-2"></i>' + (own ? 'Change' : 'Add logo');
+        var rm = b.querySelector('[data-ilb=rm]'); if (rm) rm.hidden = !own;
+    });
+}
+function settingsRow() {
+    var tg = document.getElementById('invoice-logo-toggle'); if (!tg) return false;
+    if (document.getElementById('inv-logo-row')) return true;
+    var item = tg.closest('.setting-item'); if (!item) return false;
+    var d = item.querySelector('.setting-description'); if (d) d.textContent = 'Shows your invoice logo (below) at the top of every invoice. Off leaves the logo out.';
+    var r = document.createElement('div'); r.className = 'setting-item'; r.id = 'inv-logo-row';
+    r.innerHTML = '<div class="setting-header"><div class="setting-icon"><i class="fas fa-image"></i></div><div class="setting-content"><h4 class="setting-title">Invoice Logo</h4>' +
+        '<p class="setting-description">PNG or JPG. A PNG with a see-through background looks best on the white invoice.</p></div></div>' +
+        '<div class="ilb-row"><span class="ilb-prev"></span><span class="ilb-tx"><small></small></span><button type="button" class="app-btn" data-ilb="pick"></button><button type="button" class="app-btn" data-ilb="rm" aria-label="Remove the invoice logo"><i class="fas fa-trash-alt"></i></button></div>';
+    r.addEventListener('click', function (e) { var t = e.target.closest('[data-ilb]'); if (!t) return; if (t.getAttribute('data-ilb') === 'pick') pickLogo(); else setLogo(''); });
+    item.parentNode.insertBefore(r, item.nextSibling);
+    paintLogoUi(); return true;
+}
+(function () { var n = 0, t = setInterval(function () { if (settingsRow() || ++n > 80) clearInterval(t); }, 400); })();
+CSS += '\n' + [
+'#inv-logobar { max-width: 820px; margin: 0 auto 12px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #fff; }',
+'#inv-logobar .app-btn, .ilb-row .app-btn { flex: 0 0 auto; margin: 0; padding: 8px 12px; min-height: 40px; }',
+'.ilb-prev { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #8a97a0; }',
+'.ilb-prev img { width: 100%; height: 100%; object-fit: contain; }',
+'.ilb-tx { flex: 1 1 auto; min-width: 0; } .ilb-tx b { display: block; font-size: .9rem; } .ilb-tx small { display: block; font-size: .74rem; opacity: .7; line-height: 1.3; }',
+'.ilb-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }',
+'#inv-logo-row { flex-direction: column; align-items: stretch; }',
+'[data-ilb][hidden] { display: none !important; }'
+].join('\n');
+try { var cs0 = document.getElementById('inv-css'); if (cs0) cs0.textContent = CSS; } catch (e) { /* ignore */ }
+
 function update(group, o) { if (!ctx) return; ctx.group = group || ctx.group; ctx.o = o || ctx.o; paint(); }
-window.IncInvoice = { open: open, close: close, paint: paint, update: update, html: sheetHtml, showing: function () { return !!(el && el.classList.contains('on')); }, fit: fit, share: openShare, closeShare: closeShare, sharing: shareOpen, mailUrl: mailUrl,
+window.IncInvoice = { readLogo: readLogo, setLogo: setLogo, open: open, close: close, paint: paint, update: update, html: sheetHtml, showing: function () { return !!(el && el.classList.contains('on')); }, fit: fit, share: openShare, closeShare: closeShare, sharing: shareOpen, mailUrl: mailUrl,
     pdf: function () { return IncInvPdf.blob(ctx ? (ctx.group || []) : [], ctx ? (ctx.o || {}) : {}); } };
 })();
 
@@ -29135,7 +29296,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v35)';
+var VERSION = '2026.11.13 (v36)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
