@@ -8713,6 +8713,7 @@ function signOut(wipe) {
         Object.keys(LS).filter(function (k) { return k.indexOf(prefix) === 0; }).forEach(function (k) { LS.removeItem(k); });
     }
     LS.removeItem(SESSION_KEY);
+    try { if (window.IncMail && IncMail.forget) IncMail.forget(); } catch (e) { /* ignore */ }   // the server's remembered pass for this device too
     clearToken();
     try { if (window.google && window.google.accounts && window.google.accounts.id) window.google.accounts.id.disableAutoSelect(); } catch (e) { /* ignore */ }
     var calm = false; try { calm = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { calm = false; }
@@ -17447,7 +17448,8 @@ const quietReadOn = () => sget('receiptQuietRead', false) === true;      // read
 const backupPhotosOn = () => sget('receiptBackupPhotos', true) !== false;
 const cropOn = () => sget('rcSmartCrop', true) !== false;                  // Smart Crop: keep only the receipt (on by default)
 const autoCapOn = () => sget('rcAutoCapture', true) !== false;             // Auto Capture: the camera takes the photo when the receipt is steady
-const autoReadOn = () => sget('rcAutoRead', false) === true;               // Auto Read: after Auto Capture takes the photo, start reading it straight away (off by default)
+const autoReadOn = () => sget('rcAutoRead', false) === true;
+const autoLightOn = () => sget('rcAutoLight', false) === true;             // Auto Light: the phone's flashlight comes on by itself when it is too dark to see the receipt               // Auto Read: after Auto Capture takes the photo, start reading it straight away (off by default)
 async function smartCrop(blob) {                                          // never fails: the original comes back when no receipt is found clearly
     if (!cropOn() || !window.IncCrop) return { blob: blob, cropped: false };
     try { return await IncCrop.crop(blob); } catch (e) { return { blob: blob, cropped: false }; }
@@ -18233,6 +18235,7 @@ function injectPage() {
         </div></div>`;
     settings.parentNode.insertAdjacentHTML('beforeend', html);
     host = document.getElementById('receipts-page');
+    { const top = host.querySelector('.rc-top'), yr = host.querySelector('.rc-yrow.hub'); if (top && yr) { yr.classList.add('in-top'); top.appendChild(yr); } }   // the year sits at the right of the SlipVault title
     ensureBar();
     const nav = document.querySelector('.floating-nav');                       // Receipts also lives in the bottom bar
     if (nav && !nav.querySelector('[data-page="receipts"]')) {
@@ -18251,10 +18254,11 @@ function pagesStrip(key) {
 const savePhotoNow = () => UI.saveOverride === null ? savePhotosOn() : UI.saveOverride;
 function camToggles(withAuto) {
     const t = (k, on, label, help) => `<button type="button" class="rc-tg${on ? ' on' : ''}" data-rcx="${k}" role="switch" aria-checked="${on}" title="${help}"><span class="rc-tgs"><span></span></span>${label}</button>`;
-    return `<div class="rc-tgs-row">${t('crop', cropOn(), 'Smart Crop', 'Keep only the receipt in the photo, so it takes less space')}${withAuto ? t('auto', autoCapOn(), 'Auto Capture', 'The camera takes the photo by itself when the receipt is steady') + t('read', autoReadOn(), 'Auto Read', 'After Auto Capture takes the photo, IncAtor starts reading it by itself') : ''}</div>`;
+    return `<div class="rc-tgs-row">${t('crop', cropOn(), 'Smart Crop', 'Keep only the receipt in the photo, so it takes less space')}${withAuto ? t('auto', autoCapOn(), 'Auto Capture', 'The camera takes the photo by itself when the receipt is steady') + t('read', autoReadOn(), 'Auto Read', 'After Auto Capture takes the photo, IncAtor starts reading it by itself') + t('light', autoLightOn(), 'Auto Light', 'Turns the phone flashlight on by itself when it is too dark to find the receipt') : ''}</div>`;
 }
 function setCamOpt(k, v) {
     if (k === 'read') { sset('rcAutoRead', !!v); if (v && !autoCapOn()) sset('rcAutoCapture', true); showToast(v ? 'Auto Read on: once the camera takes the photo, IncAtor reads it straight away' + (autoCapOn() ? '' : '') : 'Auto Read off: tap Read when you have all the photos', 'info'); return; }
+    if (k === 'light') { sset('rcAutoLight', !!v); showToast(v ? 'Auto Light on: the flashlight comes on by itself when it is too dark' : 'Auto Light off: tap the light button in the camera if you need it', 'info'); return; }
     if (k === 'crop') { sset('rcSmartCrop', !!v); showToast(v ? 'Smart Crop on: only the receipt is kept' : 'Smart Crop off: photos are kept as taken', 'info'); }
     else { sset('rcAutoCapture', !!v); showToast(v ? 'Auto Capture on: hold the receipt steady and the camera takes the photo' : 'Auto Capture off: tap the round button to take each photo', 'info'); }
 }
@@ -18317,7 +18321,7 @@ function openCamera() {
             <div class="rc-cam-wb"><button type="button" class="app-btn" data-cam="retry"><i class="fas fa-sync-alt mr-2"></i>Try again</button><button type="button" class="app-btn" data-cam="file"><i class="fas fa-camera mr-2"></i>Phone camera app</button></div></div>
         <button type="button" class="rc-cam-torch" data-cam="torch" hidden aria-label="Light"><i class="fas fa-bolt"></i></button>
         <canvas class="rc-cam-ol" aria-hidden="true"></canvas>
-        <div class="rc-cam-autos"><button type="button" class="rc-cam-auto" data-cam="auto" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Capture</button><button type="button" class="rc-cam-auto" data-cam="autoread" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Read</button></div>
+        <div class="rc-cam-autos"><button type="button" class="rc-cam-auto" data-cam="auto" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Capture</button><button type="button" class="rc-cam-auto" data-cam="autolight" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Light</button><button type="button" class="rc-cam-auto" data-cam="autoread" role="switch" aria-checked="false"><span class="rc-tgs"><span></span></span>Auto Read</button></div>
         <div class="rc-cam-st" aria-live="polite"></div>
         <div class="rc-cam-bar"><div class="rc-cam-strip"></div><div class="rc-cam-ctl">
             <button type="button" class="rc-cam-btn rc-cam-close" data-cam="close"><i class="fas fa-times mr-2"></i>Close</button>
@@ -18327,8 +18331,32 @@ function openCamera() {
     const video = ov.querySelector('video'), strip = ov.querySelector('.rc-cam-strip'), flash = ov.querySelector('.rc-flash'), wait = ov.querySelector('#rc-cam-wait');
     let torchOn = false, starting = false, waitT = 0, autoT = 0, steady = 0, lastBox = null, shotBox = null, cool = 0;
     const ol = ov.querySelector('.rc-cam-ol'), stEl = ov.querySelector('.rc-cam-st'), autoBtn = ov.querySelector('[data-cam="auto"]');
-    const readBtn = ov.querySelector('[data-cam="autoread"]');
-    const paintAuto = () => { const on = autoCapOn(), rd = autoReadOn(); autoBtn.classList.toggle('on', on); autoBtn.setAttribute('aria-checked', String(on)); readBtn.classList.toggle('on', rd); readBtn.setAttribute('aria-checked', String(rd)); readBtn.hidden = !on; if (!on) { stEl.textContent = ''; drawBox(null); } };
+    const readBtn = ov.querySelector('[data-cam="autoread"]'), lightBtn = ov.querySelector('[data-cam="autolight"]'), torchBtn = ov.querySelector('.rc-cam-torch');
+    let torchOk = false, darkN = 0, manualOff = false, darkTold = false, lightT = 0;
+    function setTorch(v, auto) {                                     // the phone's flashlight (only where the browser allows it)
+        if (!torchOk || !live.stream) return false;
+        try { live.stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: !!v }] }).catch(() => { /* not allowed */ }); } catch (e) { return false; }
+        torchOn = !!v; torchBtn.classList.toggle('on', torchOn); torchBtn.setAttribute('aria-pressed', String(torchOn));
+        if (auto && v) stEl.textContent = 'It is dark - the light is on';
+        return true;
+    }
+    const lumaC = document.createElement('canvas'); lumaC.width = 48; lumaC.height = 27;
+    function luma() {                                               // how bright the picture is, 0 (black) to 255 (white)
+        try { const x = lumaC.getContext('2d', { willReadFrequently: true }); x.drawImage(video, 0, 0, 48, 27); const d = x.getImageData(0, 0, 48, 27).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114; return t / (d.length / 4); } catch (e) { return 255; }
+    }
+    function lightTick() {                                          // Auto Light: twice a second, is it too dark?
+        if (gone()) return;
+        lightT = setTimeout(lightTick, 500);
+        if (!autoLightOn() || torchOn || manualOff || !video.videoWidth || document.hidden) { darkN = 0; return; }
+        const y = luma();
+        darkN = y < 62 ? darkN + 1 : 0;
+        if (darkN >= 3) {
+            darkN = 0;
+            if (torchOk) setTorch(true, true);
+            else if (!darkTold) { darkTold = true; stEl.textContent = 'Too dark to see the receipt - turn on a light. This phone\'s browser does not let IncAtor use the flashlight.'; }
+        }
+    }
+    const paintAuto = () => { const on = autoCapOn(), rd = autoReadOn(), lt = autoLightOn(); lightBtn.classList.toggle('on', lt); lightBtn.setAttribute('aria-checked', String(lt)); autoBtn.classList.toggle('on', on); autoBtn.setAttribute('aria-checked', String(on)); readBtn.classList.toggle('on', rd); readBtn.setAttribute('aria-checked', String(rd)); readBtn.hidden = !on; if (!on) { stEl.textContent = ''; drawBox(null); } };
     function drawBox(box, good) {                                   // the outline of the receipt the camera sees
         const r = video.getBoundingClientRect(); ol.width = Math.round(r.width); ol.height = Math.round(r.height); ol.style.left = r.left + 'px'; ol.style.top = r.top + 'px'; ol.style.width = r.width + 'px'; ol.style.height = r.height + 'px';
         const x = ol.getContext('2d'); x.clearRect(0, 0, ol.width, ol.height); if (!box || !video.videoWidth) return;
@@ -18388,7 +18416,8 @@ function openCamera() {
             video.play().catch(() => { /* autoplay handled by the attribute */ });
             video.addEventListener('loadedmetadata', hideWait, { once: true });
             setTimeout(() => { if (!gone() && video.videoWidth) hideWait(); }, 900);
-            try { const cap = tr && tr.getCapabilities ? tr.getCapabilities() : {}; if (cap && cap.torch) ov.querySelector('.rc-cam-torch').hidden = false; } catch (e) { /* no torch */ }
+            try { const cap = tr && tr.getCapabilities ? tr.getCapabilities() : {}; torchOk = !!(cap && cap.torch); torchBtn.hidden = !torchOk; } catch (e) { /* no torch */ }
+            if (torchOn && torchOk) setTimeout(() => setTorch(true), 300);                                    // the camera restarted: light back on
         }).catch(err => {
             starting = false; clearTimeout(waitT);
             if (gone()) return;
@@ -18396,7 +18425,8 @@ function openCamera() {
             showWait('The camera could not start.', true);                                                     // busy, or the phone needs a moment
         });
     }
-    paintAuto(); autoT = setTimeout(autoTick, 900);
+    paintAuto(); autoT = setTimeout(autoTick, 900); lightT = setTimeout(lightTick, 1200);
+    const stopAuto0 = live.stopAuto; live.stopAuto = () => { stopAuto0(); clearTimeout(lightT); };
     live.onVis = () => { if (gone() || document.hidden) return; if (!live.stream || !live.stream.getVideoTracks().some(t => t.readyState === 'live')) { live.stream = null; start(); } };
     document.addEventListener('visibilitychange', live.onVis);
     start();
@@ -18406,7 +18436,8 @@ function openCamera() {
         else if (a === 'retry') { try { if (live.stream) live.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* ignore */ } live.stream = null; start(); }
         else if (a === 'file') { stop(); document.getElementById('rc-file-cam').click(); }
         else if (a === 'done') { if (!UI.pages[key].length) return; stop(); renderPanel(); readPages(key); }    // Read receipt: straight to reading (and saving, with Auto save on)
-        else if (a === 'torch') { try { torchOn = !torchOn; live.stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }); b.classList.toggle('on', torchOn); } catch (e) { /* ignore */ } }
+        else if (a === 'torch') { const v = !torchOn; setTorch(v); if (!v) manualOff = true; }       // you turned it off: Auto Light leaves it off this time
+        else if (a === 'autolight') { setCamOpt('light', !autoLightOn()); manualOff = false; darkN = 0; paintAuto(); }
         else if (a === 'shot') takeShot(false);
         else if (a === 'auto') { setCamOpt('auto', !autoCapOn()); steady = 0; lastBox = null; shotBox = null; paintAuto(); }
         else if (a === 'autoread') { setCamOpt('read', !autoReadOn()); paintAuto(); }
@@ -18634,7 +18665,8 @@ async function aiTest() {                                       // a tiny text-o
     return (await claudeRun(key, [{ type: 'text', text: 'Reply with the single word OK.' }], 16)).model;
 }
 
-async function readPages(key) {
+async function readPages(...a) { const _b = window.IncBusy ? IncBusy.start('Reading receipt') : () => {}; try { return await readPages_(...a); } finally { _b(); } }
+async function readPages_(key) {
     const pages = UI.pages[key].slice(); if (!pages.length) return;
     const batch = key === 'upload' && UI.batch;
     const pm = progressModal(batch ? 'Reading receipts' : 'Reading your receipt');
@@ -19200,7 +19232,7 @@ function renderHub() {
     const YR = yearRecs();
     let spend = 0, claim = 0, itc = 0; YR.forEach(r => { const a = claimInfo(r); spend += N(r.total); claim += a.claimable; itc += a.itc; });
     st.innerHTML = `<div class="bz-stat"><b>${YR.length}</b><span>Receipts ${h(yearWord())}</span></div><div class="bz-stat"><b>${h(money(spend))}</b><span>Spent</span></div><div class="bz-stat"><b>${h(money(claim))}</b><span>Claimable</span></div><div class="bz-stat"><b>${h(money(itc))}</b><span>${gstWord()}</span></div>`;
-    const hero = (view, ic, grad, title, sub, n) => `<button type="button" class="rc-hero" data-rc-view="${view}"><span class="rc-hi" style="background:linear-gradient(135deg,${grad[0]},${grad[1]})"><i class="fas fa-${ic}"></i></span><b>${h(title)}</b><small>${sub}</small>${n === undefined ? '' : `<span class="rc-hn">${n}</span>`}</button>`;
+    const hero = (view, ic, grad, title, sub, n) => `<button type="button" class="rc-hero" data-rc-view="${view}"><span class="rc-hi" style="background:linear-gradient(135deg,${grad[0]},${grad[1]})"><i class="fas fa-${ic}"></i></span><span class="rc-ht"><b>${h(title)}</b><small>${sub}</small></span>${n === undefined ? '' : `<span class="rc-hn">${n}</span>`}</button>`;
     grid.innerHTML = hero('all', 'list', ['#6366f1', '#8b5cf6'], 'View Receipts', `${h(plural(YR.length, 'receipt'))} ${h(yearWord())}<br>${h(money(spend))} spent${DUPS.clusters.length ? `<br><span class="rc-hw">${DUPS.clusters.length} possible duplicate${DUPS.clusters.length === 1 ? '' : 's'}</span>` : ''}`, YR.length)
         + hero('tax', 'chart-bar', ['#14b8a6', '#3b82f6'], 'Summary', `Claimable ${h(money(claim))}<br>${gstWord()} ${h(money(itc))}`);
     renderChips();
@@ -19593,7 +19625,7 @@ function wirePage() {
         const tmb = ev.target.closest('[data-rc-taxmode]'); if (tmb) { setTaxMode(tmb.getAttribute('data-rc-taxmode')); return; }
         if (ev.target.closest('#rc-newcat')) { newCategory('').then(id => { if (id) renderAll(); }); return; }
         if (ev.target.closest('#rc-ftog')) { const f = document.getElementById('rc-filters'), on = !f.classList.contains('open'); f.classList.toggle('open', on); ev.target.closest('#rc-ftog').setAttribute('aria-expanded', String(on)); return; }
-        const tg = ev.target.closest('[data-rcx]'); if (tg) { const k = tg.getAttribute('data-rcx'); setCamOpt(k, !(k === 'crop' ? cropOn() : k === 'read' ? autoReadOn() : autoCapOn())); renderPanel(); return; }
+        const tg = ev.target.closest('[data-rcx]'); if (tg) { const k = tg.getAttribute('data-rcx'); setCamOpt(k, !(k === 'crop' ? cropOn() : k === 'read' ? autoReadOn() : k === 'light' ? autoLightOn() : autoCapOn())); renderPanel(); return; }
         const mode = ev.target.closest('[data-rc-mode]'); if (mode) { UI.mode = mode.getAttribute('data-rc-mode'); renderPanel(); return; }
         const rm = ev.target.closest('[data-rc-rm]'); if (rm) { const k = UI.mode === 'upload' ? 'upload' : 'capture'; UI.pages[k] = UI.pages[k].filter(p => p.id !== rm.getAttribute('data-rc-rm')); renderPanel(); return; }
         const a = ev.target.closest('[data-rc]');
@@ -23563,6 +23595,116 @@ window.IncFeel = { play: fx, sound: sound, buzz: buzz, haptics: function (v) { i
 })();
 
 </script>
+<script id="incator-busy">
+/* Activity indicator: a small IncAtor ring that turns while something is happening in the background -
+   checking Gmail, importing work orders, syncing with Google Drive, connecting to Google or your server, reading a PDF.
+   Phone: top-right corner, just under the status bar. Computer: top-right corner with a short word of what it is doing.
+   Tap it to see what is going on. It only shows for things that take a moment (not for quick blinks). */
+(function () {
+'use strict';
+if (window.IncBusy) return;
+var jobs = {}, seq = 0, el = null, showT = 0, hideT = 0;
+function label() {
+    var ks = Object.keys(jobs); if (!ks.length) return '';
+    var seen = {}, out = [];
+    ks.forEach(function (k) { var l = jobs[k].label; if (!seen[l]) { seen[l] = 1; out.push(l); } });
+    return out.join(' · ');
+}
+function make() {
+    if (el) return el;
+    el = document.createElement('button'); el.type = 'button'; el.id = 'inc-busy'; el.setAttribute('aria-live', 'polite');
+    el.innerHTML = '<span class="ib-ring" aria-hidden="true"><span class="ib-core">Inc</span></span><span class="ib-txt"></span>';
+    el.addEventListener('click', function () { var l = label(); try { showToast(l ? l + '…' : 'All done', 'info'); } catch (e) { /* ignore */ } });
+    (document.body || document.documentElement).appendChild(el);
+    return el;
+}
+function paint() {
+    var n = Object.keys(jobs).length;
+    clearTimeout(showT); clearTimeout(hideT);
+    if (n) {
+        showT = setTimeout(function () {
+            if (!Object.keys(jobs).length) return;
+            var e = make(), l = label();
+            e.querySelector('.ib-txt').textContent = l;
+            e.setAttribute('aria-label', 'Working: ' + l + '. Tap to see.'); e.title = l;
+            e.classList.add('on');
+        }, 350);
+    } else if (el) {
+        hideT = setTimeout(function () { el.classList.remove('on'); }, 300);
+    }
+}
+function start(lab, key) {
+    var id = key || ('j' + (++seq));
+    jobs[id] = { label: String(lab || 'Working'), at: Date.now() };
+    paint();
+    var done = false;
+    var stop = function () { if (done) return; done = true; delete jobs[id]; paint(); };
+    setTimeout(stop, 180000);                                              // never spins forever
+    return stop;
+}
+async function wrap(lab, fn) { var s = start(lab); try { return await fn(); } finally { s(); } }
+
+/* Network work the app does in the background is picked up by itself */
+function srv() { try { return String((typeof appSettings !== 'undefined' && appSettings.woServer) || '').trim().replace(/\/+$/, ''); } catch (e) { return ''; } }
+function what(url) {
+    var u = String(url || '');
+    var s = srv();
+    if (s && u.indexOf(s) === 0) {
+        var p = u.slice(s.length);
+        if (/^\/check/.test(p)) return 'Checking Gmail for work orders';
+        if (/^\/drafts|^\/file|^\/link/.test(p)) return 'Getting imported work orders';
+        if (/^\/notifications/.test(p)) return 'Getting notifications';
+        if (/^\/connect|^\/session|^\/hello/.test(p)) return 'Connecting to your IncAtor server';
+        return 'Talking to your IncAtor server';
+    }
+    if (/googleapis\.com\/(upload\/)?drive/.test(u)) return 'Syncing with Google Drive';
+    if (/oauth2\.googleapis\.com|accounts\.google\.com|tokeninfo/.test(u)) return 'Connecting to Google';
+    if (/googleapis\.com\/gmail/.test(u)) return 'Checking Gmail';
+    return '';
+}
+if (window.fetch && !window.fetch.__incBusy) {
+    var of = window.fetch;
+    var nf = function (input, init) {
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        var l = what(url);
+        if (!l) return of.apply(this, arguments);
+        var stop = start(l);
+        var p;
+        try { p = of.apply(this, arguments); } catch (e) { stop(); throw e; }
+        return Promise.resolve(p).then(function (r) { stop(); return r; }, function (e) { stop(); throw e; });
+    };
+    nf.__incBusy = true;
+    window.fetch = nf;
+}
+
+var css = [
+'#inc-busy { position: fixed; z-index: 10620; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 12px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .2s ease, transform .2s ease; -webkit-tap-highlight-color: transparent; }',
+'#inc-busy.on { opacity: 1; transform: none; pointer-events: auto; }',
+'#inc-busy .ib-ring { position: relative; width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; background: rgba(12, 8, 26, .72); box-shadow: 0 4px 14px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center; }',
+'#inc-busy .ib-ring::before { content: ""; position: absolute; inset: 2px; border-radius: 50%; padding: 2px; background: conic-gradient(from 0deg, rgba(var(--pr2, 196, 181, 253), 0) 0deg, rgb(var(--pr2, 196, 181, 253)) 250deg, #fff 360deg); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ibSpin .9s linear infinite; }',
+'#inc-busy .ib-core { font: 800 9px/1 var(--font, sans-serif); letter-spacing: -.02em; color: #fff; }',
+'#inc-busy .ib-txt { display: none; }',
+'@keyframes ibSpin { to { transform: rotate(360deg); } }',
+'@media (prefers-reduced-motion: reduce) { #inc-busy .ib-ring::before { animation-duration: 2.4s; } }',
+/* computer: the same ring with a short word of what it is doing */
+'@media (min-width: 701px) { #inc-busy { top: 14px; right: 18px; height: 34px; padding: 2px 12px 2px 2px; border-radius: 999px; background: rgba(12, 8, 26, .72); box-shadow: 0 6px 20px rgba(0,0,0,.3), inset 0 0 0 1px rgba(255,255,255,.12); color: #fff; } #inc-busy .ib-ring { background: transparent; box-shadow: none; } #inc-busy .ib-txt { display: block; font-size: .78rem; font-weight: 600; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }',
+'html.lm #inc-busy .ib-ring { background: rgba(255,255,255,.9); box-shadow: 0 4px 14px rgba(29,23,51,.15), inset 0 0 0 1px rgba(29,23,51,.1); } html.lm #inc-busy .ib-core { color: #1d1733; }',
+'@media (min-width: 701px) { html.lm #inc-busy { background: rgba(255,255,255,.92); color: #1d1733; box-shadow: 0 6px 20px rgba(29,23,51,.12), inset 0 0 0 1px rgba(29,23,51,.1); } html.lm #inc-busy .ib-ring { background: transparent; box-shadow: none; } }',
+'html[data-theme="sleek"] #inc-busy .ib-ring::before { background: conic-gradient(from 0deg, transparent 0deg, var(--sk-fg, #ededee) 360deg) !important; }',
+'html[data-theme="sleek"] #inc-busy .ib-ring { background: var(--sk-raise, #141416) !important; box-shadow: inset 0 0 0 1px var(--sk-line2, rgba(255,255,255,.16)) !important; }',
+'html[data-theme="sleek"] #inc-busy { color: var(--sk-fg, #ededee) !important; background: transparent !important; box-shadow: none !important; }',
+'@media (min-width: 701px) { html[data-theme="sleek"] #inc-busy { background: var(--sk-raise, #141416) !important; box-shadow: inset 0 0 0 1px var(--sk-line2, rgba(255,255,255,.16)) !important; border-radius: 999px !important; } }',
+'html[data-theme="sleek"] #inc-busy .ib-core { color: var(--sk-fg, #ededee) !important; }',
+'@media (min-width: 701px) { html[data-theme="sleek"] #inc-busy .ib-ring { box-shadow: none !important; background: transparent !important; } }'
+].join('\n');
+function inject() { var st = document.getElementById('incator-busy-css'); if (!st) { st = document.createElement('style'); st.id = 'incator-busy-css'; st.textContent = css; } (document.head || document.documentElement).appendChild(st); }
+inject();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
+
+window.IncBusy = { start: start, wrap: wrap, active: function () { return Object.keys(jobs).length; }, label: label };
+})();
+
+</script>
 <script id="incator-mode">
 /* Light or dark (Settings > Appearance > Light or dark).
    IncAtor is drawn dark. Light mode makes a matching light version of every style in the app: dark panels become light,
@@ -23644,7 +23786,7 @@ var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
 var SKIP = /\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
-function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)); }
+function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
 function declFor(st, og) {
     var out1 = [], seen = {}, clipText = /text/.test(st.getPropertyValue('-webkit-background-clip') + st.getPropertyValue('background-clip'));
@@ -23724,8 +23866,10 @@ function textRules(txt, acc, media, og) {
     }
 }
 var sheet = null, sig = '';
+var ORB = false;                                                          // Sleek with the IncAtor icon in colour: its styles keep their colours
 function build() {
     var acc = [], n = 0;
+    ORB = SLEEK && /^(rings|full)$/.test(document.documentElement.getAttribute('data-sk-orb') || '');
     Array.prototype.forEach.call(document.styleSheets, function (sh) {
         var id = sh.ownerNode && sh.ownerNode.id;
         if (id === 'incator-light-css' || id === 'incator-sleek-css' || id === 'incator-light-vars') return;
@@ -24002,11 +24146,13 @@ T + ' .mh-tile *, ' + T + ' .home-card * { text-shadow: none !important; }',
 T + ' .mh-cta-wrap { background: none !important; box-shadow: none !important; border: 0 !important; }',
 T + ' .mh-cta { border-radius: 999px !important; }',
 T + ' .mh-brand { background: none !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; letter-spacing: .02em; }',
-T + ' .mh-orb, ' + T + ' .mh-orb-wrap { background: transparent !important; background-image: none !important; box-shadow: none !important; animation: none !important; border-color: var(--sk-line2) !important; }',
-T + ' .mh-orb { border: 1px solid var(--sk-line2) !important; }',
-T + ' .mh-orb i { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; filter: none !important; }',
+T + ':not([data-sk-orb="full"]) .mh-orb, ' + T + ':not([data-sk-orb="full"]) .mh-orb-wrap { background: transparent !important; background-image: none !important; box-shadow: none !important; animation: none !important; border-color: var(--sk-line2) !important; }',
+T + ':not([data-sk-orb="full"]) .mh-orb { border: 1px solid var(--sk-line2) !important; }',
+/* the IncAtor icon on Home in colour, if you choose (Settings > Appearance > Sleek): colour rings, or the full colour icon */
+'html[data-theme="sleek"][data-sk-orb="rings"] .mh-orb-wrap, html[data-theme="sleek"][data-sk-orb="full"] .mh-orb-wrap { --pr4: 139, 92, 246; --ind2: 129, 140, 248; --acc2: 236, 72, 153; --pr3: 124, 58, 237; --pr2: 167, 139, 250; }',
+T + ':not([data-sk-orb="full"]) .mh-orb i { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; filter: none !important; }',
 T + ' .mh-orb-wrap::before, ' + T + ' .mh-orb-wrap::after { display: none !important; }',
-T + ' .mh-orb::before, ' + T + ' .mh-orb::after { display: none !important; }',
+T + ':not([data-sk-orb="full"]) .mh-orb::before, ' + T + ':not([data-sk-orb="full"]) .mh-orb::after { display: none !important; }',
 /* ---- scrollbars and selection ---- */
 T + ' ::selection { background: var(--sk-fg); color: var(--sk-bg); }',
 T + ' ::-webkit-scrollbar-thumb { background: var(--sk-line2) !important; }'
@@ -24070,18 +24216,40 @@ var PAL_DARK = { '--sk-bg': '#0b0b0c', '--sk-raise': '#141416', '--sk-fg': '#ede
 var PAL_LIGHT = { '--sk-bg': '#fafaf9', '--sk-raise': '#ffffff', '--sk-fg': '#111113', '--sk-mut': '#6a6a70', '--sk-faint': '#a2a2a8', '--sk-line': 'rgba(0,0,0,.085)', '--sk-line2': 'rgba(0,0,0,.16)', '--sk-soft': 'rgba(0,0,0,.035)', '--sk-press': 'rgba(0,0,0,.06)',
     '--pr': '90, 90, 94', '--pr2': '60, 60, 64', '--pr3': '110, 110, 114', '--pr4': '96, 96, 100', '--pr5': '40, 40, 44', '--acc': '17, 17, 19', '--acc2': '80, 80, 84', '--lav': '50, 50, 54', '--lav2': '30, 30, 34', '--lav3': '30, 30, 34', '--lav4': '50, 50, 54', '--ind2': '60, 60, 64',
     '--bg1': '250, 250, 249', '--bg2': '250, 250, 249', '--bg3': '250, 250, 249', '--bg4': '255, 255, 255', '--bgd': '244, 244, 243', '--bgdd': '250, 250, 249', '--panel': '255, 255, 255', '--light': '#111113' };
+/* How light the light mode is and how dark the dark mode is: two sliders in Settings > Appearance (only with Sleek).
+   Dark: 0 = deep black ... 100 = soft charcoal (default 50, not too black). Light: 0 = bright white ... 100 = warm off-white (default 50). */
+function SS(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
+function clamp(v) { v = parseInt(v, 10); return isNaN(v) ? 50 : Math.max(0, Math.min(100, v)); }
+function hex(c) { return '#' + c.map(function (x) { x = Math.max(0, Math.min(255, Math.round(x))); return (x < 16 ? '0' : '') + x.toString(16); }).join(''); }
+function rgbs(c) { return c.map(Math.round).join(', '); }
+function shadeDark(v) { var y = 255 * (0.04 + clamp(v) / 100 * 0.15); return [y, y, y + 1.5]; }
+function shadeLight(v) { var t = clamp(v) / 100, a = [253, 253, 252], b = [231, 228, 221]; return a.map(function (x, i) { return x + (b[i] - x) * t; }); }
+function palette(lm) {
+    var P = Object.assign({}, PAL_DARK, lm ? PAL_LIGHT : {});
+    if (!lm) {
+        var d = shadeDark(SS('sleekDark', 50)), up = d.map(function (x) { return x + 11; }), mid = d.map(function (x) { return x + 5; });
+        Object.assign(P, { '--sk-bg': hex(d), '--sk-raise': hex(up), '--bg1': rgbs(d), '--bg2': rgbs(d), '--bg3': rgbs(d), '--bgdd': rgbs(d), '--bgd': rgbs(mid), '--bg4': rgbs(up), '--panel': rgbs(up), '--dark': hex(d) });
+    } else {
+        var l = shadeLight(SS('sleekLight', 50)), hi = l.map(function (x) { return Math.min(255, x + 9); }), lo = l.map(function (x) { return x - 6; });
+        Object.assign(P, { '--sk-bg': hex(l), '--sk-raise': hex(hi), '--bg1': rgbs(l), '--bg2': rgbs(l), '--bg3': rgbs(l), '--bgdd': rgbs(l), '--bgd': rgbs(lo), '--bg4': rgbs(hi), '--panel': rgbs(hi) });
+    }
+    return P;
+}
 var painted = null;
 function paintVars() {
     var r = document.documentElement, b = document.body, on = isOn(), lm = r.classList.contains('lm');
-    var want = on ? (lm ? 'light' : 'dark') : '';
+    var want = on ? (lm ? 'light' : 'dark') + ':' + (lm ? SS('sleekLight', 50) : SS('sleekDark', 50)) : '';
+    var orb = on ? String(SS('sleekOrb', 'plain')) : '';
+    if (r.getAttribute('data-sk-orb') !== (orb || null)) { if (orb) r.setAttribute('data-sk-orb', orb); else r.removeAttribute('data-sk-orb'); }
     if (want === painted) return;
     var keys = Object.keys(PAL_DARK).concat(Object.keys(PAL_LIGHT));
     keys.forEach(function (k) { r.style.removeProperty(k); });
     ['background-color', 'background-image', 'color-scheme'].forEach(function (k) { r.style.removeProperty(k); if (b) b.style.removeProperty(k); });
     if (on) {
-        var P = Object.assign({}, PAL_DARK, lm ? PAL_LIGHT : {});
+        var P = palette(lm);
         Object.keys(P).forEach(function (k) { r.style.setProperty(k, P[k]); });
         r.style.setProperty('color-scheme', lm ? 'light' : 'dark');
+        try { var mc = document.querySelector('meta[name="theme-color"]'); if (mc) mc.setAttribute('content', P['--sk-bg']); } catch (e) { /* ignore */ }
         r.style.setProperty('background-color', P['--sk-bg'], 'important'); r.style.setProperty('background-image', 'none', 'important');
         if (b) { b.style.setProperty('background-color', P['--sk-bg'], 'important'); b.style.setProperty('background-image', 'none', 'important'); }
     }
@@ -24091,7 +24259,70 @@ function paintVars() {
 try { new MutationObserver(paintVars).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) { /* ignore */ }
 paintVars();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { painted = null; paintVars(); });
-window.IncSleek = { on: isOn, scan: scan, paint: function () { painted = null; paintVars(); } };
+/* ---- Settings > Appearance: the Sleek controls (only shown while Sleek is your theme) ---- */
+function setS(k, v) { try { appSettings[k] = v; saveSettings(); } catch (e) { /* ignore */ } }
+function tuneHtml() {
+    var o = String(SS('sleekOrb', 'plain'));
+    return '<div class="sk-tune-h"><b>Sleek</b><small>Only for the Sleek theme</small></div>' +
+        '<label class="sk-sl"><span><b>Dark mode</b><em id="sk-dv"></em></span><input type="range" id="sk-dark" min="0" max="100" step="1" value="' + clamp(SS('sleekDark', 50)) + '" aria-label="How dark the dark mode is"><span class="sk-ends"><i>Deeper</i><i>Softer</i></span></label>' +
+        '<label class="sk-sl"><span><b>Light mode</b><em id="sk-lv"></em></span><input type="range" id="sk-light" min="0" max="100" step="1" value="' + clamp(SS('sleekLight', 50)) + '" aria-label="How white the light mode is"><span class="sk-ends"><i>Bright white</i><i>Off-white</i></span></label>' +
+        '<div class="sk-orbset"><b>IncAtor icon on Home</b><div class="sk-seg" role="radiogroup" aria-label="IncAtor icon on Home">' +
+        [['plain', 'Plain'], ['rings', 'Colour rings'], ['full', 'Full colour']].map(function (x) { return '<button type="button" role="radio" data-skorb="' + x[0] + '" aria-checked="' + (o === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
+        '<button type="button" class="sk-reset" id="sk-reset">Reset Sleek shades</button>';
+}
+function tuneLabels() {
+    var d = document.getElementById('sk-dv'), l = document.getElementById('sk-lv');
+    var sw = function (c) { var x = hex(c); return '<i class="sk-sw" style="background:' + x + '"></i>' + x.toUpperCase(); };
+    if (d) d.innerHTML = sw(shadeDark(SS('sleekDark', 50))); if (l) l.innerHTML = sw(shadeLight(SS('sleekLight', 50)));
+}
+function tune() {
+    var grid = document.querySelector('#theme-settings-section .theme-card'); grid = grid && grid.parentNode; if (!grid) return false;
+    var box = document.getElementById('sk-tune');
+    if (!box) { box = document.createElement('div'); box.id = 'sk-tune'; box.innerHTML = tuneHtml(); grid.parentNode.insertBefore(box, grid.nextSibling); tuneLabels(); }
+    box.hidden = !isOn();
+    return true;
+}
+var tuneT = 0;
+document.addEventListener('input', function (e) {
+    var id = e.target && e.target.id; if (id !== 'sk-dark' && id !== 'sk-light') return;
+    try { appSettings[id === 'sk-dark' ? 'sleekDark' : 'sleekLight'] = clamp(e.target.value); } catch (er) { /* ignore */ }
+    var wantLm = id === 'sk-light';
+    if (wantLm !== document.documentElement.classList.contains('lm') && window.IncMode) { /* preview the mode being adjusted */ }
+    painted = null; paintVars(); tuneLabels();
+    clearTimeout(tuneT); tuneT = setTimeout(function () { try { saveSettings(); } catch (er) { /* ignore */ } }, 400);
+});
+document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-skorb]');
+    if (b) { setS('sleekOrb', b.getAttribute('data-skorb')); Array.prototype.forEach.call(document.querySelectorAll('[data-skorb]'), function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); }); paintVars(); try { if (window.IncMode && IncMode.rebuild) IncMode.rebuild(); } catch (er) { /* ignore */ } return; }
+    if (e.target.closest && e.target.closest('#sk-reset')) {
+        setS('sleekDark', 50); setS('sleekLight', 50); painted = null; paintVars();
+        var d = document.getElementById('sk-dark'), l = document.getElementById('sk-light'); if (d) d.value = 50; if (l) l.value = 50; tuneLabels();
+    }
+});
+CSS += '\n' + [
+'#sk-tune { margin: 14px 0 4px; padding: 14px; border-radius: 16px; border: 1px solid var(--sk-line2, rgba(255,255,255,.16)); }',
+'#sk-tune[hidden] { display: none !important; }',
+'.sk-tune-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; } .sk-tune-h small { opacity: .6; font-size: .75rem; }',
+'.sk-sl { display: block; margin: 10px 0 14px; } .sk-sl > span:first-child { display: flex; justify-content: space-between; font-size: .85rem; } .sk-sl em { font-style: normal; font-size: .72rem; opacity: .6; font-variant-numeric: tabular-nums; }',
+'.sk-sl input[type=range] { width: 100%; margin: 8px 0 2px; height: 28px; filter: none !important; accent-color: var(--sk-fg, #ededee); }',
+'#sk-dark { background: linear-gradient(90deg, #0a0a0b, #303034); border-radius: 999px; height: 8px !important; -webkit-appearance: none; appearance: none; }',
+'#sk-light { background: linear-gradient(90deg, #fdfdfc, #e7e4dd); border-radius: 999px; height: 8px !important; -webkit-appearance: none; appearance: none; border: 1px solid rgba(0,0,0,.12); }',
+'.sk-sl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: var(--sk-fg, #ededee); border: 3px solid var(--sk-bg, #111); box-shadow: 0 1px 6px rgba(0,0,0,.35); cursor: pointer; }',
+'.sk-sl input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--sk-fg, #ededee); border: 3px solid var(--sk-bg, #111); }',
+'.sk-sw { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 6px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(128,128,128,.5); }',
+'.sk-ends { display: flex; justify-content: space-between; font-size: .7rem; opacity: .55; } .sk-ends i { font-style: normal; }',
+'.sk-orbset > b { display: block; font-size: .85rem; margin: 4px 0 8px; }',
+'.sk-seg { display: flex; gap: 4px; padding: 3px; border-radius: 999px; border: 1px solid var(--sk-line2, rgba(255,255,255,.16)); }',
+'.sk-seg button { flex: 1; padding: 8px 6px; border-radius: 999px; border: 0; background: transparent; color: inherit; font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }',
+'html[data-theme="sleek"] .sk-seg button[aria-checked="true"] { background: var(--sk-fg) !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+'.sk-reset { margin-top: 12px; background: none; border: 0; color: inherit; opacity: .65; font: inherit; font-size: .78rem; text-decoration: underline; cursor: pointer; padding: 4px 0; }'
+].join('\n');
+(function () {
+    var n = 0, t = setInterval(function () { if (tune() || ++n > 120) { if (n <= 120) clearInterval(t); } }, 300);
+    try { new MutationObserver(function () { tune(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
+    setInterval(tune, 2000);
+})();
+window.IncSleek = { on: isOn, scan: scan, paint: function () { painted = null; paintVars(); }, palette: palette };
 })();
 
 </script>
@@ -26382,7 +26613,8 @@ var Prog = (function () {                                           // real step
     return { show: show, hide: hide };
 })();
 
-async function readPdf(file, n, total) {
+async function readPdf(...a) { const _b = window.IncBusy ? IncBusy.start('Reading work order PDF') : () => {}; try { return await readPdf_(...a); } finally { _b(); } }
+async function readPdf_(file, n, total) {
     var kept = await keepFile(file);
     Prog.show('Reading ' + (total > 1 ? 'file ' + n + ' of ' + total : 'the work order') + '...', kept.meta.name);
     var lib = await pdfjs(), doc = await lib.getDocument({ data: new Uint8Array(kept.buf.slice(0)) }).promise, pages = [], texts = [], scanned = 0;
@@ -26958,17 +27190,42 @@ function googleBtn() { return '<button type="button" class="app-btn wo-pri" data
 async function continueGoogle() {                                // straight from the tap, so iPhone lets the Google window open
     var t = window.IncAtorCloud && IncAtorCloud.tokenTap ? await IncAtorCloud.tokenTap() : null;
     if (!t) { toast('Google sign-in did not finish. Please try again.', 'error'); return; }
-    toast('Signed in', 'success'); refresh(true);
+    if (server()) await fetchSess({ 'x-google-token': t });              // remembered from now on
+    toast('Signed in', 'success'); refresh(true); try { if (window.IncNotes) IncNotes.refresh(); } catch (e) { /* ignore */ }
 }
 document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-google]')) continueGoogle(); });
+/* A "remembered" pass from your server: after one Google sign-in this device keeps it (180 days, renewed while used),
+   so notifications and imports work without asking Google again every hour. */
+var SKEY = 'incator:srvSession';
+function sess() { try { var o = JSON.parse(appStore.getItem(SKEY) || 'null'); if (o && o.s && o.exp > Date.now() && o.srv === server()) return o; } catch (e) { /* ignore */ } return null; }
+function keepSess(j) { try { if (j && j.session) appStore.setItem(SKEY, JSON.stringify({ s: j.session, exp: Date.now() + (j.days || 180) * 86400000 - 86400000, at: Date.now(), srv: server() })); } catch (e) { /* ignore */ } }
+function dropSess() { try { appStore.removeItem(SKEY); } catch (e) { /* ignore */ } }
+var getting = null;
+function fetchSess(hdr) {                                       // quietly, in the background
+    if (getting) return getting;
+    getting = fetch(server() + '/session', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: '{}' })
+        .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (j) keepSess(j); getting = null; return j; }, function () { getting = null; return null; });
+    return getting;
+}
 async function api(path, body, raw) {
     var base = server(); if (!base) throw Object.assign(new Error('Add your IncAtor server address first (Settings > App Behavior > Work Order Email Integration).'), { noserver: true });
-    var r;
-    try { r = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'Content-Type': 'application/json' }, path === '/hello' ? {} : { 'x-google-token': await token() }), body: body ? JSON.stringify(body) : undefined }); }
-    catch (e) { if (e.signin) throw e; throw Object.assign(new Error('Could not reach your IncAtor server. Check the internet connection and the server address.'), { offline: true }); }
+    var ses = path === '/hello' ? null : sess(), r, usedSess = false, hdr = {};
+    async function send() {
+        hdr = path === '/hello' ? {} : (ses ? { 'x-inc-session': ses.s } : { 'x-google-token': await token() });
+        usedSess = !!ses;
+        return fetch(base + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: body ? JSON.stringify(body) : undefined });
+    }
+    try {
+        r = await send();
+        if (r.status === 401 && usedSess) { dropSess(); ses = null; r = await send(); }   // pass ended (or signed out everywhere): Google once more
+    } catch (e) { if (e.signin) throw e; throw Object.assign(new Error('Could not reach your IncAtor server. Check the internet connection and the server address.'), { offline: true }); }
+    if (r.ok && path !== '/hello' && path !== '/session') {
+        if (!usedSess) fetchSess(hdr);                                    // signed in with Google: remember this device
+        else if (ses && Date.now() - (ses.at || 0) > 7 * 86400000) fetchSess(hdr).then(function () { /* renewed */ });
+    }
     if (raw && r.ok) return r;
     var j = {}; try { j = await r.json(); } catch (e) { j = {}; }
-    if (!r.ok) throw Object.assign(new Error(j.error || ('The server answered ' + r.status)), { status: r.status, reconnect: !!j.reconnect });
+    if (!r.ok) throw Object.assign(new Error(j.error || ('The server answered ' + r.status)), { status: r.status, reconnect: !!j.reconnect, signin: r.status === 401 });
     return j;
 }
 var status = null, statusAt = 0;
@@ -27062,12 +27319,7 @@ async function onClick(e) {
         var ok = await showConfirmation({ title: 'Disconnect Gmail?', message: 'IncAtor stops checking ' + (status.gmail && status.gmail.email) + '. Your jobs, drafts and files stay. Your sign-in and Google Drive backup are not affected.', type: 'warning', confirmText: 'Disconnect', cancelText: 'Keep' });
         if (!ok) return; try { await api('/gmail/disconnect', {}); toast('Gmail disconnected', 'info'); } catch (err) { toast(err.message, 'error'); } refresh(true); return;
     }
-    if (t.id === 'wm-auto') {
-        if (status.settings.auto_on) { try { await api('/settings', { auto_on: false }); toast('Automatic import is off', 'info'); } catch (err) { toast(err.message, 'error'); } refresh(true); return; }
-        var start = await askStart(); if (!start) return;
-        try { await api('/settings', { auto_on: true, start_at: start }); toast('Automatic import is on, from ' + dayStr(start), 'success'); } catch (err) { toast(err.message, 'error'); }
-        refresh(true); return;
-    }
+    if (t.id === 'wm-auto') { await toggleAuto(); return; }
     if (t.id === 'wm-fon') { var f0 = filtersOf(); f0.on = !(f0.on !== false); saveFilters(f0); return; }
     if (t.id && t.id.indexOf('wm-cat-') === 0) { var f1 = filtersOf(), k = t.id.slice(7); f1[k].on = !(f1[k].on !== false); saveFilters(f1); return; }
     if (a === 'wadd') { addWord(t.closest('.wm-add')); return; }
@@ -27136,20 +27388,56 @@ async function pickEmail(q) {
     load();
 }
 
-/* ---------------------------------------------------------------- Create Job: Check Gmail for New Work Orders */
+async function toggleAuto() {
+    if (!status || status.error) await refresh(true);
+    if (!status || status.error) { toast(status && status.error || 'Your IncAtor server is not reachable', 'error'); return; }
+    if (!status.gmail) { toast('Connect your work order Gmail first: Settings > App Behavior > Work Order Email Integration', 'info'); return; }
+    if (status.settings.auto_on) { try { await api('/settings', { auto_on: false }); toast('Automatic import is off', 'info'); } catch (err) { toast(err.message, 'error'); } refresh(true); return; }
+    var start = await askStart(); if (!start) return;
+    try { await api('/settings', { auto_on: true, start_at: start }); toast('Automatic import is on, from ' + dayStr(start), 'success'); } catch (err) { toast(err.message, 'error'); }
+    refresh(true);
+}
+
+/* ---------------------------------------------------------------- Create Job: Auto import + Check Gmail for New Work Orders */
 function addButton() {
     var head = document.getElementById('wo-head'); if (!head) return false;
     if (document.getElementById('wm-check')) return true;
     var b = document.createElement('div'); b.id = 'wm-checkbox';
-    b.innerHTML = '<button type="button" class="app-btn" id="wm-check"><i class="fas fa-envelope mr-2"></i>Check Gmail for New Work Orders</button><div id="wm-live" hidden></div>';
+    b.innerHTML = '<div class="wm-autorow"><div class="wm-autotx"><b>Auto import</b><small id="wm-auto-sub"></small></div>' +
+        '<div class="magic-toggle" id="wm-auto2" role="switch" tabindex="0" aria-checked="false" aria-label="Auto import work orders from Gmail"><div class="toggle-orb"></div></div></div>' +
+        '<div class="wm-last" id="wm-last" role="status"></div>' +
+        '<button type="button" class="app-btn" id="wm-check"><i class="fas fa-envelope mr-2"></i>Check Gmail for New Work Orders</button><div id="wm-live" hidden></div>' +
+        '<div id="wm-hist" class="wm-hist" hidden></div>';
     var zone = document.getElementById('wo-zone'); zone.insertBefore(b, zone.querySelector('.wo-linkbtn'));
     b.querySelector('#wm-check').addEventListener('click', checkNow);
+    var tg = b.querySelector('#wm-auto2');
+    tg.addEventListener('click', toggleAuto);
+    tg.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuto(); } });
     paintButton(); return true;
 }
+function ago(t) {
+    var s = (Date.now() - Date.parse(t)) / 1000; if (!(s >= 0)) return '';
+    if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' d ago';
+}
+function stamp(t) { var d = new Date(t); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
 function paintButton() {
     var b = document.getElementById('wm-checkbox'); if (!b) return;
     b.hidden = !server();
     var btn = b.querySelector('#wm-check'); if (btn && status && status.gmail === null) btn.title = 'Connect Gmail in Settings first';
+    var on = !!(status && status.settings && status.settings.auto_on), tg = b.querySelector('#wm-auto2'), sub = b.querySelector('#wm-auto-sub'), last = b.querySelector('#wm-last'), hist = b.querySelector('#wm-hist');
+    if (tg) { tg.classList.toggle('active', on); tg.setAttribute('aria-checked', on ? 'true' : 'false'); }
+    if (sub) sub.textContent = !status || status.error ? (status && status.signin ? 'Sign in with Google to see it' : 'Your IncAtor server is not reachable right now') : !status.gmail ? 'Connect your work order Gmail in Settings first' :
+        on ? 'On: Gmail is checked every 5 minutes, even when IncAtor is closed' + (status.settings.start_at ? ' (emails from ' + dayStr(status.settings.start_at) + ')' : '') : 'Off: check by hand with the button below';
+    var lc = status && status.gmail && status.gmail.last_check;
+    if (last) last.innerHTML = '<i class="fas fa-clock"></i><span>Last checked: <b>' + (lc ? esc(stamp(lc)) + '</b> <em>(' + esc(ago(lc)) + ')</em>' : 'never</b>') + '</span>';
+    var list = (status && status.checks) || [];
+    if (hist) {
+        hist.hidden = !on || !list.length;
+        hist.innerHTML = '<div class="wm-hh">Recent checks</div>' + list.slice(0, 10).map(function (c) {
+            var r = c.error ? '<span class="bad">Failed: ' + esc(c.error) + '</span>' : c.found ? '<span class="ok">' + c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found</span>' : '<span>Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '') + '</span>';
+            return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? 'auto' : 'by hand') + '</em>' + r + '</div>';
+        }).join('');
+    }
 }
 var watching = null;
 async function checkNow() {
@@ -27340,6 +27628,13 @@ var css = [
 '.wm-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px; margin: 8px 0; border-radius: 14px; border: 1px solid rgba(255,255,255,.15); cursor: pointer; } .wm-opt input[type=radio] { margin-top: 4px; } .wm-opt small { display: block; color: rgba(255,255,255,.7); font-size: .8rem; } .wm-opt .app-input { margin-top: 6px; font-size: 16px; }',
 '.wm-mail { display: block; width: 100%; text-align: left; padding: 10px; margin-top: 6px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: #fff; font: inherit; cursor: pointer; } .wm-mail small { display: block; color: rgba(255,255,255,.65); font-size: .76rem; } .wm-mail span { display: block; font-size: .78rem; color: rgba(255,255,255,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
 '#wm-checkbox { margin-top: 12px; text-align: center; } #wm-check { width: 100%; justify-content: center; }',
+'.wm-autorow { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); margin-bottom: 8px; }',
+'.wm-autotx b { display: block; font-size: .92rem; } .wm-autotx small { display: block; font-size: .76rem; opacity: .7; line-height: 1.35; margin-top: 2px; }',
+'.wm-autorow .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
+'.wm-last { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: .8rem; opacity: .85; margin: 4px 0 10px; } .wm-last em { font-style: normal; opacity: .7; }',
+'.wm-hist { text-align: left; margin-top: 12px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 8px; } .wm-hh { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .6; margin-bottom: 4px; }',
+'.wm-hr { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; font-size: .78rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); } .wm-hr time { white-space: nowrap; opacity: .85; } .wm-hr em { font-style: normal; font-size: .68rem; opacity: .55; } .wm-hr .ok { font-weight: 600; } .wm-hr .bad { color: #f87171; }',
+'html.lm .wm-autorow { border-color: rgba(29,23,51,.12); background: rgba(29,23,51,.03); } html.lm .wm-hist, html.lm .wm-hr { border-color: rgba(29,23,51,.08); } html.lm .wm-hr .bad { color: #b91c1c; }',
 '#wm-live { margin-top: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); text-align: left; } .wm-lh { display: flex; align-items: center; gap: 8px; } .wm-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: .84rem; } .wm-ev { margin: 6px 0 4px 18px; font-size: .8rem; color: rgba(255,255,255,.8); }',
 '.nt-types { display: grid; gap: 4px; margin-top: 8px; } .nt-type { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.08); font-size: .88rem; }',
 '.wm-dev { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; } .wm-dev small { display: block; font-size: .76rem; color: rgba(255,255,255,.65); }'
@@ -27361,7 +27656,14 @@ function boot() {
     setInterval(function () { if (server() && !document.hidden) pullDrafts(false); }, 120000);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncMail = { api: api, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart };
+/* Create Job page: keep "Last checked" fresh while you look at it */
+(function () {
+    function onAdd() { return document.body && document.body.getAttribute('data-pg') === 'add'; }
+    function tick() { if (server() && onAdd() && document.visibilityState === 'visible') refresh(false); else paintButton(); }
+    try { new MutationObserver(function () { if (onAdd()) tick(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+    setInterval(function () { if (onAdd()) { if (Date.now() - statusAt > 60000) tick(); else paintButton(); } }, 30000);
+})();
+window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart };
 })();
 
 </script>
@@ -27643,6 +27945,198 @@ function boot() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 
 window.IncNotes = { open: open, close: close, add: add, all: all, unread: unread, attention: attention, refresh: function () { return loadServer(true); }, sweep: sweep, autoOn: autoOn, days: days, setAuto: setAuto, setDays: setDays, paint: paint };
+})();
+
+</script>
+<script id="incator-layout">
+/* Layout touches (v35):
+   - Phone: the "Good Morning" greeting only shows on Home; other pages start with their own title at the top.
+   - SlipVault: the title and tagline are the header, the year sits at its right, View Receipts / Summary are small tiles.
+   - Tax summary (and every other pop-up of this kind): never under the phone's status bar; big amounts never spill
+     out of their card (also with "Big numbers" on). */
+(function () {
+'use strict';
+if (window.IncLayout) return;
+var css = [
+/* ---- phone: greeting only on Home ---- */
+'@media (max-width: 700px) {',
+'  body[data-pg]:not([data-pg="home"]) #greeting, body[data-pg]:not([data-pg="home"]) .wx-greet, body[data-pg]:not([data-pg="home"]) #wx-greet { display: none !important; }',
+'  body[data-pg]:not([data-pg="home"]) #main-header { padding: max(10px, env(safe-area-inset-top, 0px)) 0 0 !important; margin: 0 0 4px !important; min-height: 0 !important; }',
+'  html.hdr-set body[data-pg]:not([data-pg="home"]) #main-header { padding-top: max(10px, env(safe-area-inset-top, 0px)) !important; margin-top: 0 !important; }',
+'}',
+/* ---- SlipVault header: title + tagline, year at the right ---- */
+'#receipts-page .rc-top { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }',
+'#receipts-page .rc-top > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }',
+'#receipts-page .rc-top h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+'#receipts-page .rc-top p { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }',
+'#receipts-page .rc-yrow.hub.in-top { margin: 0 0 0 auto !important; flex: 0 0 auto; justify-content: flex-end; }',
+'#receipts-page .rc-yrow.in-top .rc-yr { gap: 6px; padding: 3px 4px 3px 10px; }',
+'#receipts-page .rc-yrow.in-top .rc-yr select { padding: 4px 26px 4px 8px !important; font-size: .88rem !important; }',
+'@media (max-width: 520px) { #receipts-page .rc-yrow.in-top .rc-yr span { display: none; } #receipts-page .rc-top p { font-size: .72rem !important; } }',
+/* ---- SlipVault: View Receipts and Summary as small tiles ---- */
+'#rc-hub #rc-grid.rc-hubgrid { gap: 10px !important; margin-bottom: 14px !important; }',
+'#rc-hub #rc-grid .rc-hero { flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; text-align: left !important; gap: 10px !important; min-height: 0 !important; padding: 12px 12px !important; border-radius: 18px !important; }',
+'#rc-hub #rc-grid .rc-hero .rc-hi { width: 40px !important; height: 40px !important; font-size: 18px !important; border-radius: 12px !important; flex: 0 0 auto; box-shadow: none !important; }',
+'#rc-hub #rc-grid .rc-hero .rc-ht { display: block; min-width: 0; flex: 1 1 auto; }',
+'#rc-hub #rc-grid .rc-hero .rc-ht b { display: block; font-size: .95rem !important; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+'#rc-hub #rc-grid .rc-hero .rc-ht small { display: block; font-size: .72rem !important; line-height: 1.3; margin-top: 2px; overflow: hidden; }',
+'#rc-hub #rc-grid .rc-hero .rc-hn { top: 4px !important; right: auto !important; left: 38px !important; min-width: 22px !important; height: 22px !important; font-size: .7rem !important; padding: 0 6px !important; }',
+'@media (min-width: 701px) { #rc-hub #rc-grid .rc-hero { padding: 16px !important; } #rc-hub #rc-grid .rc-hero .rc-hi { width: 48px !important; height: 48px !important; font-size: 22px !important; } #rc-hub #rc-grid .rc-hero .rc-ht b { font-size: 1.05rem !important; } #rc-hub #rc-grid .rc-hero .rc-ht small { font-size: .8rem !important; } }',
+/* ---- Tax summary: big amounts stay inside their card ---- */
+'.cc-list, .cc-row, .cc-m, .fin-box, .gf-box, .bz-box .filter-body { min-width: 0; max-width: 100%; box-sizing: border-box; }',
+'.cc-row { flex-wrap: wrap; }',
+'.cc-top { flex-wrap: wrap; row-gap: 2px; }',
+'.cc-top b { flex: 1 1 auto; min-width: 0; }',
+'.cc-amt { flex: 0 1 auto; font-size: clamp(.95rem, 4.6vw, 1.15rem) !important; max-width: 100%; overflow-wrap: anywhere; }',
+'html.big-num .cc-amt { font-size: clamp(1rem, 5.2vw, 1.3rem) !important; }',
+'.cc-row .rc-gcl { margin-left: auto; }',
+'@media (max-width: 520px) { .cc-row .rc-gcl { flex: 0 0 auto; width: calc(100% - 48px); max-width: calc(100% - 48px); box-sizing: border-box; justify-content: center; margin-left: 48px; } }',
+'.gf-line { gap: 10px; } .gf-line span { min-width: 0; } .gf-line b { flex: 0 0 auto; white-space: nowrap; }',
+'.fin-row { min-width: 0; } .fin-row .fr-main { min-width: 0; overflow-wrap: anywhere; } .fin-row .fr-amt { flex: 0 0 auto; white-space: nowrap; }',
+'.bz-box .filter-body { overflow-x: hidden; }',
+/* ---- pop-ups: below the status bar on iPhone ---- */
+'.print-modal { padding: max(12px, calc(env(safe-area-inset-top, 0px) + 10px)) 12px max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px)) !important; }',
+'.print-modal > .filter-box, .print-modal > .bz-box { max-height: calc(100vh - max(24px, calc(env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 18px))) !important; max-height: calc(100dvh - max(24px, calc(env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 18px))) !important; }',
+'@media (max-width: 700px) { .print-modal { align-items: flex-start !important; padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 14px)) !important; } }',
+/* ---- Create Job > Fill in the form, on a phone: tidy two-column rows, calm labels, quiet Clear button ---- */
+'@media (max-width: 640px) {',
+'  #add-page #entry-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }',
+'  #add-page .ae-address { order: 1; grid-column: 1 / -1; } #add-page .ae-date { order: 2; grid-column: 1; } #add-page .ae-amount { order: 3; grid-column: 2; }',
+'  #add-page .ae-wo { order: 4; grid-column: 1 / -1; } #add-page .ae-extras { order: 5; grid-column: 1 / -1; } #add-page #extra-services-container { order: 6; } #add-page .ae-notes { order: 7; }',
+'  #add-page #entry-form > :not(.magic-field):not(#extra-services-container):not(.form-row) { order: 8; grid-column: 1 / -1; }',
+'  #add-page .magic-field[data-lbl]::after { text-transform: none; letter-spacing: 0; font-size: .72rem; font-weight: 600; top: 7px; opacity: .85; }',
+'  #add-page .magic-field[data-lbl] .magic-input, #add-page .magic-field[data-lbl] .magic-textarea { min-height: 56px; border-radius: 14px; }',
+'  #add-page .ae-date .magic-input { font-size: 15px; padding-left: 38px; }',
+'  #add-page .ae-extras .magic-toggle { right: 12px; }',
+'  #add-page .magic-input::placeholder, #add-page .magic-textarea::placeholder { opacity: .65; }',
+'  #add-page .magic-actions .secondary-magic { flex: 1 1 100%; background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 8px 12px !important; opacity: .8; }',
+'  #add-page .magic-actions .secondary-magic .btn-bg-effect, #add-page .magic-actions .secondary-magic::before, #add-page .magic-actions .secondary-magic::after { display: none !important; }',
+'  #add-page .magic-actions .secondary-magic .btn-content span { font-size: .88rem; font-weight: 600; }',
+'}'
+].join('\n');
+/* clearer hints inside the job form boxes (the label already says what each box is) */
+var HINT = { address: ['Property Address', 'e.g. 123 Main St, Surrey'], 'wo-number': ['Work Order Number (Optional)', 'Optional'], amount: ['Base Amount', '0.00'], extras: ['Additional Services (Optional)', 'Turn on to add'], notes: ['Notes (Optional)', 'Optional'] };
+function hints() { Object.keys(HINT).forEach(function (id) { var el = document.getElementById(id); if (el && el.getAttribute('placeholder') === HINT[id][0]) el.setAttribute('placeholder', HINT[id][1]); }); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hints); else hints();
+function inject() { var st = document.getElementById('incator-layout-css'); if (!st) { st = document.createElement('style'); st.id = 'incator-layout-css'; } st.textContent = css; document.head.appendChild(st); }
+inject();
+window.addEventListener('load', function () { setTimeout(inject, 0); });
+window.IncLayout = { css: css };
+})();
+
+</script>
+<script id="incator-setorder">
+/* Settings: move the sections up and down.
+   Tap "Arrange sections" (under the search box), then the arrows on each section; tap Done. The order is remembered
+   (also on your other devices, it travels with your settings). "Reset order" puts them back the way they came. */
+(function () {
+'use strict';
+if (window.IncSetOrder) return;
+function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
+function save(k, v) { try { appSettings[k] = v; saveSettings(); } catch (e) { /* ignore */ } }
+function page() { return document.getElementById('settings-page'); }
+function host() { var p = page(); return p && (p.querySelector('.form-grid') || p.querySelector('.stunning-form-container')); }
+function keyOf(sec) {
+    if (sec.id) return sec.id;
+    var t = sec.querySelector('.acc-head h3, .live-calc-title, .acc-title, h3');
+    return 't:' + String(t ? t.textContent : '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+}
+function title(sec) { var t = sec.querySelector('.acc-head h3, .live-calc-title, .acc-title, h3'); return t ? t.textContent.trim() : 'section'; }
+function sections() { var h = host(); return h ? Array.prototype.filter.call(h.children, function (c) { return c.classList && c.classList.contains('acc-section'); }) : []; }
+function saved() { var o = S('settingsOrder', null); return Array.isArray(o) ? o : null; }
+
+var moving = false;
+function apply() {
+    var order = saved(), list = sections(); if (!order || list.length < 2) return;
+    var pos = {}; order.forEach(function (k, i) { pos[k] = i; });
+    var natural = list.slice(), known = natural.filter(function (s) { return pos[keyOf(s)] !== undefined; });
+    known.sort(function (a, b) { return pos[keyOf(a)] - pos[keyOf(b)]; });
+    // sections you never placed keep their own spot among the others
+    var want = [], ki = 0;
+    natural.forEach(function (s) { if (pos[keyOf(s)] === undefined) want.push(s); else want.push(known[ki++]); });
+    var same = want.every(function (s, i) { return s === list[i]; }); if (same) return;
+    moving = true;
+    var h = host(), anchor = list[list.length - 1].nextSibling;
+    want.forEach(function (s) { h.insertBefore(s, anchor); });
+    setTimeout(function () { moving = false; }, 0);
+    paintCtl();
+}
+function move(sec, d) {
+    var list = sections(), i = list.indexOf(sec), j = i + d; if (i < 0 || j < 0 || j >= list.length) return;
+    var keys = list.map(keyOf); var t = keys[i]; keys[i] = keys[j]; keys[j] = t;
+    save('settingsOrder', keys);
+    apply();
+    try { sec.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* ignore */ }
+    var b = sec.querySelector('.so-ctl [data-so="' + (d < 0 ? 'up' : 'down') + '"]'); if (b && !b.disabled) b.focus({ preventScroll: true });
+}
+function on() { return document.documentElement.classList.contains('so-on'); }
+function setMode(v) {
+    document.documentElement.classList.toggle('so-on', !!v);
+    var b = document.getElementById('so-btn'); if (b) { b.innerHTML = v ? '<i class="fas fa-check"></i><span>Done</span>' : '<i class="fas fa-list"></i><span>Arrange sections</span>'; b.setAttribute('aria-pressed', v ? 'true' : 'false'); }
+    var r = document.getElementById('so-reset'); if (r) r.style.display = v && saved() ? '' : 'none';
+    paintCtl();
+}
+function paintCtl() {
+    var list = sections();
+    list.forEach(function (sec, i) {
+        var head = sec.querySelector('.acc-head') || sec.firstElementChild; if (!head) return;
+        var c = head.querySelector(':scope > .so-ctl');
+        if (!c) {
+            c = document.createElement('span'); c.className = 'so-ctl';
+            c.innerHTML = '<button type="button" data-so="up"><i class="fas fa-chevron-up"></i></button><button type="button" data-so="down"><i class="fas fa-chevron-down"></i></button>';
+            head.appendChild(c);
+        }
+        var t = title(sec);
+        c.querySelector('[data-so=up]').disabled = i === 0; c.querySelector('[data-so=up]').setAttribute('aria-label', 'Move ' + t + ' up');
+        c.querySelector('[data-so=down]').disabled = i === list.length - 1; c.querySelector('[data-so=down]').setAttribute('aria-label', 'Move ' + t + ' down');
+    });
+}
+document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.so-ctl [data-so]');
+    if (b) { e.preventDefault(); e.stopPropagation(); move(b.closest('.acc-section'), b.getAttribute('data-so') === 'up' ? -1 : 1); return; }
+    if (e.target.closest && e.target.closest('#so-btn')) { setMode(!on()); return; }
+    if (e.target.closest && e.target.closest('#so-reset')) {
+        try { delete appSettings.settingsOrder; saveSettings(); } catch (er) { /* ignore */ }
+        try { showToast('Settings sections are back in their first order. Reopen Settings to see it.', 'info'); } catch (er) { /* ignore */ }
+        setMode(false);
+    }
+}, true);
+function bar() {
+    var f = document.getElementById('set-find'); if (!f) return false;
+    if (document.getElementById('so-bar')) return true;
+    var d = document.createElement('div'); d.id = 'so-bar';
+    d.innerHTML = '<button type="button" id="so-btn" class="so-btn" aria-pressed="false"><i class="fas fa-list"></i><span>Arrange sections</span></button>' +
+        '<button type="button" id="so-reset" class="so-btn ghost" style="display:none"><i class="fas fa-undo-alt"></i><span>Reset order</span></button>';
+    f.parentNode.insertBefore(d, f.nextSibling);
+    return true;
+}
+var css = [
+'#so-bar { display: flex; gap: 8px; justify-content: flex-end; margin: -4px 0 10px; }',
+'.so-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.05); color: inherit; font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }',
+'.so-btn.ghost { background: transparent; }',
+'html.lm .so-btn { border-color: rgba(29,23,51,.15); background: rgba(29,23,51,.03); }',
+'.so-ctl { display: none; gap: 6px; margin-left: 8px; flex: 0 0 auto; }',
+'html.so-on .so-ctl { display: inline-flex; }',
+'html.so-on #settings-page .acc-head > .acc-chev, html.so-on #settings-page .acc-head > .fa-chevron-down:last-child { display: none !important; }',
+'.so-ctl button { width: 36px; height: 36px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); color: inherit; display: flex; align-items: center; justify-content: center; cursor: pointer; }',
+'.so-ctl button:disabled { opacity: .3; cursor: default; }',
+'html.lm .so-ctl button { border-color: rgba(29,23,51,.15); background: rgba(29,23,51,.04); }',
+'html.so-on #settings-page .acc-section { transition: transform .15s ease; }',
+'html[data-theme="sleek"] .so-btn, html[data-theme="sleek"] .so-ctl button { border-color: var(--sk-line2) !important; background: transparent !important; color: var(--sk-fg) !important; }'
+].join('\n');
+var obs = null;
+function boot() {
+    var st = document.createElement('style'); st.id = 'incator-setorder-css'; st.textContent = css; document.head.appendChild(st);
+    var n = 0, t = setInterval(function () {
+        var h = host(); if (bar() && h) {
+            if (!obs) { obs = new MutationObserver(function () { if (moving) return; clearTimeout(boot.t); boot.t = setTimeout(function () { apply(); if (on()) paintCtl(); }, 200); }); obs.observe(h, { childList: true }); }
+            apply();
+        }
+        if (++n > 60) clearInterval(t);
+    }, 250);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+window.IncSetOrder = { apply: apply, keys: function () { return sections().map(keyOf); }, move: function (k, d) { var s = sections().filter(function (x) { return keyOf(x) === k; })[0]; if (s) move(s, d); }, mode: setMode };
 })();
 
 </script>
@@ -28641,7 +29135,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v34)';
+var VERSION = '2026.11.13 (v35)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
