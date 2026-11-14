@@ -10696,10 +10696,10 @@ bootstrap();
             // Add grid lines
             for (let i = 0; i <= 4; i++) {
                 const value = (maxValue / 4) * i;
-                const yPos = chartHeight - (chartHeight / 4) * i;
+                const yPos = 40 + (chartHeight / 4) * i;                 // measured from the foot of the bars (the box keeps 40px below them for the months)
                 chartHTML += `
                     <div class="chart-grid-line" style="bottom: ${yPos}px;">
-                        <div class="chart-y-label">$${value.toFixed(0)}</div>
+                        <div class="chart-y-label">$${value >= 1000 ? (value / 1000).toFixed(value >= 10000 ? 0 : 1) + 'k' : value.toFixed(0)}</div>
                     </div>
                 `;
             }
@@ -12477,12 +12477,15 @@ bootstrap();
         }
         
         function copyToClipboard() {
-            if (entries.length === 0) {
-                showToast('No data to copy', 'error');
+            const XR = window.IncExportRange || { pick: l => l, suffix: () => '', label: () => 'all your data', active: () => false, bad: () => false };
+            if (XR.bad()) { showToast('The From date is after the To date', 'error'); return; }
+            const list = XR.pick(entries);
+            if (list.length === 0) {
+                showToast(XR.active() ? 'No jobs in ' + XR.label() : 'No data to copy', 'error');
                 return;
             }
             
-            const dataStr = JSON.stringify(entries, null, 2);
+            const dataStr = JSON.stringify(list, null, 2);
             
             // Use the modern clipboard API if available
             if (navigator.clipboard && window.isSecureContext) {
@@ -12519,18 +12522,24 @@ bootstrap();
         }
         
         async function exportToJSON() {
-            const rcCount = window.RcptStore ? RcptStore.count() : 0;
-            if (entries.length === 0 && rcCount === 0) {
-                showToast('No data to export', 'error');
+            const XR = window.IncExportRange || { pick: l => l, suffix: () => '', label: () => 'all your data', active: () => false, bad: () => false };
+            if (XR.bad()) { showToast('The From date is after the To date', 'error'); return; }
+            const rcCount = window.RcptStore ? XR.pick(RcptStore.all ? RcptStore.all() : []).length : 0;
+            const E = XR.pick(entries), Q = XR.pick(quotes), P = XR.pick(projects);
+            if (E.length === 0 && rcCount === 0 && Q.length === 0 && P.length === 0) {
+                showToast(XR.active() ? 'Nothing saved in ' + XR.label() : 'No data to export', 'error');
                 return;
             }
-            const rcAll = window.RcptStore ? await RcptStore.exportable() : { receipts: [], photos: [] };
-            const payload = await IncAtorCloud.buildExport(entries, appSettings, quotes, projects, rcAll.receipts);
+            const rcAll0 = window.RcptStore ? await RcptStore.exportable() : { receipts: [], photos: [] };
+            const keepR = new Set(XR.pick(rcAll0.receipts).map(r => String(r.id)));
+            const rcAll = XR.active() ? { receipts: rcAll0.receipts.filter(r => keepR.has(String(r.id))), photos: rcAll0.photos.filter(p => keepR.has(String(p.receiptId))) } : rcAll0;
+            const payload = await IncAtorCloud.buildExport(E, appSettings, Q, P, rcAll.receipts);
+            if (XR.active()) payload.period = XR.label();                       // a part of your data: bring it back with Merge, not Replace
             if (rcAll.photos.length) payload.data.receiptPhotos = rcAll.photos;   // photos are not part of the checksum; they ride along
-            if (window.IncJobPhotos) { try { const jp = await IncJobPhotos.exportable(); if (jp.photos.length) { payload.data.jobPhotos = jp.index; payload.data.jobPhotoData = jp.photos; } } catch (e) { /* photos are optional */ } }
+            if (window.IncJobPhotos) { try { const jp = await IncJobPhotos.exportable(); if (XR.active() && jp.index && jp.index.jobs) { const keepJ = new Set([].concat(E.map(e => 'e:' + e.id), Q.map(q => 'q:' + q.id), P.map(p => 'p:' + p.id))); Object.keys(jp.index.jobs).forEach(k => { if (!keepJ.has(k)) delete jp.index.jobs[k]; }); jp.photos = jp.photos.filter(ph => keepJ.has(ph.job)); } if (jp.photos.length) { payload.data.jobPhotos = jp.index; payload.data.jobPhotoData = jp.photos; } } catch (e) { /* photos are optional */ } }
             const d = new Date();
             const pad = n => String(n).padStart(2, '0');
-            const fileName = `IncAtor-Backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+            const fileName = XR.active() ? `IncAtor-Export${XR.suffix()}.json` : `IncAtor-Backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
             const dataBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
@@ -12540,13 +12549,18 @@ bootstrap();
             link.click();
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-            showToast('Backup exported: ' + fileName, 'success');
-            markBackedUp();
+            showToast((XR.active() ? 'Exported ' + XR.label() + ': ' : 'Backup exported: ') + fileName, 'success');
+            if (!XR.active()) markBackedUp();                                   // only a full backup counts as your backup
         }
         
         function exportToCSV() {
+            const XR = window.IncExportRange || { pick: l => l, suffix: () => '', label: () => 'all your data', active: () => false, bad: () => false };
+            if (XR.bad()) { showToast('The From date is after the To date', 'error'); return; }
+            return exportToCSV_(XR.pick(entries), XR);
+        }
+        function exportToCSV_(entries, XR) {
             if (entries.length === 0) {
-                showToast('No data to export', 'error');
+                showToast(XR.active() ? 'No jobs in ' + XR.label() : 'No data to export', 'error');
                 return;
             }
             
@@ -12573,7 +12587,7 @@ bootstrap();
             
             const link = document.createElement('a');
             link.href = url;
-            link.download = `incator-data-${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = XR.active() ? `incator-data${XR.suffix()}.csv` : `incator-data-${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -12583,14 +12597,20 @@ bootstrap();
         }
         
         function exportToTXT() {
+            const XR = window.IncExportRange || { pick: l => l, suffix: () => '', label: () => 'all your data', active: () => false, bad: () => false };
+            if (XR.bad()) { showToast('The From date is after the To date', 'error'); return; }
+            return exportToTXT_(XR.pick(entries), XR);
+        }
+        function exportToTXT_(entries, XR) {
             if (entries.length === 0) {
-                showToast('No data to export', 'error');
+                showToast(XR.active() ? 'No jobs in ' + XR.label() : 'No data to export', 'error');
                 return;
             }
             
             let txtContent = 'INCATOR - INCOME TRACKER DATA EXPORT\n';
             txtContent += '=====================================\n\n';
             txtContent += `Export Date: ${new Date().toLocaleDateString()}\n`;
+            if (XR.active()) txtContent += `Period: ${XR.label()}\n`;
             txtContent += `Total Entries: ${entries.length}\n\n`;
             
             entries.forEach((entry, index) => {
@@ -12622,7 +12642,7 @@ bootstrap();
             
             const link = document.createElement('a');
             link.href = url;
-            link.download = `incator-data-${new Date().toISOString().split('T')[0]}.txt`;
+            link.download = XR.active() ? `incator-data${XR.suffix()}.txt` : `incator-data-${new Date().toISOString().split('T')[0]}.txt`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -20083,6 +20103,15 @@ async function aiDoc(o) {                                     // o: { pdf: Blob 
 }
 
 window.RcptStore = {
+    olderThan(cut) { return receipts.filter(r => r && r.date && String(r.date).slice(0, 10) < cut).length; },   // Auto Delete > Old records
+    async purgeOlder(cut) {
+        const old = receipts.filter(r => r && r.date && String(r.date).slice(0, 10) < cut); if (!old.length) return 0;
+        for (const r of old) await purge(r);
+        try { saveReceipts(); } catch (e) { return 0; }
+        try { renderAll(); } catch (e) { /* the page refreshes when opened */ }
+        Remote.schedule();
+        return old.length;
+    },
     count: () => receipts.length, smartCrop: smartCrop, cropOn: () => cropOn(), autoCapOn: () => autoCapOn(),
     ocrEach: ocrEach, aiOn: () => aiOn(), aiName: () => (AI_PROVIDERS[aiProvider()] || {}).name || '', aiDoc: aiDoc, parseAiJson: t => parseAiJson(t),
     autoOn: rcptAutoOn, days: rcptAutoDays, due: () => rcptDue().length, sweep: rcptSweep,
@@ -21971,6 +22000,84 @@ function boot() {
     var prev = window.BIZ && BIZ.onPageShown;
     if (window.BIZ) BIZ.onPageShown = function (id) { if (prev) prev.apply(this, arguments); if (id === 'data') { makeAcc(); paint(); } };
 }
+/* ---------- Export: everything, one year, or from one date to another ---------- */
+var R = { mode: 'all', year: '', from: '', to: '' };
+function dateOf(x) { if (!x) return ''; return String(x.date || x.startDate || x.createdAt || x.created || x.at || '').slice(0, 10); }
+function bounds() {
+    if (R.mode === 'year' && R.year) return [R.year + '-01-01', R.year + '-12-31'];
+    if (R.mode === 'range') return [R.from || '0000-01-01', R.to || '9999-12-31'];
+    return null;
+}
+function pick(list) {
+    if (!Array.isArray(list)) return list;
+    var b = bounds(); if (!b) return list;
+    return list.filter(function (x) { var d = dateOf(x); return d && d >= b[0] && d <= b[1]; });
+}
+function label() { var b = bounds(); if (!b) return 'all your data'; return R.mode === 'year' ? R.year : (R.from ? fmt(R.from) : 'the start') + ' to ' + (R.to ? fmt(R.to) : 'today'); }
+function fmt(d) { try { return formatDate(d); } catch (e) { return d; } }
+function suffix() { var b = bounds(); if (!b) return ''; return R.mode === 'year' ? '-' + R.year : '-' + (R.from || 'start') + '_to_' + (R.to || 'today'); }
+function years() {
+    var ys = {}; var add = function (l) { (l || []).forEach(function (x) { var d = dateOf(x); if (d && /^\d{4}/.test(d)) ys[d.slice(0, 4)] = 1; }); };
+    try { add(entries); } catch (e) { /* ignore */ } try { add(quotes); } catch (e) { /* ignore */ } try { add(projects); } catch (e) { /* ignore */ }
+    try { if (window.RcptStore) add(RcptStore.all()); } catch (e) { /* ignore */ }
+    ys[String(new Date().getFullYear())] = 1;
+    return Object.keys(ys).sort().reverse();
+}
+function rangeHtml() {
+    var y = years(); if (!R.year) R.year = y[0];
+    return '<div class="xr-seg" role="radiogroup" aria-label="What to export">' +
+        [['all', 'All data'], ['year', 'One year'], ['range', 'From - to']].map(function (o) { return '<button type="button" role="radio" data-xr="' + o[0] + '" aria-checked="' + (R.mode === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+        '<div class="xr-opt" data-for="year"' + (R.mode === 'year' ? '' : ' hidden') + '><label>Year <select id="xr-year" class="inv-input">' + y.map(function (v) { return '<option' + (v === R.year ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></label></div>' +
+        '<div class="xr-opt xr-dates" data-for="range"' + (R.mode === 'range' ? '' : ' hidden') + '><label>From <input type="date" id="xr-from" class="inv-input" value="' + esc(R.from) + '"></label><label>To <input type="date" id="xr-to" class="inv-input" value="' + esc(R.to) + '"></label></div>' +
+        '<p class="xr-note" id="xr-note" role="status"></p>';
+}
+function count() {
+    var n = 0; try { n += pick(entries).length; } catch (e) { /* ignore */ } try { n += pick(quotes).length; } catch (e) { /* ignore */ } try { n += pick(projects).length; } catch (e) { /* ignore */ }
+    var r = 0; try { if (window.RcptStore) r = pick(RcptStore.all()).length; } catch (e) { /* ignore */ }
+    var j = 0; try { j = pick(entries).length; } catch (e) { /* ignore */ }
+    return { jobs: j, all: n, receipts: r };
+}
+function note() {
+    var el = document.getElementById('xr-note'); if (!el) return;
+    if (R.mode === 'range' && R.from && R.to && R.from > R.to) { el.textContent = 'The From date is after the To date.'; el.className = 'xr-note bad'; return; }
+    var c = count(); el.className = 'xr-note';
+    el.textContent = 'Exports ' + label() + ': ' + c.jobs + ' job' + (c.jobs === 1 ? '' : 's') + (c.receipts ? ', ' + c.receipts + ' receipt' + (c.receipts === 1 ? '' : 's') : '') + '. Your settings are always included in the backup file.';
+}
+function rangeBox() {
+    var btn = document.querySelector('#data-page button[onclick="exportToCSV()"]'); if (!btn) return false;
+    if (document.getElementById('xr-box')) { note(); return true; }
+    var grid = btn.parentNode, d = document.createElement('div'); d.id = 'xr-box'; d.innerHTML = rangeHtml();
+    grid.parentNode.insertBefore(d, grid);
+    d.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-xr]'); if (!b) return;
+        R.mode = b.getAttribute('data-xr');
+        Array.prototype.forEach.call(d.querySelectorAll('[data-xr]'), function (x) { x.setAttribute('aria-checked', String(x === b)); });
+        Array.prototype.forEach.call(d.querySelectorAll('.xr-opt'), function (o) { o.hidden = o.getAttribute('data-for') !== R.mode; });
+        note();
+    });
+    d.addEventListener('change', function (e) {
+        if (e.target.id === 'xr-year') R.year = e.target.value;
+        if (e.target.id === 'xr-from') R.from = e.target.value;
+        if (e.target.id === 'xr-to') R.to = e.target.value;
+        note();
+    });
+    note(); return true;
+}
+var xcss = document.createElement('style'); xcss.id = 'incator-xr-css';
+xcss.textContent = [
+'#xr-box { margin: 0 0 14px; }',
+'.xr-seg { display: flex; gap: 4px; padding: 4px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04); }',
+'.xr-seg button { flex: 1; padding: 9px 6px; border: 0; border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }',
+'.xr-seg button[aria-checked="true"] { background: rgba(var(--pr), .35); color: #fff; }',
+'.xr-opt { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; } .xr-opt[hidden] { display: none; }',
+'.xr-opt label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; opacity: .9; flex: 1 1 140px; } .xr-opt .inv-input { width: 100%; font-size: 16px; }',
+'.xr-note { margin: 8px 2px 0; font-size: .78rem; opacity: .75; } .xr-note.bad { color: #f87171; opacity: 1; }',
+'html.lm .xr-seg { border-color: rgba(29,23,51,.14); background: rgba(29,23,51,.03); } html.lm .xr-seg button[aria-checked="true"] { color: #1d1733; background: rgba(var(--pr), .22); } html.lm .xr-note.bad { color: #b91c1c; }',
+'html[data-theme="sleek"] .xr-seg button[aria-checked="true"] { background: var(--sk-fg) !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }'
+].join('\n');
+document.head.appendChild(xcss);
+setInterval(function () { var p = page(); if (p && p.classList.contains('active')) rangeBox(); }, 1500);
+window.IncExportRange = { pick: pick, label: label, suffix: suffix, active: function () { return !!bounds(); }, set: function (o) { Object.assign(R, o || {}); var d = document.getElementById('xr-box'); if (d) { d.remove(); rangeBox(); } }, bad: function () { return R.mode === 'range' && R.from && R.to && R.from > R.to; } };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 
@@ -24118,6 +24225,9 @@ T + ' .page svg, ' + T + ' .empty-state img, ' + T + ' .es-art { filter: graysca
 T + ' .rc-hi, ' + T + ' .rc-hn, ' + T + ' .rc-reci, ' + T + ' .rc-tic, ' + T + ' .rc-ic, ' + T + ' .mo-ic, ' + T + ' .financial-icon, ' + T + ' .live-calc-icon, ' + T + ' .ap-ic, ' + T + ' .ins-ic { background: transparent !important; background-image: none !important; border: 1px solid var(--sk-line2) !important; box-shadow: none !important; color: var(--sk-fg) !important; }',
 T + ' .rc-hi *, ' + T + ' .rc-hn *, ' + T + ' .rc-reci *, ' + T + ' .rc-tic *, ' + T + ' .mo-ic *, ' + T + ' .financial-icon *, ' + T + ' .live-calc-icon * { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
 T + ' .ie-glow { display: none !important; } ' + T + ' .ie-scene, ' + T + ' .empty-illus { filter: grayscale(1); }',
+/* number badges (Trash, SlipVault counts): solid, always readable */
+T + ' .nav-badge, ' + T + ' .rc-hn, ' + T + ' .rc-cp em, ' + T + ' .nb-count { background: var(--sk-fg) !important; background-image: none !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; box-shadow: 0 0 0 2px var(--sk-bg) !important; border: 0 !important; opacity: 1 !important; filter: none !important; }',
+T + ' .nav-badge:empty, ' + T + ' .rc-hn:empty { display: none !important; }',
 /* numbers line up */
 T + ' .entry-compact-total, ' + T + ' .ledger-grand, ' + T + ' .lc-total, ' + T + ' .total-amount, ' + T + ' .financial-value, ' + T + ' .es-chip, ' + T + ' .bz-amt, ' + T + ' .rc-a, ' + T + ' .stats-value { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; background: none !important; }',
 /* ---- the bar at the bottom: solid, one thin line ---- */
@@ -27994,6 +28104,13 @@ var css = [
 '  body[data-pg]:not([data-pg="home"]) #main-header { padding: max(10px, env(safe-area-inset-top, 0px)) 0 0 !important; margin: 0 0 4px !important; min-height: 0 !important; }',
 '  html.hdr-set body[data-pg]:not([data-pg="home"]) #main-header { padding-top: max(10px, env(safe-area-inset-top, 0px)) !important; margin-top: 0 !important; }',
 '}',
+/* ---- Analytics > Income Trend Chart: room above the tallest bar for its amount ---- */
+'#income-chart { height: auto !important; min-height: 16rem; }',
+'#income-chart .chart-container { height: auto !important; padding-top: 44px !important; }',
+'#income-chart .chart-grid-line { left: 50px !important; }',
+'#income-chart .chart-y-label { left: -48px !important; width: 44px; text-align: right; }',
+'.chart-bar-value { z-index: 3; }',
+'.chart-bar { transform-origin: bottom center; }',
 /* ---- Settings: every section title lines up, even when its description runs onto two lines ---- */
 '#settings-page .acc-head > .live-calc-icon, #settings-page .live-calc-header > .live-calc-icon { flex: 0 0 auto !important; min-width: 32px; }',
 '#settings-page .acc-head > div:not(.live-calc-icon):not(.so-ctl), #settings-page .live-calc-header > div:not(.live-calc-icon):not(.so-ctl) { flex: 1 1 auto; min-width: 0; }',
@@ -28173,6 +28290,87 @@ window.IncSetOrder = { apply: apply, keys: function () { return sections().map(k
 })();
 
 </script>
+<script id="incator-oldrec">
+/* Auto Delete > Old records: everything you saved (jobs, quotes, projects, receipts) that is older than N days,
+   months or years is cleared out by itself. Your settings are never touched. Off until you turn it on, and it asks
+   first. Everything goes to the Trash first, so it can still be brought back until the Trash is emptied. */
+(function () {
+'use strict';
+if (window.IncOldRec) return;
+var DAY = 86400000;
+function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
+function save(k, v) { try { appSettings[k] = v; saveSettings(); } catch (e) { try { appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (er) { /* ignore */ } } }
+function on() { return S('oldRecOn', false) === true; }
+function days() { var n = parseInt(S('oldRecDays', 2555), 10); return n > 0 ? n : 2555; }
+function cutoff() { var d = new Date(Date.now() - days() * DAY); return d.toISOString().slice(0, 10); }
+function dateOf(x) { return x ? String(x.date || x.startDate || x.createdAt || x.created || '').slice(0, 10) : ''; }
+function old(list, cut) { return (Array.isArray(list) ? list : []).filter(function (x) { var d = dateOf(x); return d && d < cut; }); }
+function counts(cut) {
+    var c = { jobs: 0, quotes: 0, projects: 0, receipts: 0 };
+    try { c.jobs = old(entries, cut).length; } catch (e) { /* ignore */ }
+    try { c.quotes = old(quotes, cut).length; } catch (e) { /* ignore */ }
+    try { c.projects = old(projects, cut).length; } catch (e) { /* ignore */ }
+    try { c.receipts = window.RcptStore && RcptStore.olderThan ? RcptStore.olderThan(cut) : 0; } catch (e) { /* ignore */ }
+    c.all = c.jobs + c.quotes + c.projects + c.receipts;
+    return c;
+}
+function words(c) {
+    var p = [];
+    if (c.jobs) p.push(c.jobs + ' job' + (c.jobs === 1 ? '' : 's'));
+    if (c.quotes) p.push(c.quotes + ' quote' + (c.quotes === 1 ? '' : 's'));
+    if (c.projects) p.push(c.projects + ' project' + (c.projects === 1 ? '' : 's'));
+    if (c.receipts) p.push(c.receipts + ' receipt' + (c.receipts === 1 ? '' : 's'));
+    return p.join(', ') || 'nothing';
+}
+function age() { var d = days(); return d % 365 === 0 ? (d / 365) + ' year' + (d === 365 ? '' : 's') : d % 30 === 0 ? (d / 30) + ' month' + (d === 30 ? '' : 's') : d + ' day' + (d === 1 ? '' : 's'); }
+var running = false;
+async function sweep() {
+    if (!on() || running) return 0;
+    var cut = cutoff(), c = counts(cut); if (!c.all) return 0;
+    running = true;
+    try {
+        var keep = function (x) { var d = dateOf(x); return !(d && d < cut); };
+        if (c.jobs) { entries = entries.filter(keep); appStore.setItem('incomeEntries', JSON.stringify(entries)); }      // the Trash notices and keeps them for you
+        if (c.quotes) { quotes = quotes.filter(keep); if (window.BIZ && BIZ.saveQuotes) BIZ.saveQuotes(); else appStore.setItem('incomeQuotes', JSON.stringify(quotes)); }
+        if (c.projects) { projects = projects.filter(keep); if (window.BIZ && BIZ.saveProjects) BIZ.saveProjects(); else appStore.setItem('incomeProjects', JSON.stringify(projects)); }
+        if (c.receipts && window.RcptStore && RcptStore.purgeOlder) await RcptStore.purgeOlder(cut);
+        try { if (typeof refreshMainViews === 'function') refreshMainViews(); } catch (e) { /* ignore */ }
+        try { if (window.BIZ) { BIZ.renderQuotes && BIZ.renderQuotes(); BIZ.renderProjects && BIZ.renderProjects(); } } catch (e) { /* ignore */ }
+        try { if (window.IncNotes) IncNotes.add({ title: 'Old records cleared', body: words(c) + ' older than ' + age() + ' went to the Trash.', icon: 'trash-alt', go: 'trash' }); } catch (e) { /* ignore */ }
+    } finally { running = false; }
+    try { if (window.IncAutoDel) IncAutoDel.paint(); } catch (e) { /* ignore */ }
+    return c.all;
+}
+function askOn() {
+    var c = counts(cutoff());
+    var msg = 'Everything you saved that is older than ' + age() + ' (jobs, quotes, projects and receipts) will be cleared out by itself' +
+        (c.all ? ' - right now that is ' + words(c) + '.' : '. Nothing is that old yet.') +
+        ' Your settings are kept. Cleared items go to the Trash first, so you can still bring them back until it is emptied. (The CRA asks you to keep business records for 6 years.)';
+    try { return showConfirmation({ title: 'Turn on Old records?', message: msg, type: 'danger', confirmText: 'Turn on' }); } catch (e) { return Promise.resolve(confirm(msg)); }
+}
+function row() {
+    if (!window.IncAutoDel) return false;
+    if (row.done) return true;
+    IncAutoDel.add({ id: 'oldrecords', icon: 'fa-calendar-minus', title: 'Old records (everything except settings)',
+        desc: 'Jobs, quotes, projects and receipts dated longer ago than this. Your settings are never deleted. The CRA asks you to keep business records for 6 years.',
+        units: ['days', 'months', 'years'], max: 36500,
+        on: on, askOn: askOn,
+        setOn: function (v) { save('oldRecOn', !!v); if (v) setTimeout(sweep, 400); },
+        days: days, setDays: function (n) { n = Math.max(1, Math.min(36500, parseInt(n, 10) || 2555)); save('oldRecDays', n); if (on()) setTimeout(sweep, 600); return n; },
+        due: function () { return on() ? counts(cutoff()).all : 0; }, sweep: sweep,
+        offNote: 'Off: nothing is ever cleared out because of its age.' });
+    row.done = true; return true;
+}
+function boot() {
+    var n = 0, t = setInterval(function () { if (row() || ++n > 80) clearInterval(t); }, 250);
+    setTimeout(sweep, 12000);                                                   // after everything has loaded and synced
+    setInterval(function () { if (document.visibilityState === 'visible') sweep(); }, 6 * 3600 * 1000);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+window.IncOldRec = { sweep: sweep, counts: function () { return counts(cutoff()); }, cutoff: cutoff, days: days, on: on };
+})();
+
+</script>
 <script id="incator-autodel">
 /* One place for everything IncAtor clears out on its own.
    Each row is the same shape: a switch to turn it off, a number, and the unit that number is counted in.
@@ -28203,7 +28401,7 @@ function add(row) {
     if (!row || !row.id) return;
     for (var i = 0; i < ROWS.length; i++) if (ROWS[i].id === row.id) { ROWS[i] = row; paint(); return; }
     ROWS.push(row);
-    var ORDER = ['photos', 'wofiles', 'receipts', 'notifs', 'trash'];
+    var ORDER = ['photos', 'wofiles', 'receipts', 'notifs', 'oldrecords', 'trash'];
     ROWS.sort(function (a, b) { var x = ORDER.indexOf(a.id), y = ORDER.indexOf(b.id); return (x < 0 ? 50 : x) - (y < 0 ? 50 : y); });
     if (BUILT) { build(true); }
 }
@@ -28247,7 +28445,9 @@ function wire(box) {
         var id = t.closest('[data-ad]').getAttribute('data-ad');
         ROWS.forEach(function (r) {
             if (r.id !== id) return;
-            var now = !r.on(); r.setOn(now); paint();
+            var now = !r.on();
+            if (now && r.askOn) { r.askOn().then(function (ok) { if (ok) { r.setOn(true); try { showToast(r.title + ' is on', 'success'); } catch (e3) { /* ignore */ } } paint(); }); return; }   // a big one asks first
+            r.setOn(now); paint();
             try { showToast(now ? r.title + ' is on' : r.title + ' is off - nothing will be deleted', now ? 'success' : 'info'); } catch (e2) { /* ignore */ }
         });
     });
@@ -29329,7 +29529,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v38)';
+var VERSION = '2026.11.13 (v39)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
