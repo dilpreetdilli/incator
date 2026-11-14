@@ -5338,21 +5338,32 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 })();
 
 /* Swipe from left to right anywhere to go back to the page you came from (like an app).
-   Inside a Receipts list it goes back to Receipts. Ignored on sliders, sideways-scrolling rows, the nav bar and open windows. */
+   Inside a Receipts list it goes back to Receipts. With a pop-up open (Tax summary, a job, a menu) the swipe closes the pop-up.
+   A quick flick works as well as a long swipe, and a thumb that curves a little still counts.
+   The phone's own Back (Safari's edge swipe, Android's back button) also goes to the page you came from.
+   Ignored on text boxes, sliders, sideways-scrolling rows, the nav bar, the camera and the lock screen. */
 (function () {
 'use strict';
 if (window.IncBack) return;
-var stack = [], backing = false, MAX = 30;
+var stack = [], backing = false, MAX = 30, depth = 0, inCall = false;
 function cur() { return (document.body && document.body.getAttribute('data-pg')) || 'home'; }
 function wrap() {
     if (typeof window.showPage !== 'function' || window.showPage._back) return;
     var orig = window.showPage;
     window.showPage = function (p) {
-        var c = cur();
-        if (!backing && p && p !== c && document.getElementById(p + '-page')) { stack.push(c); if (stack.length > MAX) stack.shift(); }
-        return orig.apply(this, arguments);
+        if (inCall) return orig.apply(this, arguments);              // another module wrapped this one again: count each move once
+        inCall = true;
+        try { return note.apply(this, arguments); } finally { inCall = false; }
     };
     window.showPage._back = true;
+    function note(p) {
+        var c = cur();
+        if (!backing && p && p !== c && document.getElementById(p + '-page')) {
+            stack.push(c); if (stack.length > MAX) stack.shift();
+            try { history.pushState({ inc: 1, pg: p }, ''); depth++; } catch (e) { /* ignore */ }
+        }
+        return orig.apply(this, arguments);
+    }
 }
 function canBack() { return (window.RcptNav && RcptNav.inSub && RcptNav.inSub()) || stack.some(function (p) { return p !== cur(); }) || cur() !== 'home'; }
 function back() {
@@ -5363,12 +5374,40 @@ function back() {
     backing = true; try { window.showPage(p); } finally { backing = false; }
     return p;
 }
-function busy() {                                                   // a window or the camera is open: leave the swipe to it
-    if (document.querySelector('.biz-modal, .jp-ov, .jpc, .rc-cam, .rc-view, .jp-view, #nm-sheet, #nm-acct, .rc-swhint, #bg-pv, .pn-ed')) return true;
+function goBack() {                                                 // the swipe: through the phone's history when IncAtor added to it, so both stay in step
+    if (window.RcptNav && RcptNav.inSub && RcptNav.inSub()) { RcptNav.hub(); return 'receipts-list'; }
+    if (depth > 0 && stack.length) { try { history.back(); return 'history'; } catch (e) { /* fall through */ } }
+    return back();
+}
+window.addEventListener('popstate', function () {                   // Safari's edge swipe / Android back / the browser's Back button
+    if (depth <= 0) return;
+    depth--;
+    var pop = popup(); if (pop) { closePop(pop); try { history.pushState({ inc: 1, pg: cur() }, ''); depth++; } catch (e) { /* ignore */ } return; }
+    back();
+});
+function seen(el) { if (!el || !el.getClientRects().length) return false; var cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && +cs.opacity > 0.05; }
+function blocked() {                                                // the camera, the lock screen or a full-screen window that has its own controls
+    if (Array.prototype.some.call(document.querySelectorAll('.rc-cam, .rc-swhint, .jpc, #bg-pv, .pn-ed, canvas.crop, .rc-crop'), seen)) return true;
     var ov = document.getElementById('ic-overlay'); if (ov && ov.style.display !== 'none' && ov.offsetParent !== null) return true;
     var lk = document.getElementById('inc-lock'); if (lk && lk.offsetParent !== null) return true;
-    return Array.prototype.some.call(document.querySelectorAll('.print-modal'), function (m) { return getComputedStyle(m).display !== 'none'; });
+    return false;
 }
+var POPS = '.print-modal, .biz-modal, .jp-ov, .jp-view, .rc-view, #nm-sheet, #nm-acct, #wo-review, .wo-ov, #notes-centre, #nc-panel, .nc-ov, [role="dialog"]';
+function popup() {                                                  // the pop-up on top, if one is open
+    var list = Array.prototype.filter.call(document.querySelectorAll(POPS), function (m) { return seen(m) && getComputedStyle(m).position === 'fixed' || (seen(m) && m.matches('.print-modal, .biz-modal')); });
+    if (!list.length) return null;
+    list.sort(function (a, b) { return (+getComputedStyle(b).zIndex || 0) - (+getComputedStyle(a).zIndex || 0); });
+    return list[0];
+}
+var CLOSE = '[data-close], [data-act="close"], [data-a="close"], .close-btn, .modal-close, .nm-close, .jp-x, .rc-x, button[aria-label^="Close" i], button[title^="Close" i], button > .fa-times, button > .fa-xmark, button > .fa-arrow-left, button > .fa-chevron-left';
+function closePop(m) {
+    var b = m.querySelector(CLOSE); if (b && b.tagName !== 'BUTTON' && b.parentElement && b.parentElement.tagName === 'BUTTON') b = b.parentElement;
+    if (b) { b.click(); return true; }
+    var esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }); document.dispatchEvent(esc);
+    if (m.classList.contains('print-modal') || m.classList.contains('biz-modal')) { m.style.display = 'none'; return true; }
+    return false;
+}
+function busy() { return blocked(); }
 function sideways(el) {                                             // started on something that scrolls sideways itself
     for (var n = el; n && n !== document.body; n = n.parentElement) {
         if (n.scrollWidth > n.clientWidth + 2) { var o = getComputedStyle(n).overflowX; if (o === 'auto' || o === 'scroll') return true; }
@@ -5379,42 +5418,44 @@ var sw = null, hint = null;
 function page() { return document.querySelector('.page.active'); }
 document.addEventListener('touchstart', function (ev) {
     sw = null;
-    if (ev.touches.length !== 1 || busy()) return;
+    if (ev.touches.length !== 1 || blocked()) return;
     var t = ev.target;
-    if (t.closest && t.closest('input, textarea, select, [contenteditable], .floating-nav, .rc-selbar, [data-noswipe], canvas')) return;
-    if (window.RcptNav && RcptNav.inSub && RcptNav.inSub() && t.closest && t.closest('#receipts-page')) return;   // the Receipts list has its own swipe back
-    if (!canBack() || sideways(t)) return;
-    var p = ev.touches[0]; sw = { x: p.clientX, y: p.clientY, dx: 0, on: false, dead: false };
-}, { passive: true });
+    if (t.closest && t.closest('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, select, [contenteditable], input[type=range], .floating-nav, .rc-selbar, [data-noswipe], canvas')) return;
+    var pop = popup();
+    if (!pop && window.RcptNav && RcptNav.inSub && RcptNav.inSub() && t.closest && t.closest('#receipts-page')) return;   // the Receipts list has its own swipe back
+    if ((!pop && !canBack()) || sideways(t)) return;
+    var p = ev.touches[0]; sw = { x: p.clientX, y: p.clientY, dx: 0, on: false, dead: false, t: Date.now(), pop: pop };
+}, { passive: true, capture: true });
 document.addEventListener('touchmove', function (ev) {
     if (!sw || sw.dead) return;
     var p = ev.touches[0], dx = p.clientX - sw.x, dy = p.clientY - sw.y;
     if (!sw.on) {
-        if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { sw.dead = true; return; }
+        if (Math.abs(dy) > 16 && Math.abs(dy) > Math.abs(dx) * 1.1) { sw.dead = true; return; }
         if (dx < -12) { sw.dead = true; return; }
-        if (dx > 22 && dx > Math.abs(dy) * 2) {
-            sw.on = true; var pg = page(); if (pg) pg.classList.add('pg-swiping');
+        if (dx > 16 && dx > Math.abs(dy) * 1.3) {
+            sw.on = true; sw.t = Date.now(); sw.x0 = p.clientX; var pg = sw.pop ? (sw.pop.firstElementChild || sw.pop) : page(); sw.el = pg; if (pg) pg.classList.add('pg-swiping');
             if (!hint) { hint = document.createElement('div'); hint.className = 'pg-swhint'; hint.innerHTML = '<i class="fas fa-arrow-left"></i>'; document.body.appendChild(hint); }
         } else return;
     }
     sw.dx = Math.max(0, dx);
-    var k = Math.min(1, sw.dx / 110), pg2 = page();
+    var k = Math.min(1, sw.dx / 100), pg2 = sw.el;
     if (pg2) { pg2.style.transform = 'translateX(' + Math.round(sw.dx * 0.5) + 'px)'; pg2.style.opacity = String(1 - Math.min(0.4, sw.dx / 800)); }
     if (hint) { hint.style.opacity = String(k); hint.style.transform = 'translate(' + Math.round(-30 + 46 * k) + 'px, -50%) scale(' + (0.6 + 0.4 * k) + ')'; hint.classList.toggle('go', k >= 1); }
-}, { passive: true });
+}, { passive: true, capture: true });
 function end() {
     if (!sw || !sw.on) { sw = null; return; }
-    var go = sw.dx > 110, pg = page(); sw = null;
+    var dt = Date.now() - sw.t, go = sw.dx > 100 || (sw.dx > 45 && dt < 350 && sw.dx / Math.max(dt, 1) > 0.2), pg = sw.el, pop = sw.pop; sw = null;   // a long swipe or a quick flick
     if (hint) { var hh = hint; hint = null; hh.style.opacity = '0'; setTimeout(function () { hh.remove(); }, 260); }
     if (pg) { pg.classList.remove('pg-swiping'); if (!go) { pg.classList.add('pg-snap'); setTimeout(function () { pg.classList.remove('pg-snap'); }, 260); } pg.style.transform = ''; pg.style.opacity = ''; }
     if (go) {
-        var stop = function (e) { e.stopPropagation(); e.preventDefault(); };        // the finger lifting is not a tap on whatever is under it
+        var stop = function (e) { if (!e.isTrusted) return; e.stopPropagation(); e.preventDefault(); };        // the finger lifting is not a tap on whatever is under it
         document.addEventListener('click', stop, true); setTimeout(function () { document.removeEventListener('click', stop, true); }, 400);
-        back();
+        if (pop) { closePop(pop); return; }
+        goBack();
     }
 }
-document.addEventListener('touchend', end, { passive: true });
-document.addEventListener('touchcancel', end, { passive: true });
+document.addEventListener('touchend', end, { passive: true, capture: true });
+document.addEventListener('touchcancel', end, { passive: true, capture: true });
 var css = document.createElement('style'); css.id = 'pg-back-css';
 css.textContent = '.page.pg-swiping { transition: none !important; }' +
     '.page.pg-snap { transition: transform .22s cubic-bezier(.2,.9,.3,1), opacity .22s !important; }' +
@@ -5472,7 +5513,7 @@ function restore() {
         }, 650);
     }, 250);
 }
-window.IncBack = { back: back, stack: function () { return stack.slice(); }, canBack: canBack, restored: '' };
+window.IncBack = { back: back, goBack: goBack, popup: popup, closePop: closePop, _sw: function () { return sw && { on: sw.on, dead: sw.dead, dx: sw.dx, pop: !!sw.pop }; }, stack: function () { return stack.slice(); }, canBack: canBack, restored: '' };
 function boot() { new MutationObserver(function () { remember(false); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); setTimeout(restore, 900); }
 if (document.body) boot(); else document.addEventListener('DOMContentLoaded', boot);
 wrap();
@@ -19606,17 +19647,40 @@ function claimCatHtml(list, opt) {
 }
 const claimLbl = () => taxMode() === 'together' ? 'Looks claimable (before tax + GST + PST)' : 'Looks claimable (PST included, GST separate)';
 function inRange(r, from, to) { return (!from || r.date >= from) && (!to || r.date <= to); }
+/* Summary > Monthly spending: what you paid each month (with tax), how many receipts, and the busiest month */
+const MON_L = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function monthly(y, fromM, toM) {
+    const now = new Date(), rows = [];
+    for (let k = fromM || 1; k <= (toM || 12); k++) {
+        const key = `${y}-${String(k).padStart(2, '0')}`, L = receipts.filter(r => String(r.date || '').slice(0, 7) === key);
+        const total = L.reduce((t, r) => t + N(r.total), 0), gst = L.reduce((t, r) => t + N(r.gst), 0);
+        rows.push({ m: k, n: L.length, total: Math.round(total * 100) / 100, gst: Math.round(gst * 100) / 100, before: Math.round((total - gst) * 100) / 100, future: +y > now.getFullYear() || (+y === now.getFullYear() && k > now.getMonth() + 1) });
+    }
+    const past = rows.filter(r => !r.future), sum = past.reduce((t, r) => t + r.total, 0), max = Math.max(0, ...past.map(r => r.total));
+    const top = past.filter(r => r.total > 0).sort((a, b) => b.total - a.total)[0] || null;
+    return { rows: rows, sum: Math.round(sum * 100) / 100, avg: past.length ? Math.round(sum / past.length * 100) / 100 : 0, max: max, top: top, months: past.length };
+}
+function monthHtml(mo, y) {
+    if (!mo.months) return '';
+    return `<div class="fin-box mo-box"><h4>Monthly spending</h4>
+        <div class="mo-sum"><span>Total paid <b>${h(money(mo.sum))}</b></span><span>Average <b>${h(money(mo.avg))}</b> a month</span>${mo.top ? `<span>Most: <b>${h(MON_L[mo.top.m - 1])}</b></span>` : ''}</div>
+        <div class="mo-list">${mo.rows.filter(r => !r.future).map(r => `<button type="button" class="mo-row${r.total ? '' : ' nil'}${mo.top && mo.top.m === r.m ? ' top' : ''}" data-mo="${r.m}" aria-label="${h(MON_L[r.m - 1])} ${h(y)}: ${h(money(r.total))}, ${r.n} receipts. Tap to see this month.">
+            <span class="mo-n">${h(MON_L[r.m - 1].slice(0, 3))}</span><span class="mo-bar"><i style="width:${mo.max ? Math.max(r.total ? 3 : 0, Math.round(r.total / mo.max * 100)) : 0}%"></i></span>
+            <span class="mo-amt">${h(money(r.total))}<small>${r.n ? plural(r.n, 'receipt') + ' · GST ' + h(money(r.gst)) : 'nothing'}</small></span></button>`).join('')}</div>
+        <p class="bz-help" style="margin-top:6px;">Total paid, with tax. Tap a month to see its whole summary.</p></div>`;
+}
 function openTax() {
     const years = yearList();
     const y0 = UI.F.year || String(new Date().getFullYear());
     const m = modal({ title: 'Tax summary', wide: true, html: `<div class="bz-toolbar"><select id="tx-year" class="inv-input" style="max-width:130px;">${(years.length ? years : [y0]).map(y => `<option value="${y}"${y === y0 ? ' selected' : ''}>${y}</option>`).join('')}</select>
-        <select id="tx-per" class="inv-input" style="max-width:200px;"><option value="">Whole year</option><option value="1">Jan - Mar (Q1)</option><option value="2">Apr - Jun (Q2)</option><option value="3">Jul - Sep (Q3)</option><option value="4">Oct - Dec (Q4)</option></select></div><div id="tx-body"></div>`,
+        <select id="tx-per" class="inv-input" style="max-width:200px;"><option value="">Whole year</option><option value="1">Jan - Mar (Q1)</option><option value="2">Apr - Jun (Q2)</option><option value="3">Jul - Sep (Q3)</option><option value="4">Oct - Dec (Q4)</option><optgroup label="One month">${MON_L.map((n, i) => `<option value="m${i + 1}">${n}</option>`).join('')}</optgroup></select></div><div id="tx-body"></div>`,
         actions: [{ label: 'Copy summary', run: () => { copyText(txState.text); showToast('Summary copied', 'success'); } }, { label: 'Receipts CSV', run: () => exportCsv(txState.list) }, { label: 'Items CSV', run: () => exportItemsCsv(txState.list) }, { label: 'Close', run: a => a.close() }] });
     const txState = { text: '', list: [] };
     function draw() {
-        const y = m.$('#tx-year').value, per = m.$('#tx-per').value;
-        const from = per ? `${y}-${String((per - 1) * 3 + 1).padStart(2, '0')}-01` : `${y}-01-01`;
-        const toM = per ? per * 3 : 12, to = `${y}-${String(toM).padStart(2, '0')}-${String(new Date(+y, toM, 0).getDate()).padStart(2, '0')}`;
+        const y = m.$('#tx-year').value, per = m.$('#tx-per').value, one = /^m\d+$/.test(per) ? +per.slice(1) : 0;
+        const fromM = one || (per ? (per - 1) * 3 + 1 : 1), toM = one || (per ? per * 3 : 12);
+        const from = `${y}-${String(fromM).padStart(2, '0')}-01`, to = `${y}-${String(toM).padStart(2, '0')}-${String(new Date(+y, toM, 0).getDate()).padStart(2, '0')}`;
+        const perLbl = one ? MON_L[one - 1] + ' ' + y : y + (per ? ' Q' + per : '');
         const list = receipts.filter(r => inRange(r, from, to)); txState.list = list;
         const cats = {}; let spend = 0, claim = 0, itc = 0, gstPaid = 0, review = [];
         list.forEach(r => {
@@ -19625,18 +19689,26 @@ function openTax() {
             if (a.status !== 'ok' || a.verdict === 'review') review.push({ r: r, a: a });
         });
         const rows = Object.keys(cats).sort((a, b) => cats[b].spend - cats[a].spend);
-        m.$('#tx-body').innerHTML = `<div class="gf-box" style="margin-bottom:12px;"><h4>${h(y)}${per ? ' Q' + per : ''}: ${list.length} receipt${list.length === 1 ? '' : 's'}</h4>
+        const mo = monthly(y, fromM, toM); txState.mo = mo;
+        m.$('#tx-body').innerHTML = `<div class="gf-box" style="margin-bottom:12px;"><h4>${h(perLbl)}: ${list.length} receipt${list.length === 1 ? '' : 's'}</h4>
             <div class="gf-line"><span>Spent before GST</span><b>${h(money(spend))}</b></div><div class="gf-line"><span>GST paid</span><b>${h(money(gstPaid))}</b></div>
             <div class="gf-line"><span>${claimLbl()}</span><b>${h(money(claim))}</b></div><div class="gf-line t"><span>${taxMode() === 'together' ? 'GST included in the claim above' : 'GST you can claim back (input tax credits)'}</span><b>${h(money(itc))}</b></div>
             <p class="bz-help" style="margin-top:6px;">Receipts attached to a project are also counted in that project's expenses and in the GST summary there, so they are not counted twice.</p></div>
+            ${one ? `<div class="mo-back"><button type="button" class="app-btn" data-mo-all="1"><i class="fas fa-arrow-left"></i> All months of ${h(y)}</button></div>` : monthHtml(mo, y)}
             <div class="fin-box cc-box"><h4>Claimable by category</h4>${claimCatHtml(list, { actions: true })}</div>
             <div class="fin-box"><h4>Spending by category</h4>${rows.length ? rows.map(c => `<div class="fin-row"><div class="fr-main">${h(c)}<small>${cats[c].n} receipt${cats[c].n === 1 ? '' : 's'}</small></div><div class="fr-amt">${h(money(cats[c].spend))}<small style="display:block;color:rgba(255,255,255,.55);font-weight:500;">claim ${h(money(cats[c].claim))} / GST ${h(money(cats[c].itc))}</small></div></div>`).join('') : '<div class="bz-help">No receipts in this period.</div>'}</div>
             ${review.length ? `<div class="fin-box"><h4>Needs a look (${review.length})</h4>${review.slice(0, 12).map(x => `<div class="fin-row" style="cursor:pointer;" data-open-rc="${h(x.r.id)}"><div class="fr-main">${h(x.r.store)} <small>${h(formatDate(x.r.date))} - ${h((x.a.flags[0] || { msg: 'Some items need your decision' }).msg)}</small></div><div class="fr-amt">${h(money(x.r.total))}</div></div>`).join('')}${review.length > 12 ? `<div class="bz-help">and ${review.length - 12} more</div>` : ''}</div>` : ''}
             <p class="bz-help">Suggestions only. Restaurant orders are claimed ${mealShare() === 1 ? 'in full by your setting (the CRA usually limits meals to 50%)' : 'at 50%'}, personal items are excluded, and vehicle and phone costs need your business-use share. Confirm with your accountant.</p>`;
         const cc = claimByCat(list), ck = Object.keys(cc).sort((a, b) => cc[b].claim - cc[a].claim);
-        txState.text = `Receipts summary - ${y}${per ? ' Q' + per : ''}\nReceipts: ${list.length}\nSpent before GST: ${money(spend)}\nGST paid: ${money(gstPaid)}\nLooks claimable: ${money(claim)}\nGST claimable (ITC): ${money(itc)}\n\nClaimable by category:\n` + ck.map(c => `${c}: claimable ${money(cc[c].claim)}, GST ${money(cc[c].itc)} (${plural(cc[c].n, 'receipt')})`).join('\n') + `\n\nSpending by category:\n` + rows.map(c => `${c}: spend ${money(cats[c].spend)}, claimable ${money(cats[c].claim)}, GST ${money(cats[c].itc)}`).join('\n');
+        txState.text = `Receipts summary - ${perLbl}\nReceipts: ${list.length}\nSpent before GST: ${money(spend)}\nGST paid: ${money(gstPaid)}\nLooks claimable: ${money(claim)}\nGST claimable (ITC): ${money(itc)}\n\nClaimable by category:\n` + ck.map(c => `${c}: claimable ${money(cc[c].claim)}, GST ${money(cc[c].itc)} (${plural(cc[c].n, 'receipt')})`).join('\n') + `\n\nSpending by category:\n` + rows.map(c => `${c}: spend ${money(cats[c].spend)}, claimable ${money(cats[c].claim)}, GST ${money(cats[c].itc)}`).join('\n') +
+            (one ? '' : `\n\nMonthly spending (total paid):\n` + mo.rows.filter(r => !r.future).map(r => `${MON_L[r.m - 1]}: ${money(r.total)} (${plural(r.n, 'receipt')})`).join('\n'));
     }
     m.el.addEventListener('change', ev => { if (ev.target.id === 'tx-year' || ev.target.id === 'tx-per') draw(); });
+    m.el.addEventListener('click', ev => {                              // a month: the whole summary for that month only
+        const b = ev.target.closest('[data-mo]'), all = ev.target.closest('[data-mo-all]');
+        if (b) { m.$('#tx-per').value = 'm' + b.getAttribute('data-mo'); draw(); const bx = m.$('#tx-body'); if (bx && bx.scrollIntoView) bx.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+        if (all) { m.$('#tx-per').value = ''; draw(); }
+    });
     m.el.addEventListener('click', ev => { const cb = ev.target.closest('[data-cc-claim]'); if (cb) { const c = cb.getAttribute('data-cc-claim'), L = txState.list.filter(r => r.category === c && claimInfo(r).verdict !== 'claim'); if (L.length) { applyClaim(L, 'claim'); draw(); } return; } });
     m.el.addEventListener('click', ev => { const t = ev.target.closest('[data-open-rc]'); if (t) { const r = receipts.find(x => String(x.id) === t.getAttribute('data-open-rc')); if (r) { m.close(); openEditor(editDraft(r), { existing: r }); } } });
     draw();
@@ -24096,7 +24168,7 @@ function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, 
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /#inv-sheet|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
+var SKIP = /#inv-sheet|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
 function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
@@ -26815,6 +26887,16 @@ function schedNext(s, ms) {                                       // when checki
     }
     return null;
 }
+function schedLastEnd(s, ms) {                                    // when the last scheduled stretch ended (the moment it went to sleep)
+    if (!s || !s.on || !s.days || !s.days.length) return null;
+    var step = 5 * 60000, t = Math.floor(ms / 60000) * 60000, stop = ms - 8 * 86400000, next = schedActive(s, t);
+    for (var u = t - step; u >= stop; u -= step) {
+        var a = schedActive(s, u);
+        if (a && !next) { for (var b = u + 60000; b <= u + step; b += 60000) if (!schedActive(s, b)) return b; return u + step; }
+        next = a;
+    }
+    return null;
+}
 function schedText(s) {
     if (!s || !s.on) return 'All the time';
     var N = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], d = (s.days || []).slice().sort(), txt;
@@ -26834,7 +26916,7 @@ var API = {
     version: 1, parseMoney: parseMoney, parseDate: parseDate, moneyTokens: moneyTokens, toLines: toLines, linesFromItems: linesFromItems,
     extract: extract, extractOne: extractOne, findNotes: findNotes, addrKey: addrKey, normWo: normWo, compare: compare, diff: diff, mergeBatch: mergeBatch,
     checkAi: checkAi, AI_PROMPT: AI_PROMPT, fromEmail: fromEmail, filterMatch: filterMatch, workOrderLinks: workOrderLinks, pdfLinksInPage: pdfLinksInPage, looksLikeLogin: looksLikeLogin, isPdfBytes: isPdfBytes,
-    schedClean: schedClean, schedActive: schedActive, schedNext: schedNext, schedText: schedText
+    schedClean: schedClean, schedActive: schedActive, schedNext: schedNext, schedLastEnd: schedLastEnd, schedText: schedText
 };
 root.IncWOCore = API;
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
@@ -27873,6 +27955,7 @@ function addButton() {
     b.innerHTML = '<div class="wm-autorow"><div class="wm-autotx"><b>Auto import</b><small id="wm-auto-sub"></small></div>' +
         '<div class="magic-toggle" id="wm-auto2" role="switch" tabindex="0" aria-checked="false" aria-label="Auto import work orders from Gmail"><div class="toggle-orb"></div></div></div>' +
         '<div class="wm-sleep" id="wm-sleep" hidden role="status">' + SLEEPER + '<div class="wm-sltx"><b>Auto Import is sleeping</b><small id="wm-sleep-sub"></small></div></div>' +
+        '<div class="wm-office" id="wm-boy" hidden role="status"></div>' +
         '<div class="wm-last" id="wm-last" role="status"></div>' +
         '<button type="button" class="app-btn" id="wm-check"><i class="fas fa-envelope mr-2"></i>Check Gmail for New Work Orders</button><div id="wm-live" hidden></div>' +
         '<div id="wm-hist" class="wm-hist" hidden></div>';
@@ -27931,7 +28014,8 @@ async function checkNow() {
     if (!status || status.error) await refresh(true);
     if (!status || status.error) { if (status && status.signin) showLive({ status: 'failed', error: status.error, signin: true }); else toast(status && status.error || 'Your IncAtor server is not reachable', 'error'); return; }
     if (!status.gmail) { toast('Connect your work order Gmail first: Settings > App Behavior > Work Order Email Integration', 'info'); return; }
-    try { var j = await api('/check', {}); watchRun(j.run, 'Checking Gmail'); } catch (e) { showLive({ status: e.reconnect ? 'reconnect' : 'failed', error: e.message }); }
+    if (window.IncBoy) IncBoy.manual(true);                         // the boy sits down at the computer while it runs
+    try { var j = await api('/check', {}); watchRun(j.run, 'Checking Gmail'); } catch (e) { if (window.IncBoy) IncBoy.manual(false, 'The check did not start'); showLive({ status: e.reconnect ? 'reconnect' : 'failed', error: e.message }); }
 }
 function showLive(run, title) {
     var el = document.getElementById('wm-live'); if (!el) return;
@@ -27959,6 +28043,7 @@ async function watchRun(id, title) {
         if (Date.now() - t0 > 240000) break;
     }
     watching = null;
+    if (window.IncBoy) { var c = run && run.counts || {}, n = (c.imported || 0) + (c['needs-pdf'] || 0); IncBoy.manual(false, !run || run.status === 'running' ? 'Still going on your server' : run.status !== 'done' ? 'The check did not finish' : n ? n + ' work order' + (n === 1 ? '' : 's') + ' found' : 'Nothing new' + (c.found ? ' (' + c.found + ' email' + (c.found === 1 ? '' : 's') + ' looked at)' : '')); }
 }
 function reconnect() { api('/gmail/connect', { back: location.href.replace(/#.*$/, '') }).then(function (j) { location.href = j.url; }, function (e) { toast(e.message, 'error'); }); }
 
@@ -28527,6 +28612,19 @@ var css = [
 '#rc-hub #rc-grid .rc-hero .rc-ht small { display: block; font-size: .72rem !important; line-height: 1.3; margin-top: 2px; overflow: hidden; }',
 '#rc-hub #rc-grid .rc-hero .rc-hn { top: 4px !important; right: auto !important; left: 38px !important; min-width: 22px !important; height: 22px !important; font-size: .7rem !important; padding: 0 6px !important; }',
 '@media (min-width: 701px) { #rc-hub #rc-grid .rc-hero { padding: 16px !important; } #rc-hub #rc-grid .rc-hero .rc-hi { width: 48px !important; height: 48px !important; font-size: 22px !important; } #rc-hub #rc-grid .rc-hero .rc-ht b { font-size: 1.05rem !important; } #rc-hub #rc-grid .rc-hero .rc-ht small { font-size: .8rem !important; } }',
+/* ---- SlipVault Summary > Monthly spending ---- */
+'.mo-sum { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .8rem; opacity: .9; margin: 2px 0 10px; } .mo-sum b { font-weight: 700; }',
+'.mo-list { display: flex; flex-direction: column; gap: 2px; }',
+'.mo-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 112px; align-items: center; gap: 10px; width: 100%; min-height: 0 !important; height: auto !important; line-height: 1.25; padding: 6px 4px !important; margin: 0; box-shadow: none !important; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }',
+'.mo-row:active { background: rgba(255,255,255,.07); }',
+'.mo-n { font-size: .82rem; font-weight: 700; opacity: .85; }',
+'.mo-bar { display: block; height: 10px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; } .mo-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, rgb(var(--pr4, 139, 92, 246)), rgb(var(--acc2, 236, 72, 153))); }',
+'.mo-row.top .mo-n { opacity: 1; } .mo-row.top .mo-amt { color: rgb(var(--pr2, 196, 181, 253)); }',
+'.mo-amt { text-align: right; font-size: .88rem; font-weight: 700; white-space: nowrap; min-width: 0; } .mo-amt small { display: block; font-size: .64rem; font-weight: 500; opacity: .6; white-space: normal; line-height: 1.2; margin-top: 1px; }',
+'.mo-row.nil { opacity: .5; }',
+'.mo-back { margin: 0 0 12px; } .mo-back .app-btn { display: inline-flex; align-items: center; gap: 6px; }',
+'html.lm .mo-bar { background: rgba(29,23,51,.08); } html.lm .mo-row:active { background: rgba(29,23,51,.05); } html.lm .mo-row.top .mo-amt { color: rgb(var(--pr1, 124, 58, 237)); }',
+'html[data-theme="sleek"] .mo-bar { background: var(--sk-line, rgba(255,255,255,.1)) !important; } html[data-theme="sleek"] .mo-bar i { background: var(--sk-fg) !important; } html[data-theme="sleek"] .mo-row.top .mo-amt { color: var(--sk-fg) !important; }',
 /* ---- Tax summary: big amounts stay inside their card ---- */
 '.cc-list, .cc-row, .cc-m, .fin-box, .gf-box, .bz-box .filter-body { min-width: 0; max-width: 100%; box-sizing: border-box; }',
 '.cc-row { flex-wrap: wrap; }',
@@ -28834,6 +28932,188 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 window.IncOldRec = { sweep: sweep, counts: function () { return counts(cutoff()); }, cutoff: cutoff, days: days, on: on };
+})();
+
+</script>
+<script id="incator-boy">
+/* The Auto Import office boy (Create New Job > Import Work Orders).
+   - Asleep (outside your schedule): the sleeping boy in bed (woserver.js draws that one).
+   - Awake: he rolls over to his side table and does office work - stamping papers, coffee on the desk, clock ticking.
+   - Your server checks Gmail every 5 minutes (on the :00, :05, :10 ... of each hour). 5 seconds before each check he rolls
+     over to the computer, stays there while the check runs, and 3 seconds after it has finished he goes back to his papers.
+   - "Check Gmail for New Work Orders" by hand: he is at the computer for that too.
+   He only moves while you are on Create New Job, so nothing runs in the background for him. */
+(function () {
+'use strict';
+if (window.IncBoy) return;
+var FIVE = 300000, LEAD = 5000, HOLD = 3000, GIVEUP = 90000;
+var mode = '', mark = 0, until = 0, polling = false, lastPoll = 0, manual = false, result = '', built = false;
+
+function M() { return window.IncMail || null; }
+function st() { var m = M(); return m && m.status ? m.status() : null; }
+function host() { return document.getElementById('wm-boy'); }
+function onAdd() { return !document.hidden && document.body && document.body.getAttribute('data-pg') === 'add'; }
+function autoOn() { var s = st(); return !!(s && !s.error && s.gmail && s.settings && s.settings.auto_on); }
+function asleep() { var m = M(); return !!(m && m.sleeping && m.sleeping()); }
+function nextMark(t) { return Math.floor(t / FIVE) * FIVE + FIVE; }
+function willRun(t) { var m = M(), c = window.IncWOCore, sc = m && m.schedule ? m.schedule() : null; return !sc || !c || !c.schedActive || c.schedActive(sc, t); }
+function latest() { var s = st(); return (s && s.checks && s.checks[0]) || null; }
+function clock(t) { return new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+function summary(c) {
+    if (!c) return '';
+    if (c.error) return 'The check had a problem: ' + c.error;
+    if (c.found) return c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found';
+    return 'Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '');
+}
+
+var SCENE = '<svg class="ob-svg" viewBox="0 0 170 92" aria-hidden="true">' +
+    '<rect class="ob-floor" x="0" y="86" width="170" height="3" rx="1.5"/>' +
+    /* wall clock */
+    '<g class="ob-clock"><circle class="ob-cf" cx="72" cy="16" r="8"/><path class="ob-ch" d="M72 16v-4.6"/><path class="ob-cm" d="M72 16v-6.4"/><circle class="ob-cc" cx="72" cy="16" r="1"/></g>' +
+    /* side table with papers */
+    '<rect class="ob-wood" x="6" y="58" width="40" height="4" rx="1.5"/><rect class="ob-wood2" x="9" y="62" width="3" height="24"/><rect class="ob-wood2" x="40" y="62" width="3" height="24"/>' +
+    '<rect class="ob-paper" x="10" y="55.5" width="13" height="2.5" rx=".5"/><rect class="ob-paper" x="11" y="53" width="13" height="2.5" rx=".5"/><rect class="ob-paper" x="10.5" y="50.5" width="13" height="2.5" rx=".5"/>' +
+    '<rect class="ob-tray" x="28" y="55" width="16" height="3" rx="1"/><rect class="ob-sheet" x="30" y="53.6" width="12" height="1.6" rx=".4"/>' +
+    '<g class="ob-mark"><rect x="33" y="52.6" width="5" height="1.1" rx=".5"/></g>' +
+    /* desk, computer, keyboard, coffee */
+    '<rect class="ob-wood" x="96" y="56" width="70" height="4" rx="1.5"/><rect class="ob-wood2" x="100" y="60" width="3" height="26"/><rect class="ob-wood2" x="159" y="60" width="3" height="26"/>' +
+    '<rect class="ob-mon" x="112" y="26" width="40" height="26" rx="2.5"/><rect class="ob-stand" x="129" y="52" width="6" height="4"/>' +
+    '<rect class="ob-scr" x="115" y="29" width="34" height="20" rx="1"/>' +
+    '<g class="ob-scrc"><rect class="ob-env" x="124" y="32" width="16" height="11" rx="1.2"/><path class="ob-flap" d="M124.6 32.6l7.4 5.4 7.4-5.4"/>' +
+    '<rect class="ob-bar" x="118" y="45.2" width="28" height="1.8" rx=".9"/><rect class="ob-prog" x="118" y="45.2" width="28" height="1.8" rx=".9"/></g>' +
+    '<g class="ob-idle"><circle cx="126" cy="39" r="1.2"/><circle cx="132" cy="39" r="1.2"/><circle cx="138" cy="39" r="1.2"/></g>' +
+    '<rect class="ob-key" x="104" y="53.6" width="18" height="2.4" rx=".8"/>' +
+    '<g class="ob-mug"><rect x="152" y="49" width="7" height="7" rx="1.5"/><path class="ob-handle" d="M159 50.6c2.4 0 2.4 3.6 0 3.6"/>' +
+    '<path class="ob-steam s1" d="M154 46c-1.2-1.4 1.2-2.4 0-3.8"/><path class="ob-steam s2" d="M157 46c-1.2-1.4 1.2-2.4 0-3.8"/></g>' +
+    /* the boy on his rolling chair (drawn facing right; flipped when he works at the side table) */
+    '<g class="ob-boy"><g class="ob-face">' +
+        '<rect class="ob-chair" x="-12" y="-31" width="4" height="18" rx="2"/>' +
+        '<path class="ob-leg" d="M-3 -14H8.5V-3.5"/><ellipse class="ob-shoe" cx="10.8" cy="-2.6" rx="3.2" ry="1.7"/>' +
+        '<rect class="ob-seat" x="-11" y="-15" width="18" height="3.5" rx="1.6"/><rect class="ob-chair" x="-3.4" y="-11.5" width="2.6" height="7"/>' +
+        '<path class="ob-base" d="M-10 -4H8"/><circle class="ob-wheel" cx="-9" cy="-1.8" r="1.7"/><circle class="ob-wheel" cx="7" cy="-1.8" r="1.7"/>' +
+        '<rect class="ob-shirt" x="-6.5" y="-33" width="11" height="20" rx="4.5"/>' +
+        '<g class="ob-head"><circle class="ob-skin" cx="0" cy="-42" r="8.5"/>' +
+            '<path class="ob-hair" d="M-8.4 -43.4c.4-6.2 5-9.4 9.6-9.2 4.4.2 7.6 3 8 6.6-2.4-1.6-5-2-7.4-1.4-.8-1.4-2.4-2-4-1.6.4 1 .4 2 0 2.8-2.2-.4-4.4.6-6.2 2.8z"/>' +
+            '<circle class="ob-eye" cx="4" cy="-42.6" r="1.05"/><path class="ob-mouth" d="M3.6 -38.6q1.6 .9 3 0"/><ellipse class="ob-cheek" cx="1.4" cy="-39.8" rx="1.6" ry="1"/></g>' +
+        '<g class="ob-arm"><path class="ob-sleeve" d="M0 -30L9 -27.4L17 -31"/><circle class="ob-skin" cx="17.4" cy="-31.2" r="2.1"/>' +
+            '<g class="ob-stamp"><rect class="ob-sh" x="16.2" y="-38.6" width="2.6" height="6"/><rect class="ob-sb" x="14.4" y="-30.2" width="6.2" height="2.4" rx=".8"/></g></g>' +
+    '</g></g></svg>';
+
+function ensure(h) {
+    if (built && h.querySelector('.ob-svg')) return;
+    h.innerHTML = '<div class="ob-scene">' + SCENE + '</div><div class="wm-sltx ob-tx"><b id="wm-boy-t"></b><small id="wm-boy-s"></small></div>';
+    built = true;
+}
+function set(m) {
+    if (mode === m) return; mode = m;
+    var h = host(); if (h) h.setAttribute('data-mode', m);
+}
+function paintText() {
+    var h = host(); if (!h) return;
+    var t = h.querySelector('#wm-boy-t'), s = h.querySelector('#wm-boy-s'); if (!t || !s) return;
+    var a, b;
+    if (mode === 'pc') {
+        if (until) { a = 'Check finished'; b = result || 'All done'; }
+        else { a = 'Checking your emails…'; b = manual ? 'Checking Gmail by hand for new work orders' : 'Looking in Gmail for new work orders'; }
+    } else {
+        var nx = nextMark(Date.now()), k = 0; while (!willRun(nx) && k++ < 2016) nx += FIVE;
+        a = 'Auto Import is awake'; b = 'Doing office work · next email check at ' + clock(nx);
+    }
+    if (t.textContent !== a) t.textContent = a;
+    if (s.textContent !== b) s.textContent = b;
+}
+async function poll() {
+    polling = true; lastPoll = Date.now();
+    try { var m = M(); if (m && m.refresh) await m.refresh(true); } catch (e) { /* try again in a moment */ }
+    polling = false;
+    var l = latest();
+    if (!until && mark && l && Date.parse(l.at) >= mark - 20000) {
+        var end = l.end ? Date.parse(l.end) : Date.now();
+        until = Math.max(end + HOLD, Date.now() + 1500); result = summary(l);   // 3 s after it really finished (and long enough to read)
+        paintText();
+    }
+}
+function tick() {
+    var h = host(); if (!h) return;
+    var show = manual || (autoOn() && !asleep());
+    if (!show) { h.hidden = true; if (!manual) set(''); return; }
+    ensure(h); h.hidden = false;
+    if (!onAdd()) return;                                              // nobody is watching: he waits
+    var now = Date.now();
+    if (!manual) {
+        var nx = nextMark(now), pm = nx - FIVE, l = latest();
+        if (mode !== 'pc' && nx - now <= LEAD && nx !== mark && willRun(nx)) { mark = nx; until = 0; result = ''; set('pc'); }
+        else if (mode !== 'pc' && pm !== mark && now - pm < 45000 && willRun(pm) && !(l && Date.parse(l.at) >= pm - 20000)) { mark = pm; until = 0; result = ''; set('pc'); }  // you opened the page mid-check
+        if (mode === 'pc' && !until) {
+            if (now >= mark + 2000 && now - lastPoll >= 2000 && !polling) poll();
+            if (now > mark + GIVEUP) { until = now; result = 'Finished on your server'; }
+        }
+    }
+    if (mode === 'pc' && until && now >= until) { until = 0; set('office'); }
+    if (!mode) set('office');
+    paintText();
+}
+function setManual(on, text) {
+    if (on) { manual = true; until = 0; result = ''; var h = host(); if (h) { ensure(h); h.hidden = false; } set('pc'); paintText(); return; }
+    if (!manual) return;
+    manual = false; result = text || 'Done'; until = Date.now() + HOLD; mark = nextMark(Date.now()) - FIVE;
+    paintText();
+}
+
+var css = [
+'.wm-office { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 10px 12px 12px; margin: 0 0 8px; border-radius: 14px; background: linear-gradient(135deg, rgba(14,116,144,.22), rgba(30,58,138,.18)); border: 1px solid rgba(125,211,252,.2); }',
+'.wm-office[hidden] { display: none; }',
+'.ob-scene { width: 100%; max-width: 250px; } .ob-svg { display: block; width: 100%; height: auto; overflow: visible; }',
+'.ob-tx b { display: block; font-size: .9rem; } .ob-tx small { display: block; font-size: .76rem; opacity: .78; line-height: 1.35; margin-top: 2px; }',
+'.ob-floor { fill: rgba(255,255,255,.14); } .ob-wood { fill: #b07a45; } .ob-wood2 { fill: #8a5a2e; }',
+'.ob-paper { fill: #f8fafc; stroke: #cbd5e1; stroke-width: .4; } .ob-tray { fill: #64748b; } .ob-sheet { fill: #f8fafc; } .ob-mark rect { fill: #ef4444; opacity: 0; }',
+'.ob-cf { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.2; } .ob-ch, .ob-cm { stroke: #334155; stroke-width: 1.2; stroke-linecap: round; fill: none; } .ob-cc { fill: #334155; }',
+'.ob-cm { transform-box: view-box; transform-origin: 72px 16px; animation: obTurn 8s linear infinite; } .ob-ch { transform-box: view-box; transform-origin: 72px 16px; animation: obTurn 96s linear infinite; }',
+'.ob-mon { fill: #1f2937; } .ob-stand { fill: #374151; } .ob-scr { fill: #111827; transition: fill .4s ease; } .ob-key { fill: #475569; }',
+'.ob-scrc { opacity: 0; transition: opacity .3s ease; } .ob-env { fill: #f8fafc; } .ob-flap { fill: none; stroke: #2563eb; stroke-width: 1.1; stroke-linejoin: round; } .ob-bar { fill: rgba(255,255,255,.25); } .ob-prog { fill: #7dd3fc; transform-box: fill-box; transform-origin: 0 50%; transform: scaleX(0); }',
+'.ob-idle circle { fill: #334155; }',
+'.ob-mug rect { fill: #ef4444; } .ob-handle { fill: none; stroke: #ef4444; stroke-width: 1.4; } .ob-steam { fill: none; stroke: rgba(255,255,255,.55); stroke-width: .9; stroke-linecap: round; animation: obSteam 2.6s ease-in-out infinite; } .ob-steam.s2 { animation-delay: 1.3s; }',
+'.ob-skin { fill: #f6c9a1; } .ob-hair { fill: #4a3426; } .ob-eye { fill: #2b1d14; } .ob-mouth { fill: none; stroke: #4a3426; stroke-width: .9; stroke-linecap: round; } .ob-cheek { fill: #f59e9e; opacity: .5; }',
+'.ob-shirt { fill: #0ea5e9; } .ob-sleeve { fill: none; stroke: #0ea5e9; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; } .ob-leg { fill: none; stroke: #334155; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; } .ob-shoe { fill: #1e293b; }',
+'.ob-chair, .ob-seat { fill: #475569; } .ob-base { stroke: #475569; stroke-width: 1.6; stroke-linecap: round; } .ob-wheel { fill: #1e293b; }',
+'.ob-sh { fill: #92400e; } .ob-sb { fill: #b91c1c; }',
+/* where he is: by the side table (office work) or at the computer */
+'.ob-boy { transform: translate(60px, 86px); transition: transform 1.1s cubic-bezier(.45,.05,.3,1); }',
+'.ob-face { transform-box: view-box; transform-origin: 0 0; transform: scaleX(-1); transition: transform .35s ease .1s; }',
+'.wm-office[data-mode="pc"] .ob-boy { transform: translate(91px, 86px); } .wm-office[data-mode="pc"] .ob-face { transform: scaleX(1); }',
+/* office work: stamping papers */
+'.ob-arm { transform-box: view-box; transform-origin: 0 -30px; animation: obStamp 1.6s ease-in-out infinite; } .ob-mark rect { animation: obInk 1.6s ease-in-out infinite; }',
+'.ob-head { transform-box: view-box; transform-origin: 0 -34px; animation: obLook 4.8s ease-in-out infinite; }',
+'.wm-office[data-mode="pc"] .ob-stamp, .wm-office[data-mode="pc"] .ob-mark { display: none; }',
+/* at the computer: typing, screen on, an email being read */
+'.wm-office[data-mode="pc"] .ob-arm { animation: obType .28s ease-in-out infinite alternate; } .wm-office[data-mode="pc"] .ob-head { animation: none; }',
+'.wm-office[data-mode="pc"] .ob-scr { fill: #1d4ed8; } .wm-office[data-mode="pc"] .ob-scrc { opacity: 1; } .wm-office[data-mode="pc"] .ob-idle { opacity: 0; } .wm-office[data-mode="pc"] .ob-prog { animation: obProg 2.2s ease-in-out infinite; } .wm-office[data-mode="pc"] .ob-env { animation: obEnv 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }',
+'.ob-idle { transition: opacity .3s ease; }',
+'@keyframes obTurn { to { transform: rotate(360deg); } }',
+'@keyframes obSteam { 0% { opacity: 0; transform: translateY(2px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-3px); } }',
+'@keyframes obStamp { 0%, 55%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-32deg); } 45% { transform: rotate(4deg); } }',
+'@keyframes obInk { 0%, 44% { opacity: 0; } 50%, 85% { opacity: 1; } 100% { opacity: 0; } }',
+'@keyframes obLook { 0%, 70%, 100% { transform: rotate(0deg); } 78%, 92% { transform: rotate(-6deg); } }',
+'@keyframes obType { from { transform: translateY(0); } to { transform: translateY(1.1px); } }',
+'@keyframes obProg { 0% { transform: scaleX(0); } 80%, 100% { transform: scaleX(1); } }',
+'@keyframes obEnv { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.06); } }',
+'@media (prefers-reduced-motion: reduce) { .ob-arm, .ob-head, .ob-mark rect, .ob-steam, .ob-cm, .ob-ch, .ob-prog, .ob-env { animation: none !important; } .ob-boy, .ob-face { transition-duration: .01s; } }',
+'html.lm .wm-office { background: linear-gradient(135deg, rgba(224,242,254,.95), rgba(219,234,254,.75)); border-color: rgba(14,116,144,.2); } html.lm .ob-floor { fill: rgba(29,23,51,.1); } html.lm .ob-steam { stroke: rgba(71,85,105,.5); }',
+'html[data-theme="sleek"] .wm-office { background: var(--sk-raise, #141416) !important; border-color: var(--sk-line2, rgba(255,255,255,.16)) !important; }',
+'html[data-theme="sleek"] .ob-shirt { fill: var(--sk-mut, #8d8d93); } html[data-theme="sleek"] .ob-sleeve { stroke: var(--sk-mut, #8d8d93); } html[data-theme="sleek"] .ob-floor { fill: var(--sk-line, rgba(255,255,255,.1)); }'
+].join('\n');
+function inject() { var st0 = document.getElementById('incator-boy-css'); if (!st0) { st0 = document.createElement('style'); st0.id = 'incator-boy-css'; st0.textContent = css; } (document.head || document.documentElement).appendChild(st0); }
+inject();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
+setInterval(tick, 1000);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(tick, 50); });
+
+window.IncBoy = {
+    tick: tick, manual: setManual,
+    mode: function () { return mode; },
+    state: function () { return { mode: mode, mark: mark, until: until, manual: manual, result: result, polling: polling }; },
+    _t: { nextMark: nextMark, set: set, reset: function () { mode = ''; mark = 0; until = 0; manual = false; result = ''; } }
+};
 })();
 
 </script>
@@ -29995,7 +30275,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v41)';
+var VERSION = '2026.11.14 (v42)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
