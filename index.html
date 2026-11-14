@@ -27520,8 +27520,10 @@ function injectSettings() {
         '<div class="setting-control"><select id="wo-start" class="magic-input" style="padding:8px 12px;min-width:190px"><option value="upload">Import a work order</option><option value="manual">Fill in the form</option></select></div></div>' +
         '<div class="setting-item" id="wo-manual-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-upload"></i></div><div class="setting-content"><h4 class="setting-title">Import Work Order Manually</h4><p class="setting-description">Pick a work order PDF or screenshots. Same reading, checks and approval as on Create Job.</p></div></div>' +
         '<div class="setting-control"><button type="button" class="app-btn" id="wo-manual-btn"><i class="fas fa-upload mr-2"></i>Choose files</button><input type="file" id="wo-file2" accept="application/pdf,.pdf,image/*" multiple hidden></div></div>' +
-        '<div class="setting-item" id="wo-boyname-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-user"></i></div><div class="setting-content"><h4 class="setting-title">Name your helper</h4><p class="setting-description">The boy on Create New Job who checks your emails. With a name it says, for example, &quot;Sam is working&quot; or &quot;Sam is sleeping&quot;. Leave empty for &quot;Auto Import&quot;.</p></div></div>' +
-        '<div class="setting-control"><input type="text" id="wo-boyname" class="magic-input" maxlength="20" autocomplete="off" autocapitalize="words" placeholder="e.g. Sam" aria-label="Your helper\'s name" style="padding:8px 12px;min-width:160px;font-size:16px"></div></div>' +
+        '<div class="setting-item" id="wo-boyname-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-user"></i></div><div class="setting-content"><h4 class="setting-title">Name your helper</h4><p class="setting-description">The boy on Create New Job who checks your emails. With a name it says, for example, &quot;Dil is working&quot; or &quot;Dil is sleeping&quot;. Leave empty for &quot;Auto Import&quot;.</p></div></div>' +
+        '<div class="setting-control"><input type="text" id="wo-boyname" class="magic-input" maxlength="20" autocomplete="off" autocapitalize="words" placeholder="e.g. Dil" aria-label="Your helper\'s name" style="padding:8px 12px;min-width:160px;font-size:16px"></div></div>' +
+        '<div class="setting-item" id="wo-boyphoto-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-image"></i></div><div class="setting-content"><h4 class="setting-title">Photo above his bed</h4><p class="setting-description">The framed photo on his bedroom wall. Add your own photo; it is cropped to a square. In the Sleek theme it is black and white, unless you choose Colour for his room.</p></div></div>' +
+        '<div class="setting-control wo-ph-ctl"><span class="wo-ph-prev" id="wo-ph-prev" aria-hidden="true"></span><button type="button" class="app-btn" id="wo-ph-btn"><i class="fas fa-upload mr-2"></i>Choose photo</button><button type="button" class="app-btn wo-ph-del" id="wo-ph-del" hidden>Remove</button><input type="file" id="wo-ph-file" accept="image/*" hidden></div></div>' +
         '<p class="wo-sub">PDF Extraction Preferences</p>' +
         '<div class="setting-item" id="wo-notes-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-comment-alt"></i></div><div class="setting-content"><h4 class="setting-title">Extract Notes from Work Orders</h4><p class="setting-description">Off: Notes stays empty. On: copies only the notes and instructions written in the work order, word for word. Never prices, never the email.</p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="wo-notes-toggle" role="switch" tabindex="0" aria-label="Extract Notes from Work Orders"><div class="toggle-orb"></div></div></div></div>' +
@@ -27536,6 +27538,28 @@ function injectSettings() {
             var v = bn.value.replace(/\s+/g, ' ').trim().slice(0, 20); save('woBoyName', v);
             try { if (window.IncBoy) IncBoy.tick(); if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
         }, 400);
+    });
+    /* his photo: cropped to a square, 320 px, so it stays small enough to travel with your settings */
+    var phPrev = box.querySelector('#wo-ph-prev'), phDel = box.querySelector('#wo-ph-del'), phFile = box.querySelector('#wo-ph-file');
+    function phPaint() { var u = String(S('woBoyPhoto', '') || ''); phPrev.style.backgroundImage = u ? 'url("' + u + '")' : ''; phPrev.classList.toggle('on', !!u); phDel.hidden = !u; }
+    function phRepaint() { try { if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ } }
+    phPaint();
+    box.querySelector('#wo-ph-btn').addEventListener('click', function () { phFile.value = ''; phFile.click(); });
+    phDel.addEventListener('click', function () { save('woBoyPhoto', ''); phPaint(); phRepaint(); toast('Photo removed. The drawn picture is back above his bed.', 'success'); });
+    phFile.addEventListener('change', function () {
+        var f = phFile.files && phFile.files[0]; if (!f) return;
+        var url = URL.createObjectURL(f), img = new Image();
+        img.onload = function () {
+            try {
+                var n = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas'), D = 320; c.width = D; c.height = D;
+                var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, D, D);
+                g.drawImage(img, (img.naturalWidth - n) / 2, (img.naturalHeight - n) / 2, n, n, 0, 0, D, D);
+                save('woBoyPhoto', c.toDataURL('image/jpeg', 0.82)); phPaint(); phRepaint(); toast('Photo added above his bed', 'success');
+            } catch (e) { toast('That photo could not be used. Try a JPG or PNG.', 'error'); }
+            URL.revokeObjectURL(url);
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); toast('That photo could not be opened. Try a JPG or PNG.', 'error'); };
+        img.src = url;
     });
     bn.addEventListener('change', function () { var v = bn.value.trim(); toast(v ? 'Your helper is now called ' + v : 'Your helper is called Auto Import again', 'success'); });
     sel.addEventListener('change', function () { save('woStartView', sel.value); toast('Create Job will open with ' + (sel.value === 'upload' ? 'Import Work Order' : 'the form'), 'success'); });
@@ -27622,6 +27646,7 @@ var css = [
 '.wo-drop:hover, .wo-drop:focus-visible, #add-page.wo-dragging .wo-drop { background: rgba(var(--pr2), .16); border-color: rgba(var(--pr2), .9); outline: none; }',
 '.wo-dic { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: rgba(var(--pr2), .25); }',
 '.wo-dtx { display: block; flex: 1 1 auto; min-width: 0; } .wo-dtx b { display: block; font-size: 1rem !important; line-height: 1.2; } .wo-dtx span { display: block; font-size: .78rem !important; line-height: 1.3; margin-top: 2px; color: rgba(255,255,255,.75); }',
+'.wo-ph-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .wo-ph-prev { width: 44px; height: 44px; border-radius: 8px; border: 2px solid #b07a45; background: #bfdbfe center / cover no-repeat; flex: 0 0 auto; } .wo-ph-prev:not(.on) { background-image: none; } .wo-ph-del { opacity: .8; }',
 '.wo-dgo { flex: 0 0 auto; font-size: .8rem; opacity: .55; }',
 'html.lm .wo-dtx span { color: rgba(29,23,51,.68); }',
 '.wo-drop b { font-size: 1.1rem; } .wo-drop > span:not(.wo-dic) { font-size: .92rem; color: rgba(255,255,255,.88); } .wo-drop small { font-size: .78rem; color: rgba(255,255,255,.7); max-width: 460px; line-height: 1.4; }',
@@ -28022,6 +28047,13 @@ var SLEEPER =
     '<ellipse class="zb-shad" cx="44" cy="126.6" rx="22" ry="2"/><rect class="zb-wood" x="26" y="96" width="36" height="30" rx="1.5"/><rect class="zb-wood2" x="25" y="94" width="38" height="3" rx="1"/><path class="zb-drw" d="M27 110h32"/><circle class="zb-knob" cx="44" cy="103" r=".9"/><circle class="zb-knob" cx="44" cy="117" r=".9"/>' +
     '<ellipse class="zb-lampb" cx="36" cy="93.4" rx="5" ry="1.2"/><rect class="zb-lampb" x="35" y="84" width="2" height="9.6"/><path class="zb-shade" d="M29 75h14l3.4 10H25.6z"/>' +
     '<rect class="zb-alarm" x="46" y="86.6" width="14" height="7.4" rx="1.6"/><text class="zb-clk" x="53" y="92.5" text-anchor="middle">7:00</text>' +
+    '<path class="zb-wire" d="M146 26l12-11 12 11"/><circle class="zb-nail" cx="158" cy="15" r="1"/>' +
+    '<rect class="zb-pfr" x="140" y="24" width="36" height="36" rx="1.6"/><rect class="zb-pmat" x="143" y="27" width="30" height="30"/>' +
+    '<clipPath id="zb-pclip"><rect x="145" y="29" width="26" height="26"/></clipPath><g clip-path="url(#zb-pclip)"><g class="zb-pdef"><rect x="145" y="29" width="26" height="26" fill="#bfdbfe"/>' +
+    '<path d="M147 55c0-7 5-10 11-10s11 3 11 10z" fill="#3b82f6"/><rect x="156" y="42" width="4" height="4" fill="#e3ae86"/><circle cx="158" cy="38.6" r="6" fill="#f2c29b"/>' +
+    '<path d="M152 38.4c-.4-4.6 2.6-7 6-7s6.6 2.2 6 6.4c-1.6-1.6-3.6-2.4-6-2.2-2.2.2-4.4 1-6 2.8z" fill="#3a2a1f"/><circle cx="155.8" cy="39" r=".7" fill="#1f2937"/><circle cx="160.2" cy="39" r=".7" fill="#1f2937"/><path d="M156 41.6q2 1.4 4 0" stroke="#9a4b3a" stroke-width=".7" fill="none" stroke-linecap="round"/></g>' +
+    '<image class="zb-pimg" x="145" y="29" width="26" height="26" preserveAspectRatio="xMidYMid slice" href=""/></g>' +
+    '<rect class="zb-pshine" x="145" y="29" width="26" height="26"/>' +
     '<ellipse class="zb-shad" cx="150" cy="126.6" rx="80" ry="2.4"/><rect class="zb-rug" x="78" y="121" width="150" height="7" rx="3.5"/>' +
     '<rect class="zb-wood" x="70" y="62" width="9" height="62" rx="3"/><rect class="zb-wood2" x="72.6" y="68" width="3.8" height="34" rx="1.5"/><rect class="zb-wood" x="226" y="86" width="7" height="38" rx="2.5"/>' +
     '<rect class="zb-wood2" x="74" y="108" width="156" height="7" rx="1.5"/><rect class="zb-matt" x="77" y="98" width="151" height="11" rx="2.5"/>' +
@@ -28030,10 +28062,11 @@ var SLEEPER =
     '<g class="zb-head"><circle class="zb-skin" cx="99.4" cy="85.6" r="8.4"/>' +
     '<path class="zb-hair" d="M95.4 78.2C91.6 79.6 90.2 83.6 91.2 88.2 92 91.6 94.4 93.6 97.6 94.1 95.2 91.8 94.6 88.8 95.6 86.4 94.4 84.4 94.4 81.4 95.4 78.2z"/>' +
     '<ellipse class="zb-ear" cx="98" cy="87.4" rx="2.3" ry="1.7"/>' +
-    '<path class="zb-eye" d="M99.6 80.6q1.6 1.3 3.2 .2"/><path class="zb-brow" d="M99 78.6q1.8 -.9 3.6 -.2"/><path class="zb-nose" d="M104.2 78.2q1.9 .6 1.2 2.4"/><ellipse class="zb-mouth" cx="106.6" cy="83.6" rx=".7" ry=".9"/><ellipse class="zb-cheek" cx="102.6" cy="83.4" rx="1.4" ry="1"/></g>' +
+    '<path class="zb-eye" d="M99.6 80.6q1.6 1.3 3.2 .2"/><ellipse class="zb-eyeo" cx="101.2" cy="80.9" rx=".9" ry=".7"/><ellipse class="zb-yawnm" cx="106.4" cy="83.8" rx="1.6" ry="2.2"/><path class="zb-brow" d="M99 78.6q1.8 -.9 3.6 -.2"/><path class="zb-nose" d="M104.2 78.2q1.9 .6 1.2 2.4"/><ellipse class="zb-mouth" cx="106.6" cy="83.6" rx=".7" ry=".9"/><ellipse class="zb-cheek" cx="102.6" cy="83.4" rx="1.4" ry="1"/></g>' +
     '<g class="zb-blank"><path class="zb-quilt" d="M116 99C117 92 121 88.5 128 88c14-.6 26 2 42 2 20-.4 38-2.4 56 2.6V108H116z"/>' +
     '<path class="zb-sheet" d="M116 99c1-6.4 4.6-10 10-10.8l4 .4c-5 1.8-8.4 5.4-9.6 10.4z"/><path class="zb-fold" d="M136 93c10 3 24 4 40 3M150 100c14 2 34 2 52-1M180 91c8 2 18 2 26 0"/></g>' +
-    '<path class="zb-sleeve" d="M112.6 92.6c3.4 4 9.6 5.6 18.2 4.8"/><circle class="zb-skin" cx="132.6" cy="97.2" r="2.1"/>' +
+    '<g class="zb-arm"><path class="zb-sleeve" d="M112.6 92.6c3.4 4 9.6 5.6 18.2 4.8"/><circle class="zb-skin" cx="132.6" cy="97.2" r="2.1"/></g>' +
+    '<g class="zb-ybub"><path class="zb-bub" d="M114 50h32a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-24l-5 4.6v-4.6h-3a4 4 0 0 1-4-4v-5a4 4 0 0 1 4-4z"/><text class="zb-ytx" x="130" y="59.6" text-anchor="middle">Yaaawn…</text></g>' +
     '<ellipse class="zb-slip" cx="96" cy="124" rx="4.4" ry="1.6"/><ellipse class="zb-slip" cx="105" cy="125" rx="4.4" ry="1.6"/>' +
     '</g></svg>' +
     '<span class="z z1">z</span><span class="z z2">z</span><span class="z z3">Z</span></div>';
@@ -28053,8 +28086,10 @@ function paintButton() {
     var zz = b.querySelector('#wm-sleep'), sl = sleeping(), sc = sched();
     var clk = zz && zz.querySelector('.zb-clk'), wa = sl ? wakeAt() : null;
     if (clk && wa) { var wd = new Date(wa), wt = ((wd.getHours() % 12) || 12) + ':' + String(wd.getMinutes()).padStart(2, '0'); if (clk.textContent !== wt) clk.textContent = wt; }   // the alarm clock shows when he wakes up
-    if (zz) { var zt = zz.querySelector('#wm-sleep-t'), nm = ''; try { nm = String(appSettings.woBoyName || '').replace(/\s+/g, ' ').trim().slice(0, 20); } catch (e) { /* ignore */ } if (zt) zt.textContent = nm ? nm + ' is sleeping' : 'Auto Import is sleeping'; }
-    if (zz) { zz.hidden = !sl; var zs = zz.querySelector('#wm-sleep-sub'); if (zs && sl) zs.textContent = 'Outside your schedule (' + schedText(sc) + '). Wakes up ' + wakeStr(wakeAt()) + '. You can still check by hand below.'; }
+    var trip = !!(window.IncBoy && IncBoy.seq && IncBoy.seq());          // checking by hand while asleep: the boy's trip shows the cards
+    if (zz) { var ph = ''; try { ph = String(appSettings.woBoyPhoto || ''); } catch (e) { /* ignore */ } var pi = zz.querySelector('.zb-pimg'); if (pi && pi.getAttribute('href') !== ph) { pi.setAttribute('href', ph); } var sv = zz.querySelector('svg'); if (sv) sv.classList.toggle('zb-photo-on', !!ph); }
+    if (zz && !trip) { var zt = zz.querySelector('#wm-sleep-t'), nm = ''; try { nm = String(appSettings.woBoyName || '').replace(/\s+/g, ' ').trim().slice(0, 20); } catch (e) { /* ignore */ } if (zt) zt.textContent = nm ? nm + ' is sleeping' : 'Auto Import is sleeping'; }
+    if (zz && !trip) { zz.hidden = !sl; var zs = zz.querySelector('#wm-sleep-sub'); if (zs && sl) zs.textContent = 'Outside your schedule (' + schedText(sc) + '). Wakes up ' + wakeStr(wakeAt()) + '. You can still check by hand below.'; }
     b.classList.toggle('wm-asleep', sl);
     if (sub && on && status && status.gmail && sc.on) sub.textContent = sl ? 'On, sleeping now: ' + schedText(sc) : 'On: checking every 5 minutes · ' + schedText(sc);
     var lc = status && status.gmail && status.gmail.last_check;
@@ -28328,6 +28363,18 @@ var css = [
 '@keyframes zbFloat { 0% { opacity: 0; transform: translate(0, 0) rotate(-8deg) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(46px, -52px) rotate(12deg) scale(1.15); } }',
 '@keyframes zbTwinkle { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }',
 '@keyframes zbGlow { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }',
+/* the photo above his bed */
+'.zb-wire { fill: none; stroke: #a8a29e; stroke-width: .7; } .zb-nail { fill: #a8a29e; } .zb-pfr { fill: #b07a45; } .zb-pmat { fill: #f8fafc; } .zb-pshine { fill: none; stroke: rgba(0,0,0,.15); stroke-width: .8; } .zb-pimg { display: none; } .zb-photo-on .zb-pimg { display: inline; } .zb-photo-on .zb-pdef { display: none; }',
+/* waking up (checking by hand while he sleeps) and going back to sleep: yawn, stretch, no z z z */
+'.zb-eyeo, .zb-yawnm, .zb-ybub { display: none; } .zb-eyeo { fill: #1f2937; } .zb-yawnm { fill: #7c2d12; } .zb-bub { fill: #f8fafc; } .zb-ytx { fill: #334155; font: 700 6px/1 var(--font, sans-serif); }',
+'.zb-arm { transform-box: view-box; transform-origin: 112.6px 92.6px; }',
+'.wm-sleep[data-st] .wm-zzz .z { display: none; } .wm-sleep[data-st] .zb-mouth { display: none; } .wm-sleep[data-st] .zb-yawnm, .wm-sleep[data-st] .zb-ybub { display: inline; }',
+'.wm-sleep[data-st="wake"] .zb-eye { display: none; } .wm-sleep[data-st="wake"] .zb-eyeo { display: inline; }',
+'.wm-sleep[data-st="wake"] .zb-arm { animation: zbStretch 2.2s ease-in-out forwards; } .wm-sleep[data-st="wake"] .zb-yawnm { animation: zbYawn 2.2s ease-in-out forwards; transform-box: fill-box; transform-origin: 50% 50%; }',
+'.wm-sleep[data-st="tobed"] .zb-arm { animation: zbStretch 2.6s ease-in-out reverse forwards; } .wm-sleep[data-st="tobed"] .zb-yawnm { animation: zbYawn 2.6s ease-in-out forwards; transform-box: fill-box; transform-origin: 50% 50%; } .wm-sleep[data-st="tobed"] .zb-ybub { animation: zbBubOff 2.6s ease forwards; }',
+'@keyframes zbStretch { 0% { transform: rotate(0deg); } 35%, 75% { transform: rotate(-150deg); } 100% { transform: rotate(-150deg); } }',
+'@keyframes zbYawn { 0% { transform: scale(.4); } 30%, 70% { transform: scale(1.2); } 100% { transform: scale(.5); } }',
+'@keyframes zbBubOff { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }',
 '.wm-sleep .wm-sltx b { font-size: .95rem; } .wm-sleep .wm-sltx small { max-width: 320px; margin: 2px auto 0; }',
 '@keyframes zbBreath { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.04); } }',
 '@keyframes zbNod { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-1.2deg); } }',
@@ -29109,6 +29156,7 @@ var SCENE =
     '<rect class="ob-oln" x="117" y="39" width="29" height=".9" rx=".4"/><rect class="ob-oln" x="117" y="40.8" width="25" height=".9" rx=".4"/><rect class="ob-oln" x="117" y="42.6" width="27" height=".9" rx=".4"/>' +
     '<rect class="ob-opdf" x="117" y="44.6" width="9" height="3" rx=".7"/><rect class="ob-opdl" x="118.2" y="45.7" width="5" height=".8" rx=".4"/><g class="ob-ook"><circle cx="144.6" cy="46" r="1.9"/><path d="M143.7 46l.7.7 1.2-1.3"/></g></g></g>' +
     '</g>' +
+    '<g class="ob-pow"><circle class="ob-powc" cx="174" cy="70" r="5.4"/><path class="ob-powl" d="M174 64.6v5.4"/></g>' +
     '<g class="ob-idle"><circle cx="166" cy="70" r="1.5"/><circle cx="174" cy="70" r="1.5"/><circle cx="182" cy="70" r="1.5"/></g>' +
     '<rect class="ob-stand" x="171" y="86" width="6" height="6"/><rect class="ob-stand" x="163" y="92" width="22" height="2" rx="1"/>' +
     '<rect class="ob-key" x="133" y="91.6" width="27" height="2.4" rx=".8"/><path class="ob-keys" d="M135 92.8h23"/><ellipse class="ob-mouse" cx="165.5" cy="93" rx="2.4" ry="1.3"/>' +
@@ -29133,6 +29181,19 @@ var SCENE =
     '<g class="ob-p ob-p-phone ob-phone"><path class="ob-sleeve" d="M1 -42L11 -44L1.6 -54"/><g transform="rotate(-10 1.6 -56)"><rect class="ob-phb" x="-.6" y="-62" width="4.6" height="10.4" rx="1.3"/><rect class="ob-phs" x=".2" y="-60.6" width="3" height="7.6" rx=".6"/></g><circle class="ob-skin" cx="1.8" cy="-54.4" r="2.2"/></g>' +
     '</g>' +
     '</g></g>' +
+    '<g class="ob-walker"><g class="ob-wface">' +
+    '<ellipse class="ob-shad" cx="0" cy=".6" rx="9" ry="1.8"/>' +
+    '<g class="ob-wl2"><path class="ob-leg2" d="M-1 -27L-1 -4"/><path class="ob-shoe" d="M-3.4 -5.4h6.6a2.6 2.6 0 0 1 0 5.2h-6.6z"/></g>' +
+    '<g class="ob-wa2"><path class="ob-sleeve2" d="M-1 -48L-2 -33"/><circle class="ob-skin2" cx="-2" cy="-31.4" r="2.1"/></g>' +
+    '<g class="ob-wl1"><path class="ob-leg" d="M1 -27L1 -4"/><path class="ob-shoe" d="M-1.4 -5.6h7.4a2.8 2.8 0 0 1 0 5.6h-7.4z"/></g>' +
+    '<path class="ob-shirt" d="M-8 -24C-9 -36-7 -48-1 -52L5 -52C9 -47 9 -36 8 -24Z"/><path class="ob-shade" d="M-8 -24C-9 -36-7 -48-1 -52L1 -52C-4 -46-5 -34-3 -24Z"/><rect class="ob-belt" x="-8" y="-26" width="16" height="2.2" rx=".6"/><path class="ob-collar" d="M1 -52l2.6 3.6 2.6-3.6z"/>' +
+    '<rect class="ob-neck" x=".4" y="-56.5" width="4" height="5.4" rx="1"/>' +
+    '<g transform="translate(0 -5.5)"><circle class="ob-skin" cx="1.5" cy="-57" r="8.6"/><ellipse class="ob-ear" cx="-2.6" cy="-56.4" rx="1.8" ry="2.4"/>' +
+    '<path class="ob-hair" d="M-7.3 -57.5C-8 -64-3 -67.5 2.5 -67C8 -66.5 11 -62.5 10 -59C8 -61 5 -61.8 2 -61.2C1 -59 0 -58.2-1.5 -58.5C-2.5 -57-3.6 -55.5-5.4 -54C-6.6 -55-7.2 -56.2-7.3 -57.5Z"/>' +
+    '<path class="ob-weye" d="M5.4 -57.6q1.2 .8 2.4 0"/><path class="ob-brow" d="M5 -61.2q1.6 -.8 3.2 -.2"/><path class="ob-nose" d="M9.6 -57q1.4 1.4 -.2 2.2"/><ellipse class="ob-yawn" cx="8" cy="-52.4" rx="1.3" ry="1.9"/><ellipse class="ob-cheek" cx="5.4" cy="-54.4" rx="1.5" ry=".9"/></g>' +
+    '<g class="ob-wa1"><path class="ob-sleeve" d="M1 -48L2 -33"/><circle class="ob-skin" cx="2" cy="-31.4" r="2.2"/></g>' +
+    '</g></g>' +
+    '<g class="ob-ybub" transform="translate(7 20)"><path class="ob-bub" d="M2 26h30a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4H14l-5 4.6v-4.6H2a4 4 0 0 1-4-4v-5a4 4 0 0 1 4-4z"/><text class="ob-ytx" x="15" y="35.6" text-anchor="middle">Yaaawn…</text></g>' +
     '<g class="ob-talk"><path class="ob-bub" d="M60 42h22a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4h-2l3 5.4-8.4-5.4H60a4 4 0 0 1-4-4v-6a4 4 0 0 1 4-4z"/><circle class="ob-dot d1" cx="65" cy="49" r="1.4"/><circle class="ob-dot d2" cx="71" cy="49" r="1.4"/><circle class="ob-dot d3" cx="77" cy="49" r="1.4"/></g>' +
     '</g></svg>';
 
@@ -29174,6 +29235,7 @@ async function poll() {
 }
 function tick() {
     var h = host(); if (!h) return;
+    if (seq) return;                                                   // on his trip to the office: the trip runs itself
     var show = manual || (autoOn() && !asleep());
     if (!show) { h.hidden = true; if (!manual) set(''); return; }
     ensure(h); h.hidden = false;
@@ -29196,8 +29258,55 @@ function tick() {
     if (!mode) set('office');
     paintText();
 }
+/* Checking by hand while he is asleep (outside your schedule): he wakes up yawning, walks to the office, turns the
+   computer on, checks, then walks back to bed yawning and goes back to sleep.
+   wake (in bed) -> walkin -> boot -> pc -> walkout -> tobed (in bed) -> asleep again */
+var SEQ_MS = { wake: 2200, walkin: 2000, boot: 1300, walkout: 2000, tobed: 2600 }, seq = null, seqT = 0;
+function sleepCard() { return document.getElementById('wm-sleep'); }
+function nm() { return who() || 'Auto Import'; }
+function seqText(a, b) {
+    var z = sleepCard(), inBed = seq && (seq.phase === 'wake' || seq.phase === 'tobed');
+    if (inBed && z) { var t = z.querySelector('#wm-sleep-t'), s0 = z.querySelector('#wm-sleep-sub'); if (t) t.textContent = a; if (s0) s0.textContent = b; return; }
+    var h = host(); if (!h) return; var t2 = h.querySelector('#wm-boy-t'), s2 = h.querySelector('#wm-boy-s'); if (t2) t2.textContent = a; if (s2) s2.textContent = b;
+}
+function phase(p) {
+    clearTimeout(seqT); if (!seq) return;
+    seq.phase = p; seq.at = Date.now();
+    var h = host(), z = sleepCard();
+    if (p === 'wake' || p === 'tobed') {
+        if (h) h.hidden = true;
+        if (z) { z.hidden = false; z.setAttribute('data-st', p); }
+        if (p === 'wake') seqText(nm() + ' is waking up', 'Yaaawn… off to the computer to check your emails.');
+        else seqText(nm() + ' is going back to sleep', (seq.result || 'Done') + '. Wakes up again at your scheduled time.');
+        seqT = setTimeout(function () { phase(p === 'wake' ? 'walkin' : 'end'); }, SEQ_MS[p]);
+        return;
+    }
+    if (p === 'end') {
+        if (z) z.removeAttribute('data-st');
+        seq = null; manual = false; until = 0; set('');
+        try { if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
+        tick(); return;
+    }
+    if (z) { z.hidden = true; z.removeAttribute('data-st'); }
+    if (h) { ensure(h); h.hidden = false; }
+    h.removeAttribute('data-boot');
+    if (p === 'walkin') { set('walkin'); seqText(nm() + ' is walking to the computer', 'Still a bit sleepy…'); seqT = setTimeout(function () { phase('boot'); }, SEQ_MS.walkin); }
+    else if (p === 'boot') { set('pc'); h.setAttribute('data-boot', ''); seqText(nm() + ' is turning on the computer', 'Starting up…'); seqT = setTimeout(function () { phase('pc'); }, SEQ_MS.boot); }
+    else if (p === 'pc') { set('pc'); seqText(nm() + ' is checking your emails…', 'Checking Gmail by hand for new work orders'); if (seq.done) leaveSoon(); }
+    else if (p === 'walkout') { set('walkout'); seqText(nm() + ' is going back to bed', seq.result || 'Done'); seqT = setTimeout(function () { phase('tobed'); }, SEQ_MS.walkout); }
+}
+function leaveSoon() {                                                // show the result for 3 seconds (and at least 2.5 s at the computer), then back to bed
+    var stay = Math.max(HOLD, 2500 - (Date.now() - seq.at));
+    seqText(nm() + ' finished checking', seq.result || 'Done');
+    clearTimeout(seqT); seqT = setTimeout(function () { phase('walkout'); }, stay);
+}
 function setManual(on, text) {
-    if (on) { manual = true; until = 0; result = ''; var h = host(); if (h) { ensure(h); h.hidden = false; } set('pc'); paintText(); return; }
+    if (on) {
+        if (seq) return;
+        if (autoOn() && asleep() && onAdd()) { manual = true; until = 0; result = ''; seq = { phase: '', done: false, result: '' }; phase('wake'); return; }
+        manual = true; until = 0; result = ''; var h = host(); if (h) { ensure(h); h.hidden = false; } set('pc'); paintText(); return;
+    }
+    if (seq) { seq.done = true; seq.result = text || 'Done'; result = seq.result; if (seq.phase === 'pc') leaveSoon(); return; }
     if (!manual) return;
     manual = false; result = text || 'Done'; until = Date.now() + HOLD; mark = nextMark(Date.now()) - FIVE;
     paintText();
@@ -29236,6 +29345,29 @@ var css = [
 '.ob-ch1, .ob-ch2 { fill: #374151; } .ob-base { stroke: #374151; stroke-width: 2.2; stroke-linecap: round; } .ob-wheel { fill: #111827; }',
 '.ob-sb { fill: #b91c1c; } .ob-sh { fill: #92400e; }',
 '.ob-cupb { fill: #f8fafc; stroke: #94a3b8; stroke-width: .5; } .ob-cuph { fill: none; stroke: #94a3b8; stroke-width: 1.1; } .ob-docl { stroke: #94a3b8; stroke-width: .8; stroke-linecap: round; } .ob-phb { fill: #111827; } .ob-phs { fill: #38bdf8; opacity: .85; }',
+'.ob-walker, .ob-ybub, .ob-pow { display: none; } .ob-ytx { fill: #334155; font: 700 5.6px/1 var(--font, sans-serif); } .ob-yawn { fill: #7c2d12; transform-box: fill-box; transform-origin: 50% 50%; animation: obYawn 1.8s ease-in-out infinite; } .ob-weye { fill: none; stroke: #1f2937; stroke-width: .9; stroke-linecap: round; }',
+'.ob-powc { fill: none; stroke: #e0f2fe; stroke-width: 1.4; stroke-dasharray: 26 8; stroke-dashoffset: -4; } .ob-powl { stroke: #e0f2fe; stroke-width: 1.4; stroke-linecap: round; }',
+/* walking in from the bedroom / back out to it: the chair waits at the desk, he walks */
+'.wm-office[data-mode="walkin"] .ob-boy, .wm-office[data-mode="walkout"] .ob-boy { transform: translate(118px, 126px); transition: none; } .wm-office[data-mode="walkin"] .ob-face, .wm-office[data-mode="walkout"] .ob-face { transform: scaleX(1); transition: none; }',
+'.wm-office[data-mode^="walk"] .ob-face > :not(.ob-ch1):not(.ob-ch2):not(.ob-base):not(.ob-wheel) { display: none; }',
+'.wm-office[data-mode^="walk"] .ob-walker, .wm-office[data-mode^="walk"] .ob-ybub { display: inline; }',
+'.ob-wface { transform-box: view-box; transform-origin: 0 0; }',
+'.wm-office[data-mode="walkin"] .ob-walker { animation: obWalkIn 2s cubic-bezier(.3,.1,.4,1) forwards; } .wm-office[data-mode="walkout"] .ob-walker { animation: obWalkOut 2s cubic-bezier(.5,0,.7,.9) forwards; } .wm-office[data-mode="walkout"] .ob-wface { transform: scaleX(-1); }',
+'.ob-wl1, .ob-wl2, .ob-wa1, .ob-wa2 { transform-box: view-box; } .ob-wl1, .ob-wl2 { transform-origin: 0 -27px; } .ob-wa1, .ob-wa2 { transform-origin: 0 -48px; }',
+'.wm-office[data-mode^="walk"] .ob-wl1, .wm-office[data-mode^="walk"] .ob-wa2 { animation: obStep .5s ease-in-out infinite alternate; } .wm-office[data-mode^="walk"] .ob-wl2, .wm-office[data-mode^="walk"] .ob-wa1 { animation: obStep2 .5s ease-in-out infinite alternate; }',
+'.wm-office[data-mode="walkin"] .ob-ybub { animation: obBubIn 2s ease forwards; } .wm-office[data-mode="walkout"] .ob-ybub { animation: obBubOut 2s ease forwards; }',
+'@keyframes obWalkIn { 0% { transform: translate(-16px, 126px); } 100% { transform: translate(104px, 126px); } }',
+'@keyframes obWalkOut { 0% { transform: translate(104px, 126px); } 100% { transform: translate(-18px, 126px); } }',
+'@keyframes obStep { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }',
+'@keyframes obStep2 { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }',
+'@keyframes obBubIn { 0%, 45% { opacity: 1; } 60%, 100% { opacity: 0; } }',
+'@keyframes obBubOut { 0%, 30% { opacity: 0; } 45%, 100% { opacity: 1; } }',
+'@keyframes obYawn { 0%, 100% { transform: scale(.7); } 50% { transform: scale(1.15); } }',
+/* turning the computer on */
+'.wm-office[data-boot] .ob-pow { display: inline; animation: obPow 1.3s ease-out forwards; } .wm-office[data-boot] .ob-scrc { opacity: 0 !important; } .wm-office[data-boot] .ob-scr { animation: obBootScr 1.3s ease-in forwards; } .wm-office[data-boot] .ob-glow { animation: obBootGlow 1.3s ease-in forwards; } .wm-office[data-boot] .ob-arm { animation: none; }',
+'@keyframes obPow { 0% { opacity: 0; transform: scale(.4); } 30% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } } .ob-pow { transform-box: fill-box; transform-origin: 50% 50%; }',
+'@keyframes obBootScr { 0% { fill: #0f172a; } 60% { fill: #0f172a; } 100% { fill: #1d4ed8; } }',
+'@keyframes obBootGlow { 0% { opacity: 0; } 100% { opacity: 1; } }',
 '.ob-bub { fill: #f8fafc; } .ob-dot { fill: #475569; animation: obDot 1.2s ease-in-out infinite; } .ob-dot.d2 { animation-delay: .2s; } .ob-dot.d3 { animation-delay: .4s; } .ob-talk { display: none; }',
 /* where he sits: at the side table (office work, facing it) or at the computer */
 '.ob-boy { transform: translate(94px, 126px); transition: transform 1.1s cubic-bezier(.45,.05,.3,1); }',
@@ -29284,11 +29416,11 @@ setInterval(tick, 1000);
 document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(tick, 50); });
 
 window.IncBoy = {
-    tick: tick, manual: setManual,
+    tick: tick, manual: setManual, seq: function () { return seq ? seq.phase : ''; },
     mode: function () { return mode; },
     act: function () { return ACTS[actI]; },
     state: function () { return { act: ACTS[actI], mode: mode, mark: mark, until: until, manual: manual, result: result, polling: polling }; },
-    _t: { nextMark: nextMark, set: set, reset: function () { mode = ''; mark = 0; until = 0; manual = false; result = ''; } }
+    _t: { nextMark: nextMark, set: set, ms: SEQ_MS, reset: function () { clearTimeout(seqT); seq = null; mode = ''; mark = 0; until = 0; manual = false; result = ''; } }
 };
 })();
 
@@ -30451,7 +30583,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v47)';
+var VERSION = '2026.11.14 (v48)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
