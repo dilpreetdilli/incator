@@ -8031,11 +8031,44 @@ async function performBackup(opts) {
         return { uploaded: true, gen: gen, name: metadata.name };
     });
 }
+/* Data Management > Google Drive Backup > Saved files: you can see and delete backup files, but the newest 10 are always
+   protected (the newest one already holds everything you saved). Only IncAtor backup files are ever listed or deleted
+   here - receipt photos, job photos and work order files are separate files and are never touched. */
+var PROTECT = 10;
+function keepFiles() { var on = true, n = 50; try { on = appSettings.driveKeepOn !== false; n = parseInt(appSettings.driveKeep, 10) || 50; } catch (e) { /* defaults */ } return on ? Math.max(PROTECT, Math.min(1000, n)) : Infinity; }
+function newestFirst(files) { return files.slice().sort(function (a, b) { if (b.gen !== a.gen) return b.gen - a.gen; return String(b.createdTime) < String(a.createdTime) ? -1 : 1; }); }
+async function driveFiles() {
+    var sess = readSession(); if (setupMode || !sess) throw AuthError('Sign in with Google first', { needUser: true });
+    return withToken(async function (token) {
+        var folderId = await ensureFolder(token);
+        return newestFirst(await listBackups(token, folderId, sess.sub)).map(function (f, i) { return Object.assign({}, f, { protect: i < PROTECT }); });
+    });
+}
+async function driveDelete(ids) {
+    var sess = readSession(); if (setupMode || !sess) throw AuthError('Sign in with Google first', { needUser: true });
+    return withToken(async function (token) {
+        var folderId = await ensureFolder(token);
+        var files = newestFirst(await listBackups(token, folderId, sess.sub));          // checked again right now, on Drive itself
+        var safe = new Set(files.slice(0, PROTECT).map(function (f) { return f.id; })), mine = new Set(files.map(function (f) { return f.id; }));
+        var done = 0, kept = 0;
+        for (var i = 0; i < ids.length; i++) {
+            if (safe.has(ids[i]) || !mine.has(ids[i])) { kept++; continue; }        // protected, or not an IncAtor backup file: never deleted
+            try { await rawFetch(API + '/' + encodeURIComponent(ids[i]), { method: 'DELETE' }, token); done++; } catch (e) { /* tried */ }
+        }
+        return { deleted: done, protected: kept };
+    });
+}
+async function drivePrune() {
+    var sess = readSession(); if (setupMode || !sess) return 0;
+    return withToken(async function (token) { var folderId = await ensureFolder(token); var f = await listBackups(token, folderId, sess.sub); return prune(token, f); });
+}
 async function prune(token, files) {
-    var extra = files.slice(CFG.KEEP_VERSIONS);
+    var keep = keepFiles(); if (!isFinite(keep)) return 0;                              // Auto Delete > Old Google Drive backups is off
+    var extra = newestFirst(files).slice(keep), n = 0;
     for (var i = 0; i < extra.length; i++) {
-        try { await rawFetch(API + '/' + encodeURIComponent(extra[i].id), { method: 'DELETE' }, token); } catch (e) { /* ignore */ }
+        try { await rawFetch(API + '/' + encodeURIComponent(extra[i].id), { method: 'DELETE' }, token); n++; } catch (e) { /* ignore */ }
     }
+    return n;
 }
 
 /* -------------------------- scheduling / retries -------------------------- */
@@ -8799,6 +8832,7 @@ window.addEventListener('online', function () { setTimeout(photosChanged, 1500);
 window.IncAtorCloud = {
     setupMode: setupMode,
     photos: { ready: photosReady, list: photoList, upload: photoUpload, download: photoDownload, remove: photoRemove },
+    files: { list: driveFiles, remove: driveDelete, prune: drivePrune, protect: PROTECT, keep: keepFiles },
     token: function () { if (setupMode || !readSession()) return Promise.resolve(null); return withToken(function (t) { return t; }).catch(function () { return null; }); },   // for your IncAtor server: proves who you are
     tokenTap: function () { if (setupMode || !readSession()) return Promise.resolve(null); return getTokenFromTap().catch(function () { return null; }); },   // same, from a tap: Google may need you to confirm it is you
     session: readSession,
@@ -20061,6 +20095,67 @@ function editRecurring(t, done) {
 }
 
 /* ------------------------------------------------------------------ public API (backup, import, GST) ------------------------------------------------------------------ */
+/* Settings > Auto Delete > Old receipt photos: the photos of receipts older than this (6 years 1 month to begin with)
+   are deleted - from this device and from Google Drive - to save space. The receipts themselves (store, date,
+   amounts, GST) are kept. You can also delete the photos of receipts between two dates. */
+const rcPhotoOn = () => sget('rcPhotoAutoOn', true) !== false;
+const rcPhotoDays = () => { const n = parseInt(sget('rcPhotoAutoDays', 2220), 10); return n > 0 ? n : 2220; };
+function photoCut() { return isoD(new Date(Date.now() - rcPhotoDays() * 86400000)); }
+function withPhotos(pred) { return receipts.filter(r => r && (r.photos || []).length && pred(String(r.date || '').slice(0, 10))); }
+async function dropReceiptPhotos(list) {
+    if (!list.length) return { receipts: 0, photos: 0 };
+    const ids = [];
+    list.forEach(r => { (r.photos || []).forEach(p => ids.push(p.id)); r.photos = []; r.photosRemovedAt = new Date().toISOString(); });
+    try { saveReceipts(); } catch (e) { return { receipts: 0, photos: 0 }; }
+    try { await PH.del(ids); } catch (e) { /* ignore */ }
+    Remote.forget(ids); Remote.schedule();                                   // and from Google Drive
+    try { renderAll(); } catch (e) { /* ignore */ }
+    return { receipts: list.length, photos: ids.length };
+}
+async function rcPhotoSweep() { if (!rcPhotoOn()) return 0; const cut = photoCut(); const r = await dropReceiptPhotos(withPhotos(d => d && d < cut)); return r.photos; }
+function rcPhotoRangeBox() {
+    const row = document.getElementById('ad-rcphotos'); if (!row || row.querySelector('.rcp-range')) return;
+    const d = document.createElement('div'); d.className = 'rcp-range';
+    d.innerHTML = `<p class="setting-description" style="margin:12px 0 6px"><b>Or delete the photos of receipts between two dates</b></p>
+        <div class="rcp-dates"><label>From <input type="date" class="magic-input rcp-from"></label><label>To <input type="date" class="magic-input rcp-to"></label></div>
+        <button type="button" class="app-btn rcp-go"><i class="fas fa-trash-alt mr-2"></i>Delete these photos</button><span class="rcp-note setting-description"></span>`;
+    row.appendChild(d);
+    const note = () => { const a = d.querySelector('.rcp-from').value, b = d.querySelector('.rcp-to').value, n = d.querySelector('.rcp-note');
+        if (!a || !b) { n.textContent = ' Choose both dates.'; return; } if (a > b) { n.textContent = ' The From date is after the To date.'; return; }
+        const l = withPhotos(x => x && x >= a && x <= b), k = l.reduce((t, r) => t + r.photos.length, 0); n.textContent = ` ${plural(k, 'photo')} on ${plural(l.length, 'receipt')}.`; };
+    d.addEventListener('change', note);
+    d.querySelector('.rcp-go').addEventListener('click', async () => {
+        const a = d.querySelector('.rcp-from').value, b = d.querySelector('.rcp-to').value;
+        if (!a || !b) { showToast('Choose both dates first', 'info'); return; } if (a > b) { showToast('The From date is after the To date', 'error'); return; }
+        const l = withPhotos(x => x && x >= a && x <= b), k = l.reduce((t, r) => t + r.photos.length, 0);
+        if (!k) { showToast('No receipt photos between those dates', 'info'); return; }
+        const ok = await showConfirmation({ title: `Delete ${plural(k, 'photo')}?`, message: `The photos of ${plural(l.length, 'receipt')} from ${formatDate(a)} to ${formatDate(b)} are deleted from this device and from Google Drive. The receipts themselves (store, date, amounts and GST) are kept. Photos cannot be brought back.`, type: 'danger', confirmText: 'Delete photos' });
+        if (!ok) return;
+        const r = await dropReceiptPhotos(l); showToast(`${plural(r.photos, 'receipt photo')} deleted`, 'success'); note(); try { IncAutoDel.paint(); } catch (e) { /* ignore */ }
+    });
+    note();
+}
+(function registerReceiptPhotoAutoDelete() {
+    function go() {
+        if (!window.IncAutoDel) return false;
+        IncAutoDel.add({ id: 'rcphotos', icon: 'fa-image', title: 'Old receipt photos', unit: 'months',
+            desc: 'Deletes the photos of receipts older than this (6 years 1 month to begin with) from this device and from Google Drive. The receipts and their amounts are kept.',
+            on: rcPhotoOn, days: rcPhotoDays,
+            setOn: v => { sset('rcPhotoAutoOn', !!v); if (v) rcPhotoSweep(); },
+            setDays: n => { sset('rcPhotoAutoDays', Math.max(1, Math.min(36500, n))); rcPhotoSweep(); return rcPhotoDays(); },
+            due: () => rcPhotoOn() ? withPhotos(d => d && d < photoCut()).reduce((t, r) => t + r.photos.length, 0) : 0,
+            sweep: rcPhotoSweep, offNote: 'Off: receipt photos are kept for as long as their receipts.' });
+        return true;
+    }
+    (function w() { if (!go()) setTimeout(w, 300); })();
+    setInterval(rcPhotoRangeBox, 1200);
+    setTimeout(() => { rcPhotoSweep(); }, 15000);
+    setInterval(() => { rcPhotoSweep(); }, 6 * 3600000);
+    const st = document.createElement('style'); st.textContent = '.rcp-dates { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; } .rcp-dates label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; flex: 1 1 130px; } .rcp-dates input { font-size: 16px; padding: 8px 10px; } .rcp-go { margin: 0; }';
+    document.head.appendChild(st);
+})();
+window.__rcPhotoTest = { sweep: rcPhotoSweep, cut: photoCut };
+
 (function registerReceiptAutoDelete() {                       // Settings > Auto Delete
     function go() {
         if (!window.IncAutoDel) return false;
@@ -22077,6 +22172,116 @@ xcss.textContent = [
 ].join('\n');
 document.head.appendChild(xcss);
 setInterval(function () { var p = page(); if (p && p.classList.contains('active')) rangeBox(); }, 1500);
+/* ---------- Google Drive Backup > Saved files ---------- */
+var gd = { files: [], sel: new Set(), busy: false };
+function gdWhen(t) { var d = new Date(t); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+function gdButton() {
+    var card = document.getElementById('gd-card'); if (!card) return false;
+    if (document.getElementById('gd-files-btn')) return true;
+    var row = card.querySelector('button[onclick*="openHistory"]'); if (!row) return false;
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'app-btn'; b.id = 'gd-files-btn';
+    b.innerHTML = '<i class="fas fa-folder-open mr-2"></i> Saved files';
+    b.addEventListener('click', gdOpen);
+    row.parentNode.insertBefore(b, row.nextSibling);
+    return true;
+}
+function gdPanel() {
+    var p = document.getElementById('gd-panel'); if (p) return p;
+    p = document.createElement('div'); p.id = 'gd-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-modal', 'true'); p.setAttribute('aria-label', 'Backup files in Google Drive');
+    p.innerHTML = '<div class="gd-box"><div class="gd-head"><div><h2>Backup files in Google Drive</h2><p id="gd-sub"></p></div><button type="button" class="gd-x" data-gd="close" aria-label="Close"><i class="fas fa-times"></i></button></div>' +
+        '<div class="gd-body" id="gd-body"></div><div class="gd-foot" id="gd-foot"></div></div>';
+    document.body.appendChild(p);
+    p.addEventListener('click', gdClick);
+    p.addEventListener('change', function (e) { var c = e.target.closest('[data-gdf]'); if (!c) return; var id = c.getAttribute('data-gdf'); if (c.checked) gd.sel.add(id); else gd.sel.delete(id); gdFoot(); });
+    return p;
+}
+async function gdOpen() {
+    var p = gdPanel(); p.classList.add('open'); document.documentElement.classList.add('nc-open');
+    document.getElementById('gd-body').innerHTML = '<p class="gd-msg">Loading your backup files from Google Drive...</p>'; document.getElementById('gd-foot').innerHTML = ''; document.getElementById('gd-sub').textContent = '';
+    gd.sel = new Set();
+    try { gd.files = await IncAtorCloud.files.list(); gdPaint(); }
+    catch (e) { document.getElementById('gd-body').innerHTML = '<p class="gd-msg bad">' + esc(e && e.message || 'Google Drive could not be reached') + '</p><p class="gd-msg"><button type="button" class="app-btn" data-gd="retry"><i class="fas fa-sync-alt mr-2"></i>Try again</button></p>'; }
+}
+function gdPaint() {
+    var tot = gd.files.reduce(function (a, f) { return a + (f.size || 0); }, 0);
+    document.getElementById('gd-sub').textContent = gd.files.length + ' file' + (gd.files.length === 1 ? '' : 's') + ' · ' + size(tot) + ' · the newest ' + IncAtorCloud.files.protect + ' are protected';
+    document.getElementById('gd-body').innerHTML = gd.files.length ? gd.files.map(function (f, i) {
+        return '<label class="gd-row' + (f.protect ? ' prot' : '') + '">' +
+            (f.protect ? '<span class="gd-lock" title="Protected"><i class="fas fa-lock"></i></span>' : '<input type="checkbox" data-gdf="' + esc(f.id) + '"' + (gd.sel.has(f.id) ? ' checked' : '') + ' aria-label="Select this backup">') +
+            '<span class="gd-tx"><b>' + esc(gdWhen(f.createdTime)) + (i === 0 ? ' <em class="gd-tag">Latest</em>' : '') + '</b><small>' + esc(f.name) + ' · ' + size(f.size) + (isFinite(f.n) ? ' · ' + f.n + ' jobs' : '') + '</small></span></label>';
+    }).join('') : '<p class="gd-msg">No backup files in Google Drive yet.</p>';
+    gdFoot();
+}
+function gdFoot() {
+    var n = gd.sel.size, free = gd.files.filter(function (f) { return !f.protect; }).length;
+    document.getElementById('gd-foot').innerHTML = '<p class="gd-note">Only IncAtor backup files are shown. Your receipt photos, job photos and work order files are never deleted here.</p>' +
+        '<div class="gd-btns"><button type="button" class="app-btn" data-gd="all"' + (free ? '' : ' disabled') + '>' + (n && n === free ? 'Select none' : 'Select all older') + '</button>' +
+        '<button type="button" class="app-btn gd-del" data-gd="del"' + (n ? '' : ' disabled') + '><i class="fas fa-trash-alt mr-2"></i>Delete' + (n ? ' ' + n : '') + '</button></div>';
+}
+async function gdClick(e) {
+    var b = e.target.closest('[data-gd]'); if (e.target.id === 'gd-panel') b = { getAttribute: function () { return 'close'; } }; if (!b) return;
+    var a = b.getAttribute('data-gd');
+    if (a === 'close') { document.getElementById('gd-panel').classList.remove('open'); document.documentElement.classList.remove('nc-open'); return; }
+    if (a === 'retry') { gdOpen(); return; }
+    if (a === 'all') { var free = gd.files.filter(function (f) { return !f.protect; }); if (gd.sel.size === free.length) gd.sel = new Set(); else gd.sel = new Set(free.map(function (f) { return f.id; })); gdPaint(); return; }
+    if (a === 'del' && gd.sel.size && !gd.busy) {
+        var n = gd.sel.size, ok = true;
+        try { ok = await showConfirmation({ title: 'Delete ' + n + ' backup file' + (n === 1 ? '' : 's') + '?', message: 'They are removed from Google Drive. Your data in IncAtor and your newest backups are not touched.', type: 'danger', confirmText: 'Delete' }); } catch (er) { ok = true; }
+        if (!ok) return;
+        gd.busy = true; b.disabled = true; b.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Deleting...';
+        try {
+            var r = await IncAtorCloud.files.remove(Array.from(gd.sel));
+            try { showToast(r.deleted + ' backup file' + (r.deleted === 1 ? '' : 's') + ' deleted' + (r.protected ? ' (' + r.protected + ' protected, kept)' : ''), 'success'); } catch (er) { /* ignore */ }
+        } catch (er) { try { showToast(er && er.message || 'Could not delete', 'error'); } catch (e2) { /* ignore */ } }
+        gd.busy = false; gdOpen();
+    }
+}
+var gcss = document.createElement('style'); gcss.id = 'incator-gd-css';
+gcss.textContent = [
+'#gd-panel { position: fixed; inset: 0; z-index: 10640; display: none; background: rgba(0,0,0,.55); }',
+'#gd-panel.open { display: flex; justify-content: center; align-items: flex-end; }',
+'@media (min-width: 700px) { #gd-panel.open { align-items: center; } }',
+'.gd-box { width: 100%; max-width: 600px; height: min(90vh, 880px); display: flex; flex-direction: column; background: rgb(18, 14, 32); color: #fff; border: 1px solid rgba(255,255,255,.12); border-radius: 24px 24px 0 0; overflow: hidden; padding-bottom: env(safe-area-inset-bottom, 0px); }',
+'@media (min-width: 700px) { .gd-box { border-radius: 22px; } }',
+'.gd-head { display: flex; justify-content: space-between; gap: 12px; padding: 18px 18px 10px; border-bottom: 1px solid rgba(255,255,255,.08); } .gd-head h2 { margin: 0; font-size: 1.2rem; font-weight: 700; } .gd-head p { margin: 3px 0 0; font-size: .78rem; opacity: .65; }',
+'.gd-x { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: inherit; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }',
+'.gd-body { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 12px; }',
+'.gd-row { display: flex; align-items: center; gap: 12px; padding: 10px 6px; border-bottom: 1px solid rgba(255,255,255,.07); cursor: pointer; }',
+'.gd-row.prot { cursor: default; } .gd-row input { width: 22px; height: 22px; flex: 0 0 auto; } .gd-lock { width: 22px; flex: 0 0 auto; text-align: center; opacity: .55; }',
+'.gd-tx { min-width: 0; } .gd-tx b { display: block; font-size: .9rem; font-weight: 600; } .gd-tx small { display: block; font-size: .72rem; opacity: .6; overflow-wrap: anywhere; }',
+'.gd-tag { font-style: normal; font-size: .66rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(34,197,94,.2); color: #4ade80; margin-left: 6px; }',
+'.gd-msg { padding: 24px 10px; text-align: center; opacity: .75; } .gd-msg.bad { color: #f87171; opacity: 1; }',
+'.gd-foot { border-top: 1px solid rgba(255,255,255,.08); padding: 10px 16px 14px; } .gd-note { font-size: .74rem; opacity: .65; margin: 0 0 10px; } .gd-btns { display: flex; gap: 10px; } .gd-btns .app-btn { flex: 1; justify-content: center; margin: 0; }',
+'.gd-btns .gd-del:not([disabled]) { border-color: rgba(239,68,68,.6); color: #fca5a5; } .gd-btns [disabled] { opacity: .45; }',
+'html.lm .gd-box { background: #fff; color: #1d1733; border-color: rgba(29,23,51,.1); } html.lm .gd-row, html.lm .gd-head, html.lm .gd-foot { border-color: rgba(29,23,51,.08); } html.lm .gd-btns .gd-del:not([disabled]) { color: #b91c1c; }',
+'html[data-theme="sleek"] .gd-box { background: var(--sk-raise) !important; color: var(--sk-fg) !important; border-color: var(--sk-line) !important; } html[data-theme="sleek"] .gd-tag { background: var(--sk-fg) !important; color: var(--sk-bg) !important; }'
+].join('\n');
+document.head.appendChild(gcss);
+setInterval(gdButton, 1500);
+
+/* ---------- Settings > Auto Delete > Old Google Drive backups ---------- */
+(function () {
+    function S(k, d) { try { var v = appSettings[k]; return v == null ? d : v; } catch (e) { return d; } }
+    function sv(k, v) { try { appSettings[k] = v; saveSettings(); } catch (e) { /* ignore */ } }
+    var lastCount = null;
+    function count() { if (!window.IncAtorCloud || !IncAtorCloud.files) return; IncAtorCloud.files.list().then(function (f) { lastCount = f.length; if (window.IncAutoDel) IncAutoDel.paint(); }).catch(function () { /* offline */ }); }
+    function row() {
+        if (!window.IncAutoDel) return false;
+        IncAutoDel.add({ id: 'drivebackups', icon: 'fa-cloud', title: 'Old Google Drive backups',
+            desc: 'Keeps only your newest backup files in Google Drive and deletes the older ones to save space (at least 10 are always kept). Only backup files - never receipt photos, job photos or work order files.',
+            units: ['files'], max: 1000, offNote: 'Off: every backup file is kept in Google Drive.',
+            on: function () { return S('driveKeepOn', true) !== false; },
+            setOn: function (v) { sv('driveKeepOn', !!v); if (v && IncAtorCloud.files) IncAtorCloud.files.prune().then(count, function () { /* later */ }); },
+            days: function () { return Math.max(10, parseInt(S('driveKeep', 50), 10) || 50); },
+            setDays: function (n) { n = Math.max(10, Math.min(1000, parseInt(n, 10) || 50)); sv('driveKeep', n); if (S('driveKeepOn', true) !== false && IncAtorCloud.files) IncAtorCloud.files.prune().then(count, function () { /* later */ }); return n; },
+            due: function () { var k = Math.max(10, parseInt(S('driveKeep', 50), 10) || 50); return lastCount != null && lastCount > k ? lastCount - k : 0; },
+            sweep: function () { return IncAtorCloud.files ? IncAtorCloud.files.prune() : Promise.resolve(0); } });
+        return true;
+    }
+    (function w(n) { if (!row() && n < 80) setTimeout(function () { w(n + 1); }, 300); })(0);
+    document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('#autodelete-settings-section .acc-head')) setTimeout(count, 100); });
+})();
+
 window.IncExportRange = { pick: pick, label: label, suffix: suffix, active: function () { return !!bounds(); }, set: function (o) { Object.assign(R, o || {}); var d = document.getElementById('xr-box'); if (d) { d.remove(); rangeBox(); } }, bad: function () { return R.mode === 'range' && R.from && R.to && R.from > R.to; } };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
@@ -27575,7 +27780,9 @@ function paintButton() {
         hist.hidden = !on || !list.length;
         hist.innerHTML = '<div class="wm-hh">Recent checks</div>' + list.slice(0, 10).map(function (c) {
             var r = c.error ? '<span class="bad">Failed: ' + esc(c.error) + '</span>' : c.found ? '<span class="ok">' + c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found</span>' : '<span>Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '') + '</span>';
-            return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? 'auto' : 'by hand') + '</em>' + r + '</div>';
+            var who = (c.from || []).map(function (f) { return esc([f.n, f.e].filter(Boolean).join(', ')); }).filter(Boolean);
+            return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? 'auto' : 'by hand') + '</em>' + r +
+                (who.length ? '<span class="wm-from"><i class="fas fa-envelope"></i> ' + who.join('<br>') + '</span>' : '') + '</div>';
         }).join('');
     }
 }
@@ -27773,6 +27980,7 @@ var css = [
 '.wm-autorow .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
 '.wm-last { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: .8rem; opacity: .85; margin: 4px 0 10px; } .wm-last em { font-style: normal; opacity: .7; }',
 '.wm-hist { text-align: left; margin-top: 12px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 8px; } .wm-hh { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .6; margin-bottom: 4px; }',
+'.wm-hr .wm-from { grid-column: 1 / -1; font-size: .74rem; opacity: .8; margin-top: -2px; overflow-wrap: anywhere; } .wm-hr .wm-from i { opacity: .6; margin-right: 3px; }',
 '.wm-hr { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; font-size: .78rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); } .wm-hr time { white-space: nowrap; opacity: .85; } .wm-hr em { font-style: normal; font-size: .68rem; opacity: .55; } .wm-hr .ok { font-weight: 600; } .wm-hr .bad { color: #f87171; }',
 'html.lm .wm-autorow { border-color: rgba(29,23,51,.12); background: rgba(29,23,51,.03); } html.lm .wm-hist, html.lm .wm-hr { border-color: rgba(29,23,51,.08); } html.lm .wm-hr .bad { color: #b91c1c; }',
 '#wm-live { margin-top: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); text-align: left; } .wm-lh { display: flex; align-items: center; gap: 8px; } .wm-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: .84rem; } .wm-ev { margin: 6px 0 4px 18px; font-size: .8rem; color: rgba(255,255,255,.8); }',
@@ -28390,7 +28598,7 @@ function split(days, pref) {                                     // 2555 days sh
     if (days >= 365 && days % 365 === 0) return { n: days / 365, u: 'years' };
     return { n: days, u: 'days' };
 }
-function unitOf(r) { return S('adUnit_' + r.id, ''); }
+function unitOf(r) { return S('adUnit_' + r.id, r.unit || ''); }
 function toDays(n, unit) {
     var m = 1; UNITS.forEach(function (u) { if (u[0] === unit) m = u[1]; });
     return Math.max(1, Math.min(36500, Math.round(n * m)));
@@ -28401,7 +28609,7 @@ function add(row) {
     if (!row || !row.id) return;
     for (var i = 0; i < ROWS.length; i++) if (ROWS[i].id === row.id) { ROWS[i] = row; paint(); return; }
     ROWS.push(row);
-    var ORDER = ['photos', 'wofiles', 'receipts', 'notifs', 'oldrecords', 'trash'];
+    var ORDER = ['photos', 'wofiles', 'receipts', 'rcphotos', 'notifs', 'drivebackups', 'oldrecords', 'trash'];
     ROWS.sort(function (a, b) { var x = ORDER.indexOf(a.id), y = ORDER.indexOf(b.id); return (x < 0 ? 50 : x) - (y < 0 ? 50 : y); });
     if (BUILT) { build(true); }
 }
@@ -29529,7 +29737,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v39)';
+var VERSION = '2026.11.13 (v40)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
