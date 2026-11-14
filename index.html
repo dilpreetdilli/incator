@@ -24629,6 +24629,8 @@ function paintVars() {
     var want = on ? (lm ? 'light' : 'dark') + ':' + (lm ? SS('sleekLight', 50) : SS('sleekDark', 50)) : '';
     var orb = on ? String(SS('sleekOrb', 'plain')) : '';
     if (r.getAttribute('data-sk-orb') !== (orb || null)) { if (orb) r.setAttribute('data-sk-orb', orb); else r.removeAttribute('data-sk-orb'); }
+    var pics = on && String(SS('sleekPics', 'grey')) === 'colour' ? 'colour' : '';      // the boy's room (Auto Import) in colour
+    if (r.getAttribute('data-sk-pics') !== (pics || null)) { if (pics) r.setAttribute('data-sk-pics', pics); else r.removeAttribute('data-sk-pics'); }
     if (want === painted) return;
     var keys = Object.keys(PAL_DARK).concat(Object.keys(PAL_LIGHT));
     keys.forEach(function (k) { r.style.removeProperty(k); });
@@ -24650,12 +24652,14 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 /* ---- Settings > Appearance: the Sleek controls (only shown while Sleek is your theme) ---- */
 function setS(k, v) { try { appSettings[k] = v; saveSettings(); } catch (e) { /* ignore */ } }
 function tuneHtml() {
-    var o = String(SS('sleekOrb', 'plain'));
+    var o = String(SS('sleekOrb', 'plain')), pics = String(SS('sleekPics', 'grey'));
     return '<div class="sk-tune-h"><b>Sleek</b><small>Only for the Sleek theme</small></div>' +
         '<label class="sk-sl"><span><b>Dark mode</b><em id="sk-dv"></em></span><input type="range" id="sk-dark" min="0" max="100" step="1" value="' + clamp(SS('sleekDark', 50)) + '" aria-label="How dark the dark mode is"><span class="sk-ends"><i>Deeper</i><i>Softer</i></span></label>' +
         '<label class="sk-sl"><span><b>Light mode</b><em id="sk-lv"></em></span><input type="range" id="sk-light" min="0" max="100" step="1" value="' + clamp(SS('sleekLight', 50)) + '" aria-label="How white the light mode is"><span class="sk-ends"><i>Bright white</i><i>Off-white</i></span></label>' +
         '<div class="sk-orbset"><b>IncAtor icon on Home</b><div class="sk-seg" role="radiogroup" aria-label="IncAtor icon on Home">' +
         [['plain', 'Plain'], ['rings', 'Colour rings'], ['full', 'Full colour']].map(function (x) { return '<button type="button" role="radio" data-skorb="' + x[0] + '" aria-checked="' + (o === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
+        '<div class="sk-orbset"><b>Auto Import room (the boy)</b><div class="sk-seg" role="radiogroup" aria-label="Auto Import room colours">' +
+        [['grey', 'Grey'], ['colour', 'Colour']].map(function (x) { return '<button type="button" role="radio" data-skpics="' + x[0] + '" aria-checked="' + (pics === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
         '<button type="button" class="sk-reset" id="sk-reset">Reset Sleek shades</button>';
 }
 function tuneLabels() {
@@ -24682,6 +24686,8 @@ document.addEventListener('input', function (e) {
 document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-skorb]');
     if (b) { setS('sleekOrb', b.getAttribute('data-skorb')); Array.prototype.forEach.call(document.querySelectorAll('[data-skorb]'), function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); }); paintVars(); try { if (window.IncMode && IncMode.rebuild) IncMode.rebuild(); } catch (er) { /* ignore */ } return; }
+    var pb = e.target.closest && e.target.closest('[data-skpics]');
+    if (pb) { setS('sleekPics', pb.getAttribute('data-skpics')); Array.prototype.forEach.call(document.querySelectorAll('[data-skpics]'), function (x) { x.setAttribute('aria-checked', x === pb ? 'true' : 'false'); }); paintVars(); return; }
     if (e.target.closest && e.target.closest('#sk-reset')) {
         setS('sleekDark', 50); setS('sleekLight', 50); painted = null; paintVars();
         var d = document.getElementById('sk-dark'), l = document.getElementById('sk-light'); if (d) d.value = 50; if (l) l.value = 50; tuneLabels();
@@ -24690,6 +24696,8 @@ document.addEventListener('click', function (e) {
 CSS += '\n' + [
 '#sk-tune { margin: 14px 0 4px; padding: 14px; border-radius: 16px; border: 1px solid var(--sk-line2, rgba(255,255,255,.16)); }',
 '#sk-tune[hidden] { display: none !important; }',
+'html[data-theme="sleek"][data-sk-pics="colour"] .page svg.ob-svg, html[data-theme="sleek"][data-sk-pics="colour"] .page svg.wm-boy { filter: none !important; }',
+'.sk-orbset + .sk-orbset { margin-top: 12px; }',
 '.sk-tune-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; } .sk-tune-h small { opacity: .6; font-size: .75rem; }',
 '.sk-sl { display: block; margin: 10px 0 14px; } .sk-sl > span:first-child { display: flex; justify-content: space-between; font-size: .85rem; } .sk-sl em { font-style: normal; font-size: .72rem; opacity: .6; font-variant-numeric: tabular-nums; }',
 '.sk-sl input[type=range] { width: 100%; margin: 8px 0 2px; height: 28px; filter: none !important; accent-color: var(--sk-fg, #ededee); }',
@@ -27512,6 +27520,8 @@ function injectSettings() {
         '<div class="setting-control"><select id="wo-start" class="magic-input" style="padding:8px 12px;min-width:190px"><option value="upload">Import a work order</option><option value="manual">Fill in the form</option></select></div></div>' +
         '<div class="setting-item" id="wo-manual-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-upload"></i></div><div class="setting-content"><h4 class="setting-title">Import Work Order Manually</h4><p class="setting-description">Pick a work order PDF or screenshots. Same reading, checks and approval as on Create Job.</p></div></div>' +
         '<div class="setting-control"><button type="button" class="app-btn" id="wo-manual-btn"><i class="fas fa-upload mr-2"></i>Choose files</button><input type="file" id="wo-file2" accept="application/pdf,.pdf,image/*" multiple hidden></div></div>' +
+        '<div class="setting-item" id="wo-boyname-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-user"></i></div><div class="setting-content"><h4 class="setting-title">Name your helper</h4><p class="setting-description">The boy on Create New Job who checks your emails. With a name it says, for example, &quot;Sam is working&quot; or &quot;Sam is sleeping&quot;. Leave empty for &quot;Auto Import&quot;.</p></div></div>' +
+        '<div class="setting-control"><input type="text" id="wo-boyname" class="magic-input" maxlength="20" autocomplete="off" autocapitalize="words" placeholder="e.g. Sam" aria-label="Your helper\'s name" style="padding:8px 12px;min-width:160px;font-size:16px"></div></div>' +
         '<p class="wo-sub">PDF Extraction Preferences</p>' +
         '<div class="setting-item" id="wo-notes-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-comment-alt"></i></div><div class="setting-content"><h4 class="setting-title">Extract Notes from Work Orders</h4><p class="setting-description">Off: Notes stays empty. On: copies only the notes and instructions written in the work order, word for word. Never prices, never the email.</p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="wo-notes-toggle" role="switch" tabindex="0" aria-label="Extract Notes from Work Orders"><div class="toggle-orb"></div></div></div></div>' +
@@ -27519,6 +27529,15 @@ function injectSettings() {
         '<div class="setting-control"><div class="magic-toggle" id="wo-ai-toggle" role="switch" tabindex="0" aria-label="Ask the AI reader"><div class="toggle-orb"></div></div></div></div>';
     var body = sec.querySelector('#wos-body') || sec; body.appendChild(box);
     var sel = box.querySelector('#wo-start'); sel.value = startView();
+    var bn = box.querySelector('#wo-boyname'), bnT = 0; bn.value = String(S('woBoyName', '') || '');
+    bn.addEventListener('input', function () {                         // saved as you type; the boy's card updates straight away
+        clearTimeout(bnT);
+        bnT = setTimeout(function () {
+            var v = bn.value.replace(/\s+/g, ' ').trim().slice(0, 20); save('woBoyName', v);
+            try { if (window.IncBoy) IncBoy.tick(); if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
+        }, 400);
+    });
+    bn.addEventListener('change', function () { var v = bn.value.trim(); toast(v ? 'Your helper is now called ' + v : 'Your helper is called Auto Import again', 'success'); });
     sel.addEventListener('change', function () { save('woStartView', sel.value); toast('Create Job will open with ' + (sel.value === 'upload' ? 'Import Work Order' : 'the form'), 'success'); });
     var f2 = box.querySelector('#wo-file2');
     box.querySelector('#wo-manual-btn').addEventListener('click', function () { f2.click(); });
@@ -27970,7 +27989,7 @@ function addButton() {
     var b = document.createElement('div'); b.id = 'wm-checkbox';
     b.innerHTML = '<div class="wm-autorow"><div class="wm-autotx"><b>Auto import</b><small id="wm-auto-sub"></small></div>' +
         '<div class="magic-toggle" id="wm-auto2" role="switch" tabindex="0" aria-checked="false" aria-label="Auto import work orders from Gmail"><div class="toggle-orb"></div></div></div>' +
-        '<div class="wm-sleep" id="wm-sleep" hidden role="status">' + SLEEPER + '<div class="wm-sltx"><b>Auto Import is sleeping</b><small id="wm-sleep-sub"></small></div></div>' +
+        '<div class="wm-sleep" id="wm-sleep" hidden role="status">' + SLEEPER + '<div class="wm-sltx"><b id="wm-sleep-t">Auto Import is sleeping</b><small id="wm-sleep-sub"></small></div></div>' +
         '<div class="wm-office" id="wm-boy" hidden role="status"></div>' +
         '<div class="wm-last" id="wm-last" role="status"></div>' +
         '<button type="button" class="app-btn" id="wm-check"><i class="fas fa-envelope mr-2"></i>Check Gmail for New Work Orders</button><div id="wm-live" hidden></div>' +
@@ -28034,6 +28053,7 @@ function paintButton() {
     var zz = b.querySelector('#wm-sleep'), sl = sleeping(), sc = sched();
     var clk = zz && zz.querySelector('.zb-clk'), wa = sl ? wakeAt() : null;
     if (clk && wa) { var wd = new Date(wa), wt = ((wd.getHours() % 12) || 12) + ':' + String(wd.getMinutes()).padStart(2, '0'); if (clk.textContent !== wt) clk.textContent = wt; }   // the alarm clock shows when he wakes up
+    if (zz) { var zt = zz.querySelector('#wm-sleep-t'), nm = ''; try { nm = String(appSettings.woBoyName || '').replace(/\s+/g, ' ').trim().slice(0, 20); } catch (e) { /* ignore */ } if (zt) zt.textContent = nm ? nm + ' is sleeping' : 'Auto Import is sleeping'; }
     if (zz) { zz.hidden = !sl; var zs = zz.querySelector('#wm-sleep-sub'); if (zs && sl) zs.textContent = 'Outside your schedule (' + schedText(sc) + '). Wakes up ' + wakeStr(wakeAt()) + '. You can still check by hand below.'; }
     b.classList.toggle('wm-asleep', sl);
     if (sub && on && status && status.gmail && sc.on) sub.textContent = sl ? 'On, sleeping now: ' + schedText(sc) : 'On: checking every 5 minutes · ' + schedText(sc);
@@ -28342,7 +28362,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     try { new MutationObserver(function () { if (onAdd()) tick(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
     setInterval(function () { if (onAdd()) { if (Date.now() - statusAt > 60000) tick(); else paintButton(); } }, 30000);
 })();
-window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
+window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, repaint: function () { paintButton(); }, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
 })();
 
 </script>
@@ -29041,6 +29061,7 @@ function asleep() { var m = M(); return !!(m && m.sleeping && m.sleeping()); }
 function nextMark(t) { return Math.floor(t / FIVE) * FIVE + FIVE; }
 function willRun(t) { var m = M(), c = window.IncWOCore, sc = m && m.schedule ? m.schedule() : null; return !sc || !c || !c.schedActive || c.schedActive(sc, t); }
 function latest() { var s = st(); return (s && s.checks && s.checks[0]) || null; }
+function who() { try { return String(appSettings.woBoyName || '').replace(/\s+/g, ' ').trim().slice(0, 20); } catch (e) { return ''; } }   // the name you gave him (Settings > Work Orders)
 function clock(t) { return new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
 function summary(c) {
     if (!c) return '';
@@ -29130,11 +29151,12 @@ function paintText() {
     var t = h.querySelector('#wm-boy-t'), s = h.querySelector('#wm-boy-s'); if (!t || !s) return;
     var a, b;
     if (mode === 'pc') {
-        if (until) { a = 'Check finished'; b = result || 'All done'; }
-        else { a = 'Checking your emails…'; b = manual ? 'Checking Gmail by hand for new work orders' : 'Looking in Gmail for new work orders'; }
+        var nm = who();
+        if (until) { a = nm ? nm + ' finished checking' : 'Check finished'; b = result || 'All done'; }
+        else { a = nm ? nm + ' is checking your emails…' : 'Checking your emails…'; b = manual ? 'Checking Gmail by hand for new work orders' : 'Looking in Gmail for new work orders'; }
     } else {
         var nx = nextMark(Date.now()), k = 0; while (!willRun(nx) && k++ < 2016) nx += FIVE;
-        a = 'Auto Import is awake'; b = ACT_L[ACTS[actI]] + ' · next email check at ' + clock(nx);
+        a = who() ? who() + ' is working' : 'Auto Import is awake'; b = ACT_L[ACTS[actI]] + ' · next email check at ' + clock(nx);
     }
     if (t.textContent !== a) t.textContent = a;
     if (s.textContent !== b) s.textContent = b;
@@ -30429,7 +30451,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v45)';
+var VERSION = '2026.11.14 (v47)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
