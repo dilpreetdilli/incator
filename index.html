@@ -27463,7 +27463,7 @@ function injectAdd() {
     var top = document.createElement('div'); top.id = 'wo-head';
     top.innerHTML = '<div class="wo-seg" role="tablist" aria-label="How to create the job"><button type="button" role="tab" data-wov="upload"><i class="fas fa-clipboard-list mr-2"></i>Import work order</button><button type="button" role="tab" data-wov="manual"><i class="fas fa-edit mr-2"></i>Fill in the form</button></div><div id="wo-pending"></div>' +
         '<div id="wo-zone"><input type="file" id="wo-file" accept="application/pdf,.pdf,image/*" multiple hidden>' +
-        '<div class="wo-drop" role="button" tabindex="0" aria-label="Import Work Order: choose a PDF or screenshots"><span class="wo-dic"><i class="fas fa-clipboard-list"></i></span><b>Import Work Order</b><span>Drop your work order PDF or screenshots here, or tap to choose</span><small>PDF, JPG or PNG. Pick several screenshots of one work order at once. IncAtor reads the work order #, address, date and total - you check them before anything is saved.</small></div>' +
+        '<div class="wo-drop" role="button" tabindex="0" aria-label="Import Work Order: choose a PDF or screenshots. IncAtor reads the work order number, address, date and total, and you check them before anything is saved." title="PDF, JPG or PNG. Pick several screenshots of one work order at once. IncAtor reads the work order #, address, date and total - you check them before anything is saved."><span class="wo-dic"><i class="fas fa-clipboard-list"></i></span><span class="wo-dtx"><b>Import Work Order</b><span>Tap to choose a PDF or screenshots, or drop them here</span></span><i class="fas fa-chevron-right wo-dgo" aria-hidden="true"></i></div>' +
         '<button type="button" class="wo-linkbtn" data-wov="manual">Fill in the form myself instead</button></div>';
     grid.insertBefore(top, grid.firstChild);
     var input = top.querySelector('#wo-file'), drop = top.querySelector('.wo-drop');
@@ -27487,13 +27487,27 @@ function formCleared() {
     if (pending) { pending = null; paintPending(); }                     // the draft is still waiting under "Review", nothing is lost
 }
 
-/* ---------------------------------------------------------------- Settings > App Behavior > Work orders */
+/* ---------------------------------------------------------------- Settings > Work Orders (its own section, under App Behavior)
+   Importing (what Create Job opens with, PDF preferences) and, added by woserver.js, the Email Integration with Auto Import
+   and its schedule. */
+function woSection() {
+    var sec = document.getElementById('wo-settings-section'); if (sec) return sec;
+    var anchor = document.getElementById('live-calc-item'), page = document.getElementById('settings-page');
+    var grid = page && page.querySelector('.form-grid'), behav = anchor && anchor.closest('.magic-calc-display');
+    if (!grid || !behav) return null;
+    sec = document.createElement('div'); sec.className = 'magic-calc-display animate-item'; sec.id = 'wo-settings-section';   // built like the other sections, so it opens the same way
+    sec.style.cssText = 'margin: 20px 0; padding: 20px;';
+    sec.innerHTML = '<div class="live-calc-header" style="margin-bottom: 16px;"><div class="live-calc-icon" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(14, 165, 233, 0.32)); color: #38bdf8;"><i class="fas fa-clipboard-list"></i></div>' +
+        '<div><h3 class="live-calc-title" style="color: #38bdf8;">Work Orders</h3><p class="text-gray-400 text-sm">Importing, Gmail and Auto Import with its schedule</p></div></div><div id="wos-body"></div>';
+    if (behav.parentNode === grid) grid.insertBefore(sec, behav.nextSibling); else grid.appendChild(sec);
+    return sec;
+}
 function injectSettings() {
-    var anchor = document.getElementById('live-calc-item'); if (!anchor) return false;
+    var sec = woSection(); if (!sec) return false;
     if (document.getElementById('wo-settings')) return true;
     var box = document.createElement('div'); box.id = 'wo-settings'; box.className = 'wo-set';
     var aiTxt = function () { return window.RcptStore && RcptStore.aiOn && RcptStore.aiOn() ? 'Uses ' + RcptStore.aiName() + ' (set up in SlipVault settings).' : 'Needs the AI reader set up in Settings > SlipVault. Without it, you fill in what is missing.'; };
-    box.innerHTML = '<h4 class="wo-sh"><i class="fas fa-clipboard-list mr-2"></i>Work orders</h4>' +
+    box.innerHTML = '<h4 class="wo-sh"><i class="fas fa-upload mr-2"></i>Importing</h4>' +
         '<div class="setting-item" id="wo-start-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-clipboard-list"></i></div><div class="setting-content"><h4 class="setting-title">Create Job opens with</h4><p class="setting-description">What you see first on Create Job. The other is always one tap away.</p></div></div>' +
         '<div class="setting-control"><select id="wo-start" class="magic-input" style="padding:8px 12px;min-width:190px"><option value="upload">Import a work order</option><option value="manual">Fill in the form</option></select></div></div>' +
         '<div class="setting-item" id="wo-manual-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-upload"></i></div><div class="setting-content"><h4 class="setting-title">Import Work Order Manually</h4><p class="setting-description">Pick a work order PDF or screenshots. Same reading, checks and approval as on Create Job.</p></div></div>' +
@@ -27503,8 +27517,7 @@ function injectSettings() {
         '<div class="setting-control"><div class="magic-toggle" id="wo-notes-toggle" role="switch" tabindex="0" aria-label="Extract Notes from Work Orders"><div class="toggle-orb"></div></div></div></div>' +
         '<div class="setting-item" id="wo-ai-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-magic"></i></div><div class="setting-content"><h4 class="setting-title">Ask the AI reader when something is missing</h4><p class="setting-description">Only used when a work order # , address, date or total could not be found. Anything it finds is marked for you to check. <span id="wo-ai-note"></span></p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="wo-ai-toggle" role="switch" tabindex="0" aria-label="Ask the AI reader"><div class="toggle-orb"></div></div></div></div>';
-    anchor.parentNode.insertBefore(box, anchor.nextSibling);
-    [1500, 4000, 9000].forEach(function (ms) { setTimeout(function () { if (anchor.nextElementSibling !== box) anchor.parentNode.insertBefore(box, anchor.nextSibling); }, ms); });   // right under Live Calculations
+    var body = sec.querySelector('#wos-body') || sec; body.appendChild(box);
     var sel = box.querySelector('#wo-start'); sel.value = startView();
     sel.addEventListener('change', function () { save('woStartView', sel.value); toast('Create Job will open with ' + (sel.value === 'upload' ? 'Import Work Order' : 'the form'), 'success'); });
     var f2 = box.querySelector('#wo-file2');
@@ -27586,9 +27599,12 @@ var css = [
 '#wo-zone { display: none; margin-top: 12px; }',
 '#add-page.wo-up #wo-zone { display: block; }',
 '#add-page.wo-up #entry-form, #add-page.wo-up #live-calculation-magic, #add-page.wo-up #magic-actions-container, #add-page.wo-up #split-percent-panel, #add-page.wo-up #editing-banner { display: none !important; }',
-'.wo-drop { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 26px 16px; border-radius: 20px; border: 2px dashed rgba(255,255,255,.32); background: rgba(255,255,255,.05); color: #fff; cursor: pointer; transition: background .15s, border-color .15s; }',
+'.wo-drop { display: flex; flex-direction: row; align-items: center; text-align: left; gap: 12px; padding: 12px 14px; border-radius: 16px; border: 2px dashed rgba(255,255,255,.32); background: rgba(255,255,255,.05); color: #fff; cursor: pointer; transition: background .15s, border-color .15s; }',
 '.wo-drop:hover, .wo-drop:focus-visible, #add-page.wo-dragging .wo-drop { background: rgba(var(--pr2), .16); border-color: rgba(var(--pr2), .9); outline: none; }',
-'.wo-dic { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: rgba(var(--pr2), .25); margin-bottom: 4px; }',
+'.wo-dic { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: rgba(var(--pr2), .25); }',
+'.wo-dtx { display: block; flex: 1 1 auto; min-width: 0; } .wo-dtx b { display: block; font-size: 1rem !important; line-height: 1.2; } .wo-dtx span { display: block; font-size: .78rem !important; line-height: 1.3; margin-top: 2px; color: rgba(255,255,255,.75); }',
+'.wo-dgo { flex: 0 0 auto; font-size: .8rem; opacity: .55; }',
+'html.lm .wo-dtx span { color: rgba(29,23,51,.68); }',
 '.wo-drop b { font-size: 1.1rem; } .wo-drop > span:not(.wo-dic) { font-size: .92rem; color: rgba(255,255,255,.88); } .wo-drop small { font-size: .78rem; color: rgba(255,255,255,.7); max-width: 460px; line-height: 1.4; }',
 '.wo-linkbtn { display: block; margin: 10px auto 0; background: none; border: 0; color: rgba(255,255,255,.85); text-decoration: underline; font: inherit; font-size: .88rem; cursor: pointer; padding: 6px; }',
 '.wo-pend { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(251,191,36,.14); border: 1px solid rgba(251,191,36,.45); color: #fff; font-size: .9rem; }',
@@ -27695,7 +27711,7 @@ function fetchSess(hdr) {                                       // quietly, in t
     return getting;
 }
 async function api(path, body, raw) {
-    var base = server(); if (!base) throw Object.assign(new Error('Add your IncAtor server address first (Settings > App Behavior > Work Order Email Integration).'), { noserver: true });
+    var base = server(); if (!base) throw Object.assign(new Error('Add your IncAtor server address first (Settings > Work Orders > Work Order Email Integration).'), { noserver: true });
     var ses = path === '/hello' ? null : sess(), r, usedSess = false, hdr = {};
     async function send() {
         hdr = path === '/hello' ? {} : (ses ? { 'x-inc-session': ses.s } : { 'x-google-token': await token() });
@@ -27775,7 +27791,7 @@ function schedHtml() {
         '</div></div>';
 }
 
-/* ---------------------------------------------------------------- Settings > App Behavior > Work Order Email Integration */
+/* ---------------------------------------------------------------- Settings > Work Orders > Work Order Email Integration */
 function section() {
     var anchor = document.getElementById('wo-settings'); if (!anchor) return false;
     if (document.getElementById('wo-mail')) return true;
@@ -27940,7 +27956,7 @@ async function pickEmail(q) {
 async function toggleAuto() {
     if (!status || status.error) await refresh(true);
     if (!status || status.error) { toast(status && status.error || 'Your IncAtor server is not reachable', 'error'); return; }
-    if (!status.gmail) { toast('Connect your work order Gmail first: Settings > App Behavior > Work Order Email Integration', 'info'); return; }
+    if (!status.gmail) { toast('Connect your work order Gmail first: Settings > Work Orders > Work Order Email Integration', 'info'); return; }
     if (status.settings.auto_on) { try { await api('/settings', { auto_on: false }); toast('Automatic import is off', 'info'); } catch (err) { toast(err.message, 'error'); } refresh(true); return; }
     var start = await askStart(); if (!start) return;
     try { await api('/settings', { auto_on: true, start_at: start }); toast('Automatic import is on, from ' + dayStr(start), 'success'); } catch (err) { toast(err.message, 'error'); }
@@ -27963,6 +27979,7 @@ function addButton() {
     b.querySelector('#wm-check').addEventListener('click', checkNow);
     var tg = b.querySelector('#wm-auto2');
     tg.addEventListener('click', toggleAuto);
+    b.querySelector('#wm-hist').addEventListener('click', function (e) { if (e.target.closest('.wm-hh')) toggleHist(); });
     tg.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuto(); } });
     paintButton(); return true;
 }
@@ -27998,22 +28015,49 @@ function paintButton() {
     var lc = status && status.gmail && status.gmail.last_check;
     if (last) last.innerHTML = '<i class="fas fa-clock"></i><span>Last checked: <b>' + (lc ? esc(stamp(lc)) + '</b> <em>(' + esc(ago(lc)) + ')</em>' : 'never</b>') + '</span>';
     var list = (status && status.checks) || [];
-    if (hist) {
-        hist.hidden = !on || !list.length;
-        hist.innerHTML = '<div class="wm-hh">Recent checks</div>' + list.slice(0, 10).map(function (c) {
-            var r = c.error ? '<span class="bad">Failed: ' + esc(c.error) + '</span>' : c.found ? '<span class="ok">' + c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found</span>' : '<span>Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '') + '</span>';
-            var who = (c.from || []).map(function (f) { return esc([f.n, f.e].filter(Boolean).join(', ')); }).filter(Boolean);
-            return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? 'auto' : 'by hand') + '</em>' + r +
-                (who.length ? '<span class="wm-from"><i class="fas fa-envelope"></i> ' + who.join('<br>') + '</span>' : '') + '</div>';
-        }).join('');
-    }
+    if (hist) paintHist(hist, on, list);
+}
+/* Recent checks: folded up as one summary line of the last 24 hours; tap it to open every check of the day */
+var histOpen = false, histDay = null, histAt = 0, histBusy = false;
+function rowHtml(c) {
+    var r = c.error ? '<span class="bad">Failed: ' + esc(c.error) + '</span>' : c.found ? '<span class="ok">' + c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found</span>' : '<span>Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '') + '</span>';
+    var who = (c.from || []).map(function (f) { return esc([f.n, f.e].filter(Boolean).join(', ')); }).filter(Boolean);
+    return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? (c.wake ? 'woke up' : 'auto') : 'by hand') + '</em>' + r +
+        (c.wake ? '<span class="wm-from"><i class="fas fa-sun"></i> First check of the day: looked back to ' + esc(stamp(c.wake)) + '</span>' : '') +
+        (who.length ? '<span class="wm-from"><i class="fas fa-envelope"></i> ' + who.join('<br>') + '</span>' : '') + '</div>';
+}
+function daySum() {
+    var d = status && status.checks_day, list = (status && status.checks) || [];
+    if (!d) { var cut = Date.now() - 86400000, L = list.filter(function (c) { return Date.parse(c.at) >= cut; }); d = { n: L.length, found: L.reduce(function (t, c) { return t + (c.found || 0); }, 0), failed: L.filter(function (c) { return c.error; }).length }; }
+    return d;
+}
+function paintHist(hist, on, list) {
+    var d = daySum();
+    hist.hidden = !on || !(d.n || list.length);
+    if (hist.hidden) return;
+    var bits = [d.n + ' check' + (d.n === 1 ? '' : 's')];
+    bits.push(d.found ? d.found + ' work order' + (d.found === 1 ? '' : 's') + ' found' : 'no new work orders');
+    if (d.failed) bits.push(d.failed + ' failed');
+    var rows = histOpen ? ((histDay && histDay.checks) || list) : [];
+    hist.innerHTML = '<button type="button" class="wm-hh" aria-expanded="' + histOpen + '" aria-controls="wm-hlist"><span><b>Recent checks</b> · last 24 hours<small>' + esc(bits.join(' · ')) + '</small></span><i class="fas fa-chevron-down wm-hchev"></i></button>' +
+        (histOpen ? '<div class="wm-hlist" id="wm-hlist">' + (histBusy && !histDay ? '<p class="wm-note">Getting the full day...</p>' : '') + rows.map(rowHtml).join('') +
+            (!rows.length && !histBusy ? '<p class="wm-note">No checks in the last 24 hours.</p>' : '') + '</div>' : '');
+    hist.classList.toggle('open', histOpen);
+}
+async function toggleHist() {
+    histOpen = !histOpen; paintButton();
+    if (!histOpen || histBusy || (histDay && Date.now() - histAt < 60000)) return;
+    histBusy = true; paintButton();
+    try { histDay = await api('/checks'); histAt = Date.now(); }
+    catch (e) { histDay = null; if (!/404|not found/i.test(e.message)) toast(e.message, 'error'); }    // an older server: the latest 20 are shown instead
+    histBusy = false; paintButton();
 }
 var watching = null;
 async function checkNow() {
     if (watching) return;
     if (!status || status.error) await refresh(true);
     if (!status || status.error) { if (status && status.signin) showLive({ status: 'failed', error: status.error, signin: true }); else toast(status && status.error || 'Your IncAtor server is not reachable', 'error'); return; }
-    if (!status.gmail) { toast('Connect your work order Gmail first: Settings > App Behavior > Work Order Email Integration', 'info'); return; }
+    if (!status.gmail) { toast('Connect your work order Gmail first: Settings > Work Orders > Work Order Email Integration', 'info'); return; }
     if (window.IncBoy) IncBoy.manual(true);                         // the boy sits down at the computer while it runs
     try { var j = await api('/check', {}); watchRun(j.run, 'Checking Gmail'); } catch (e) { if (window.IncBoy) IncBoy.manual(false, 'The check did not start'); showLive({ status: e.reconnect ? 'reconnect' : 'failed', error: e.message }); }
 }
@@ -28150,7 +28194,7 @@ function notifSection() {
 }
 async function paintNotif() {
     var body = document.getElementById('nt-body'); if (!body) return;
-    if (!server()) { body.innerHTML = '<p class="wm-note">Notifications come from your IncAtor server. Add its address first in App Behavior &gt; Work Order Email Integration.</p>'; return; }
+    if (!server()) { body.innerHTML = '<p class="wm-note">Notifications come from your IncAtor server. Add its address first in Settings &gt; Work Orders &gt; Work Order Email Integration.</p>'; return; }
     if (!status || status.error) { body.innerHTML = '<p class="wm-note ' + (status && status.error ? 'wm-bad' : '') + '">' + esc(status && status.error || 'Checking the server...') + '</p>' + (status && status.signin ? googleBtn() : ''); return; }
     var ps = pushSupport(), sub = ps.ok ? await mySub() : null, p = status.prefs, mine = sub && status.devices.some(function (d) { return sub.endpoint.slice(-24) === d.endpoint; });
     var permTxt = !ps.ok ? ps.why : ps.perm === 'granted' ? 'Allowed' : ps.perm === 'denied' ? 'Blocked - allow notifications for IncAtor in your browser or phone settings' : 'Not asked yet';
@@ -28203,6 +28247,9 @@ var css = [
 '.wm-autotx b { display: block; font-size: .92rem; } .wm-autotx small { display: block; font-size: .76rem; opacity: .7; line-height: 1.35; margin-top: 2px; }',
 '.wm-autorow .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
 '.wm-last { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: .8rem; opacity: .85; margin: 4px 0 10px; } .wm-last em { font-style: normal; opacity: .7; }',
+'.wm-hh { display: flex !important; align-items: center; gap: 10px; width: 100%; padding: 8px 2px !important; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; text-transform: none !important; letter-spacing: 0 !important; opacity: 1 !important; font-size: .8rem !important; font-weight: 500 !important; }',
+'.wm-hh > span { flex: 1 1 auto; min-width: 0; } .wm-hh b { font-weight: 700; } .wm-hh small { display: block; font-size: .74rem; opacity: .7; margin-top: 2px; } .wm-hchev { flex: 0 0 auto; transition: transform .2s ease; opacity: .7; } .wm-hist.open .wm-hchev { transform: rotate(180deg); }',
+'.wm-hlist { max-height: 340px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-right: 2px; }',
 '.wm-hist { text-align: left; margin-top: 12px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 8px; } .wm-hh { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .6; margin-bottom: 4px; }',
 '.wm-hr .wm-from { grid-column: 1 / -1; font-size: .74rem; opacity: .8; margin-top: -2px; overflow-wrap: anywhere; } .wm-hr .wm-from i { opacity: .6; margin-right: 3px; }',
 '.wm-hr { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; font-size: .78rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); } .wm-hr time { white-space: nowrap; opacity: .85; } .wm-hr em { font-style: normal; font-size: .68rem; opacity: .55; } .wm-hr .ok { font-weight: 600; } .wm-hr .bad { color: #f87171; }',
@@ -28217,15 +28264,16 @@ var css = [
 'html.lm .wm-sched { background: rgba(29,23,51,.03); border-color: rgba(29,23,51,.1); } html.lm .wm-day { border-color: rgba(29,23,51,.18); } html.lm .wm-day.on { background: rgba(var(--pr1, 124, 58, 237), .14); border-color: rgba(var(--pr1, 124, 58, 237), .55); }',
 'html[data-theme="sleek"] .wm-day.on { background: var(--sk-fg) !important; color: var(--sk-bg) !important; border-color: var(--sk-fg) !important; }',
 /* sleeping boy */
-'.wm-sleep { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; margin: 0 0 8px; border-radius: 14px; background: linear-gradient(135deg, rgba(49,46,129,.35), rgba(30,27,75,.2)); border: 1px solid rgba(165,180,252,.22); }',
+'.wm-sleep { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 14px 12px 12px; margin: 0 0 8px; border-radius: 14px; background: linear-gradient(135deg, rgba(49,46,129,.35), rgba(30,27,75,.2)); border: 1px solid rgba(165,180,252,.22); }',
 '.wm-sleep[hidden] { display: none; } .wm-sltx { min-width: 0; } .wm-sltx b { display: block; font-size: .9rem; } .wm-sltx small { display: block; font-size: .76rem; opacity: .78; line-height: 1.35; margin-top: 2px; }',
-'.wm-zzz { position: relative; flex: 0 0 auto; width: 92px; height: 56px; } .wm-boy { position: absolute; left: 0; bottom: 0; width: 92px; height: 49px; overflow: visible; }',
+'.wm-zzz { position: relative; flex: 0 0 auto; width: 220px; max-width: 100%; height: 134px; } .wm-boy { position: absolute; left: 0; bottom: 0; width: 220px; max-width: 100%; height: 117px; overflow: visible; }',
 '.zb-pil { fill: #e0e7ff; } .zb-skin { fill: #f6c9a1; } .zb-hair { fill: #4a3426; } .zb-eye, .zb-mouth { fill: none; stroke: #4a3426; stroke-width: 1.5; stroke-linecap: round; } .zb-cheek { fill: #f59e9e; opacity: .55; }',
 '.zb-blank { fill: #6366f1; transform-box: fill-box; transform-origin: 50% 100%; animation: zbBreath 3.2s ease-in-out infinite; } .zb-fold { fill: none; stroke: rgba(255,255,255,.35); stroke-width: 1.6; stroke-linecap: round; } .zb-bed { fill: rgba(255,255,255,.18); }',
 '.zb-head { transform-box: fill-box; transform-origin: 50% 90%; animation: zbNod 3.2s ease-in-out infinite; }',
-'.wm-zzz .z { position: absolute; left: 34px; top: 10px; font-weight: 800; font-family: var(--font, sans-serif); color: #c7d2fe; opacity: 0; animation: zbFloat 3s ease-in infinite; pointer-events: none; }',
-'.wm-zzz .z1 { font-size: 11px; animation-delay: 0s; } .wm-zzz .z2 { font-size: 14px; animation-delay: 1s; } .wm-zzz .z3 { font-size: 18px; animation-delay: 2s; }',
-'@keyframes zbFloat { 0% { opacity: 0; transform: translate(0, 0) rotate(-8deg) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(26px, -30px) rotate(12deg) scale(1.15); } }',
+'.wm-zzz .z { position: absolute; left: 80px; top: 22px; font-weight: 800; font-family: var(--font, sans-serif); color: #c7d2fe; opacity: 0; animation: zbFloat 3s ease-in infinite; pointer-events: none; }',
+'.wm-zzz .z1 { font-size: 20px; animation-delay: 0s; } .wm-zzz .z2 { font-size: 27px; animation-delay: 1s; } .wm-zzz .z3 { font-size: 35px; animation-delay: 2s; }',
+'@keyframes zbFloat { 0% { opacity: 0; transform: translate(0, 0) rotate(-8deg) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(60px, -64px) rotate(12deg) scale(1.15); } }',
+'.wm-sleep .wm-sltx b { font-size: .95rem; } .wm-sleep .wm-sltx small { max-width: 320px; margin: 2px auto 0; }',
 '@keyframes zbBreath { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.07); } }',
 '@keyframes zbNod { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-3deg); } }',
 '@media (prefers-reduced-motion: reduce) { .wm-zzz .z { animation-duration: 6s; } .zb-blank, .zb-head { animation: none; } }',
@@ -28382,7 +28430,7 @@ function paint() {
     var h = '';
     if (att) h += '<button type="button" class="nc-att" data-nc="att"><span class="nc-ic"><i class="fas fa-clipboard-list"></i></span><span class="nc-tx"><b>' + att + ' imported work order' + (att === 1 ? ' needs' : 's need') + ' you</b><small>Review, approve or add the PDF</small></span><i class="fas fa-chevron-right"></i></button>';
     if (serverErr) h += '<div class="nc-warn"><i class="fas fa-exclamation-circle"></i><span>' + esc(serverErr) + '</span>' + (serverSignin ? '<button type="button" class="app-btn wo-pri" data-google="1">Continue with Google</button>' : '') + '</div>';
-    if (!list.length) h += '<div class="nc-empty"><i class="fas fa-bell"></i><p>No notifications</p><small>' + (serverOn() ? 'Work orders from Gmail and anything that needs you will show up here.' : 'Add your IncAtor server (Settings &gt; App Behavior &gt; Work Order Email Integration) to get notifications about work orders from Gmail.') + '</small></div>';
+    if (!list.length) h += '<div class="nc-empty"><i class="fas fa-bell"></i><p>No notifications</p><small>' + (serverOn() ? 'Work orders from Gmail and anything that needs you will show up here.' : 'Add your IncAtor server (Settings &gt; Work Orders &gt; Work Order Email Integration) to get notifications about work orders from Gmail.') + '</small></div>';
     var day = '';
     list.forEach(function (n) {
         var d = new Date(n.at), k = d.toDateString(), lab = k === new Date().toDateString() ? 'Today' : k === new Date(Date.now() - 86400000).toDateString() ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -28947,6 +28995,7 @@ window.IncOldRec = { sweep: sweep, counts: function () { return counts(cutoff())
 'use strict';
 if (window.IncBoy) return;
 var FIVE = 300000, LEAD = 5000, HOLD = 3000, GIVEUP = 90000;
+var ACTS = ['stamp', 'coffee', 'read', 'phone'], ACT_L = { stamp: 'Stamping papers', coffee: 'Coffee break', read: 'Reading a work order', phone: 'On the phone with a customer' }, ACT_MS = 7000, actI = 0, actAt = 0;
 var mode = '', mark = 0, until = 0, polling = false, lastPoll = 0, manual = false, result = '', built = false;
 
 function M() { return window.IncMail || null; }
@@ -28979,8 +29028,13 @@ var SCENE = '<svg class="ob-svg" viewBox="0 0 170 92" aria-hidden="true">' +
     '<rect class="ob-wood" x="96" y="56" width="70" height="4" rx="1.5"/><rect class="ob-wood2" x="100" y="60" width="3" height="26"/><rect class="ob-wood2" x="159" y="60" width="3" height="26"/>' +
     '<rect class="ob-mon" x="112" y="26" width="40" height="26" rx="2.5"/><rect class="ob-stand" x="129" y="52" width="6" height="4"/>' +
     '<rect class="ob-scr" x="115" y="29" width="34" height="20" rx="1"/>' +
-    '<g class="ob-scrc"><rect class="ob-env" x="124" y="32" width="16" height="11" rx="1.2"/><path class="ob-flap" d="M124.6 32.6l7.4 5.4 7.4-5.4"/>' +
-    '<rect class="ob-bar" x="118" y="45.2" width="28" height="1.8" rx=".9"/><rect class="ob-prog" x="118" y="45.2" width="28" height="1.8" rx=".9"/></g>' +
+    '<defs><clipPath id="ob-clip"><rect x="115" y="29" width="34" height="20" rx="1"/></clipPath></defs>' +
+    '<g class="ob-scrc" clip-path="url(#ob-clip)">' +
+    '<g class="ob-inbox"><rect class="ob-ibar" x="115" y="29" width="34" height="2.2"/><g class="ob-list"><rect class="ob-row" x="115.8" y="30.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="31.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="31.4" width="12" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="33.1" width="22" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="35.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="36.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="36.4" width="17" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="38.1" width="19" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="40.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="41.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="41.4" width="22" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="43.1" width="16" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="45.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="46.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="46.4" width="14" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="48.1" width="22" height=".8" rx=".4"/><rect class="ob-row hl" x="115.8" y="50.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="51.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="51.4" width="19" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="53.1" width="19" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="55.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="56.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="56.4" width="24" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="58.1" width="16" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="60.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="61.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="61.4" width="16" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="63.1" width="22" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="65.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="66.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="66.4" width="21" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="68.1" width="19" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="70.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="71.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="71.4" width="13" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="73.1" width="16" height=".8" rx=".4"/><rect class="ob-row" x="115.8" y="75.6" width="32.4" height="4.3" rx=".6"/><rect class="ob-ric" x="117" y="76.6" width="3.6" height="2.4" rx=".4"/><rect class="ob-rl1" x="122" y="76.4" width="18" height="1.1" rx=".5"/><rect class="ob-rl2" x="122" y="78.1" width="22" height=".8" rx=".4"/></g></g>' +
+    '<g class="ob-open"><rect class="ob-obg" x="115" y="29" width="34" height="20"/><rect class="ob-ohd" x="115" y="29" width="34" height="3.4"/><circle class="ob-oav" cx="118.4" cy="35.6" r="1.6"/>' +
+    '<rect class="ob-osub" x="121" y="34.4" width="15" height="1.3" rx=".5"/><rect class="ob-ofrom" x="121" y="36.4" width="10" height=".8" rx=".4"/><rect class="ob-owo" x="139" y="34.2" width="8" height="2.6" rx=".7"/>' +
+    '<rect class="ob-oln" x="117" y="39" width="29" height=".9" rx=".4"/><rect class="ob-oln" x="117" y="40.8" width="25" height=".9" rx=".4"/><rect class="ob-oln" x="117" y="42.6" width="27" height=".9" rx=".4"/>' +
+    '<rect class="ob-opdf" x="117" y="44.6" width="9" height="3" rx=".7"/><rect class="ob-opdl" x="118.2" y="45.7" width="5" height=".8" rx=".4"/><g class="ob-ook"><circle cx="144.6" cy="46" r="1.9"/><path d="M143.7 46l.7.7 1.2-1.3"/></g></g></g>' +
     '<g class="ob-idle"><circle cx="126" cy="39" r="1.2"/><circle cx="132" cy="39" r="1.2"/><circle cx="138" cy="39" r="1.2"/></g>' +
     '<rect class="ob-key" x="104" y="53.6" width="18" height="2.4" rx=".8"/>' +
     '<g class="ob-mug"><rect x="152" y="49" width="7" height="7" rx="1.5"/><path class="ob-handle" d="M159 50.6c2.4 0 2.4 3.6 0 3.6"/>' +
@@ -28994,14 +29048,22 @@ var SCENE = '<svg class="ob-svg" viewBox="0 0 170 92" aria-hidden="true">' +
         '<rect class="ob-shirt" x="-6.5" y="-33" width="11" height="20" rx="4.5"/>' +
         '<g class="ob-head"><circle class="ob-skin" cx="0" cy="-42" r="8.5"/>' +
             '<path class="ob-hair" d="M-8.4 -43.4c.4-6.2 5-9.4 9.6-9.2 4.4.2 7.6 3 8 6.6-2.4-1.6-5-2-7.4-1.4-.8-1.4-2.4-2-4-1.6.4 1 .4 2 0 2.8-2.2-.4-4.4.6-6.2 2.8z"/>' +
-            '<circle class="ob-eye" cx="4" cy="-42.6" r="1.05"/><path class="ob-mouth" d="M3.6 -38.6q1.6 .9 3 0"/><ellipse class="ob-cheek" cx="1.4" cy="-39.8" rx="1.6" ry="1"/></g>' +
+            '<circle class="ob-eye" cx="4" cy="-42.6" r="1.05"/><path class="ob-mouth" d="M3.6 -38.6q1.6 .9 3 0"/><ellipse class="ob-cheek" cx="1.4" cy="-39.8" rx="1.6" ry="1"/>' +
+            '</g>' +
         '<g class="ob-arm"><path class="ob-sleeve" d="M0 -30L9 -27.4L17 -31"/><circle class="ob-skin" cx="17.4" cy="-31.2" r="2.1"/>' +
-            '<g class="ob-stamp"><rect class="ob-sh" x="16.2" y="-38.6" width="2.6" height="6"/><rect class="ob-sb" x="14.4" y="-30.2" width="6.2" height="2.4" rx=".8"/></g></g>' +
-    '</g></g></svg>';
+            '<g class="ob-stamp"><rect class="ob-sh" x="16.2" y="-38.6" width="2.6" height="6"/><rect class="ob-sb" x="14.4" y="-30.2" width="6.2" height="2.4" rx=".8"/></g>' +
+            '<g class="ob-cup"><rect class="ob-cupb" x="15.6" y="-37.2" width="5.4" height="6.4" rx="1.3"/><path class="ob-cuph" d="M21 -35.6c2 0 2 3 0 3"/></g>' +
+            '<g class="ob-doc"><rect class="ob-paper" x="16" y="-42" width="10" height="13" rx=".8"/><path class="ob-docl" d="M18 -39h6M18 -36.6h6M18 -34.2h4.4"/></g>' +
+            '</g>' +
+    '<g class="ob-phone"><rect class="ob-phb" x="-7.2" y="-49" width="4.4" height="10.5" rx="1.3" transform="rotate(-14 -5 -43.7)"/><rect class="ob-phs" x="-6.4" y="-47.6" width="2.8" height="7.6" rx=".6" transform="rotate(-14 -5 -43.7)"/></g>' +
+    '</g></g>' +
+    '<g class="ob-talk" transform="translate(-17 3)"><path class="ob-bub" d="M38 10h22a5 5 0 0 1 5 5v5a5 5 0 0 1-5 5h-12l-5 4v-4h-5a5 5 0 0 1-5-5v-5a5 5 0 0 1 5-5z"/><circle class="ob-dot d1" cx="43" cy="17.5" r="1.4"/><circle class="ob-dot d2" cx="49" cy="17.5" r="1.4"/><circle class="ob-dot d3" cx="55" cy="17.5" r="1.4"/></g>' +
+    '</svg>';
 
 function ensure(h) {
     if (built && h.querySelector('.ob-svg')) return;
     h.innerHTML = '<div class="ob-scene">' + SCENE + '</div><div class="wm-sltx ob-tx"><b id="wm-boy-t"></b><small id="wm-boy-s"></small></div>';
+    h.setAttribute('data-act', ACTS[actI]);
     built = true;
 }
 function set(m) {
@@ -29017,7 +29079,7 @@ function paintText() {
         else { a = 'Checking your emails…'; b = manual ? 'Checking Gmail by hand for new work orders' : 'Looking in Gmail for new work orders'; }
     } else {
         var nx = nextMark(Date.now()), k = 0; while (!willRun(nx) && k++ < 2016) nx += FIVE;
-        a = 'Auto Import is awake'; b = 'Doing office work · next email check at ' + clock(nx);
+        a = 'Auto Import is awake'; b = ACT_L[ACTS[actI]] + ' · next email check at ' + clock(nx);
     }
     if (t.textContent !== a) t.textContent = a;
     if (s.textContent !== b) s.textContent = b;
@@ -29049,7 +29111,11 @@ function tick() {
             if (now > mark + GIVEUP) { until = now; result = 'Finished on your server'; }
         }
     }
-    if (mode === 'pc' && until && now >= until) { until = 0; set('office'); }
+    if (mode === 'pc' && until && now >= until) { until = 0; set('office'); actAt = now; }
+    if (mode === 'office' && now - actAt >= ACT_MS) {                  // something else to do every few seconds
+        if (actAt) actI = (actI + 1) % ACTS.length;
+        actAt = now; h.setAttribute('data-act', ACTS[actI]);
+    }
     if (!mode) set('office');
     paintText();
 }
@@ -29070,7 +29136,11 @@ var css = [
 '.ob-cf { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.2; } .ob-ch, .ob-cm { stroke: #334155; stroke-width: 1.2; stroke-linecap: round; fill: none; } .ob-cc { fill: #334155; }',
 '.ob-cm { transform-box: view-box; transform-origin: 72px 16px; animation: obTurn 8s linear infinite; } .ob-ch { transform-box: view-box; transform-origin: 72px 16px; animation: obTurn 96s linear infinite; }',
 '.ob-mon { fill: #1f2937; } .ob-stand { fill: #374151; } .ob-scr { fill: #111827; transition: fill .4s ease; } .ob-key { fill: #475569; }',
-'.ob-scrc { opacity: 0; transition: opacity .3s ease; } .ob-env { fill: #f8fafc; } .ob-flap { fill: none; stroke: #2563eb; stroke-width: 1.1; stroke-linejoin: round; } .ob-bar { fill: rgba(255,255,255,.25); } .ob-prog { fill: #7dd3fc; transform-box: fill-box; transform-origin: 0 50%; transform: scaleX(0); }',
+'.ob-scrc { opacity: 0; transition: opacity .3s ease; }',
+'.ob-ibar { fill: #1e40af; } .ob-row { fill: #dbeafe; } .ob-row.hl { fill: #fde68a; } .ob-ric { fill: #2563eb; } .ob-rl1 { fill: #1e3a8a; } .ob-rl2 { fill: #93c5fd; }',
+'.ob-obg { fill: #f8fafc; } .ob-ohd { fill: #2563eb; } .ob-oav { fill: #f59e0b; } .ob-osub { fill: #0f172a; } .ob-ofrom { fill: #94a3b8; } .ob-owo { fill: #16a34a; } .ob-oln { fill: #cbd5e1; } .ob-opdf { fill: #fee2e2; stroke: #ef4444; stroke-width: .4; } .ob-opdl { fill: #ef4444; }',
+'.ob-ook circle { fill: #16a34a; } .ob-ook path { fill: none; stroke: #fff; stroke-width: .6; stroke-linecap: round; stroke-linejoin: round; }',
+'.ob-open { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; } .ob-ook { opacity: 0; }',
 '.ob-idle circle { fill: #334155; }',
 '.ob-mug rect { fill: #ef4444; } .ob-handle { fill: none; stroke: #ef4444; stroke-width: 1.4; } .ob-steam { fill: none; stroke: rgba(255,255,255,.55); stroke-width: .9; stroke-linecap: round; animation: obSteam 2.6s ease-in-out infinite; } .ob-steam.s2 { animation-delay: 1.3s; }',
 '.ob-skin { fill: #f6c9a1; } .ob-hair { fill: #4a3426; } .ob-eye { fill: #2b1d14; } .ob-mouth { fill: none; stroke: #4a3426; stroke-width: .9; stroke-linecap: round; } .ob-cheek { fill: #f59e9e; opacity: .5; }',
@@ -29085,9 +29155,27 @@ var css = [
 '.ob-arm { transform-box: view-box; transform-origin: 0 -30px; animation: obStamp 1.6s ease-in-out infinite; } .ob-mark rect { animation: obInk 1.6s ease-in-out infinite; }',
 '.ob-head { transform-box: view-box; transform-origin: 0 -34px; animation: obLook 4.8s ease-in-out infinite; }',
 '.wm-office[data-mode="pc"] .ob-stamp, .wm-office[data-mode="pc"] .ob-mark { display: none; }',
+/* other office work: coffee, reading a work order, a phone call */
+'.ob-cup, .ob-doc, .ob-phone, .ob-talk { display: none; } .ob-cupb { fill: #f8fafc; stroke: #94a3b8; stroke-width: .5; } .ob-cuph { fill: none; stroke: #94a3b8; stroke-width: 1.1; } .ob-docl { stroke: #94a3b8; stroke-width: .8; stroke-linecap: round; } .ob-phb { fill: #111827; } .ob-phs { fill: #38bdf8; opacity: .85; }',
+'.ob-bub { fill: #f8fafc; } .ob-dot { fill: #475569; animation: obDot 1.2s ease-in-out infinite; } .ob-dot.d2 { animation-delay: .2s; } .ob-dot.d3 { animation-delay: .4s; }',
+'.wm-office:not([data-mode="pc"])[data-act]:not([data-act="stamp"]) .ob-stamp, .wm-office:not([data-mode="pc"])[data-act]:not([data-act="stamp"]) .ob-mark { display: none; }',
+'.wm-office:not([data-mode="pc"])[data-act="coffee"] .ob-cup { display: inline; } .wm-office:not([data-mode="pc"])[data-act="coffee"] .ob-arm { animation: obSip 3.5s ease-in-out infinite; }',
+'.wm-office:not([data-mode="pc"])[data-act="read"] .ob-doc { display: inline; } .wm-office:not([data-mode="pc"])[data-act="read"] .ob-arm { animation: obRead 2.4s ease-in-out infinite; } .wm-office:not([data-mode="pc"])[data-act="read"] .ob-head { animation: obNod 2.4s ease-in-out infinite; }',
+'.wm-office:not([data-mode="pc"])[data-act="phone"] .ob-phone, .wm-office:not([data-mode="pc"])[data-act="phone"] .ob-talk { display: inline; } .wm-office:not([data-mode="pc"])[data-act="phone"] .ob-arm { animation: obPhone 2s ease-in-out infinite; }',
+'@keyframes obSip { 0%, 100% { transform: rotate(0deg); } 25%, 65% { transform: rotate(-46deg); } }',
+'@keyframes obRead { 0%, 100% { transform: rotate(-38deg); } 50% { transform: rotate(-34deg); } }',
+'@keyframes obPhone { 0%, 100% { transform: rotate(-104deg); } 50% { transform: rotate(-101deg); } }',
+'@keyframes obNod { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(7deg); } }',
+'@keyframes obDot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }',
 /* at the computer: typing, screen on, an email being read */
 '.wm-office[data-mode="pc"] .ob-arm { animation: obType .28s ease-in-out infinite alternate; } .wm-office[data-mode="pc"] .ob-head { animation: none; }',
-'.wm-office[data-mode="pc"] .ob-scr { fill: #1d4ed8; } .wm-office[data-mode="pc"] .ob-scrc { opacity: 1; } .wm-office[data-mode="pc"] .ob-idle { opacity: 0; } .wm-office[data-mode="pc"] .ob-prog { animation: obProg 2.2s ease-in-out infinite; } .wm-office[data-mode="pc"] .ob-env { animation: obEnv 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }',
+'.wm-office[data-mode="pc"] .ob-scr { fill: #1d4ed8; } .wm-office[data-mode="pc"] .ob-scrc { opacity: 1; } .wm-office[data-mode="pc"] .ob-idle { opacity: 0; }',
+/* at the computer: the inbox scrolls, then an email opens (subject, work order badge, text, the PDF) - and again */
+'.wm-office[data-mode="pc"] .ob-list { animation: obScroll 4.4s ease-in-out infinite; } .wm-office[data-mode="pc"] .ob-inbox { animation: obInbox 4.4s linear infinite; } .wm-office[data-mode="pc"] .ob-open { animation: obOpen 4.4s linear infinite; } .wm-office[data-mode="pc"] .ob-ook { animation: obOk 4.4s ease-out infinite; }',
+'@keyframes obScroll { 0%, 8% { transform: translateY(0); } 48%, 100% { transform: translateY(-16px); } }',
+'@keyframes obInbox { 0%, 52% { opacity: 1; } 56%, 96% { opacity: 0; } 100% { opacity: 1; } }',
+'@keyframes obOpen { 0%, 53% { opacity: 0; transform: scale(.96); } 58%, 94% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; } }',
+'@keyframes obOk { 0%, 74% { opacity: 0; } 80%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }',
 '.ob-idle { transition: opacity .3s ease; }',
 '@keyframes obTurn { to { transform: rotate(360deg); } }',
 '@keyframes obSteam { 0% { opacity: 0; transform: translateY(2px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-3px); } }',
@@ -29097,7 +29185,7 @@ var css = [
 '@keyframes obType { from { transform: translateY(0); } to { transform: translateY(1.1px); } }',
 '@keyframes obProg { 0% { transform: scaleX(0); } 80%, 100% { transform: scaleX(1); } }',
 '@keyframes obEnv { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.06); } }',
-'@media (prefers-reduced-motion: reduce) { .ob-arm, .ob-head, .ob-mark rect, .ob-steam, .ob-cm, .ob-ch, .ob-prog, .ob-env { animation: none !important; } .ob-boy, .ob-face { transition-duration: .01s; } }',
+'@media (prefers-reduced-motion: reduce) { .ob-arm, .ob-head, .ob-mark rect, .ob-steam, .ob-cm, .ob-ch, .ob-list, .ob-inbox, .ob-open, .ob-ook { animation: none !important; } .wm-office[data-mode="pc"] .ob-open { opacity: 1 !important; } .wm-office[data-mode="pc"] .ob-inbox { opacity: 0 !important; } .ob-boy, .ob-face { transition-duration: .01s; } }',
 'html.lm .wm-office { background: linear-gradient(135deg, rgba(224,242,254,.95), rgba(219,234,254,.75)); border-color: rgba(14,116,144,.2); } html.lm .ob-floor { fill: rgba(29,23,51,.1); } html.lm .ob-steam { stroke: rgba(71,85,105,.5); }',
 'html[data-theme="sleek"] .wm-office { background: var(--sk-raise, #141416) !important; border-color: var(--sk-line2, rgba(255,255,255,.16)) !important; }',
 'html[data-theme="sleek"] .ob-shirt { fill: var(--sk-mut, #8d8d93); } html[data-theme="sleek"] .ob-sleeve { stroke: var(--sk-mut, #8d8d93); } html[data-theme="sleek"] .ob-floor { fill: var(--sk-line, rgba(255,255,255,.1)); }'
@@ -29111,7 +29199,8 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 window.IncBoy = {
     tick: tick, manual: setManual,
     mode: function () { return mode; },
-    state: function () { return { mode: mode, mark: mark, until: until, manual: manual, result: result, polling: polling }; },
+    act: function () { return ACTS[actI]; },
+    state: function () { return { act: ACTS[actI], mode: mode, mark: mark, until: until, manual: manual, result: result, polling: polling }; },
     _t: { nextMark: nextMark, set: set, reset: function () { mode = ''; mark = 0; until = 0; manual = false; result = ''; } }
 };
 })();
@@ -30275,7 +30364,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v42)';
+var VERSION = '2026.11.14 (v43)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
