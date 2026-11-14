@@ -27994,6 +27994,9 @@ var css = [
 '  body[data-pg]:not([data-pg="home"]) #main-header { padding: max(10px, env(safe-area-inset-top, 0px)) 0 0 !important; margin: 0 0 4px !important; min-height: 0 !important; }',
 '  html.hdr-set body[data-pg]:not([data-pg="home"]) #main-header { padding-top: max(10px, env(safe-area-inset-top, 0px)) !important; margin-top: 0 !important; }',
 '}',
+/* ---- Settings: every section title lines up, even when its description runs onto two lines ---- */
+'#settings-page .acc-head > .live-calc-icon, #settings-page .live-calc-header > .live-calc-icon { flex: 0 0 auto !important; min-width: 32px; }',
+'#settings-page .acc-head > div:not(.live-calc-icon):not(.so-ctl), #settings-page .live-calc-header > div:not(.live-calc-icon):not(.so-ctl) { flex: 1 1 auto; min-width: 0; }',
 /* ---- SlipVault header: title + tagline, year at the right ---- */
 '#receipts-page .rc-top { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }',
 '#receipts-page .rc-top > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }',
@@ -29326,7 +29329,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.13 (v37)';
+var VERSION = '2026.11.13 (v38)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
