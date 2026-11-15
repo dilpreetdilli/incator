@@ -10877,6 +10877,7 @@ bootstrap();
                 entries.push(entry);
             }
             appStore.setItem('incomeEntries', JSON.stringify(entries));
+            try { window.dispatchEvent(new CustomEvent('incjobsaved', { detail: { entry: entry, isNew: !orig } })); } catch (e) { /* ignore */ }   // Dil cheers for a big one
             return entry;
         }
 
@@ -27532,6 +27533,10 @@ function injectSettings() {
         '<div class="setting-item wo-size-item" id="wo-roomsize-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-expand-alt"></i></div><div class="setting-content"><h4 class="setting-title">Size of his room</h4><p class="setting-description">How big his rooms look on Create New Job. Watch the preview while you slide.</p></div></div>' +
         '<div class="wo-size-ctl"><span class="wo-size-ends"><i class="fas fa-compress-alt" aria-hidden="true"></i><input type="range" id="wo-roomsize" min="160" max="560" step="10" aria-label="Size of his room"><i class="fas fa-expand-alt" aria-hidden="true"></i></span><output id="wo-roomsize-v"></output><button type="button" class="app-btn wo-size-reset" id="wo-roomsize-reset">Reset</button></div>' +
         '<div class="wo-size-prev wm-office" id="wo-room-prev" data-mode="office" data-act="stamp" aria-hidden="true"></div></div>' +
+        '<div class="setting-item" id="wo-wx-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-cloud-sun-rain"></i></div><div class="setting-content"><h4 class="setting-title">Real weather in his windows</h4><p class="setting-description">Rain, snow, clouds or sun outside his windows, from the weather right now: the place you chose for the app weather in Looks, otherwise Surrey, BC (Open-Meteo, free).</p></div></div>' +
+        '<div class="setting-control"><div class="magic-toggle" id="wo-wx-toggle" role="switch" tabindex="0" aria-label="Real weather in his windows"><div class="toggle-orb"></div></div></div></div>' +
+        '<div class="setting-item" id="wo-pet-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-paw"></i></div><div class="setting-content"><h4 class="setting-title">His pet</h4><p class="setting-description">A pet that follows him around the house, naps on the sofa and sleeps at the foot of his bed.</p></div></div>' +
+        '<div class="setting-control"><select id="wo-pet" class="magic-input" aria-label="His pet"><option value="cat">Cat</option><option value="dog">Dog</option><option value="none">No pet</option></select></div></div>' +
         '<p class="wo-sub">PDF Extraction Preferences</p>' +
         '<div class="setting-item" id="wo-notes-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-comment-alt"></i></div><div class="setting-content"><h4 class="setting-title">Extract Notes from Work Orders</h4><p class="setting-description">Off: Notes stays empty. On: copies only the notes and instructions written in the work order, word for word. Never prices, never the email.</p></div></div>' +
         '<div class="setting-control"><div class="magic-toggle" id="wo-notes-toggle" role="switch" tabindex="0" aria-label="Extract Notes from Work Orders"><div class="toggle-orb"></div></div></div></div>' +
@@ -27560,7 +27565,7 @@ function injectSettings() {
         var k = bed ? 'bed' : 'office'; if (prev.getAttribute('data-room') === k && prev.querySelector('svg')) return;
         var h = bed ? IncMail.sleeperHtml() : (window.IncBoy && IncBoy.sceneHtml ? '<div class="ob-scene">' + IncBoy.sceneHtml() + '</div>' : '');
         if (!h) return; h = h.replace(/id="([A-Za-z][\w-]*)"/g, 'id="pv-$1"').replace(/url\(#([A-Za-z][\w-]*)\)/g, 'url(#pv-$1)'); prev.setAttribute('data-room', k); prev.className = bed ? 'wo-size-prev wm-zzz-prev' : 'wo-size-prev wm-office'; prev.setAttribute('data-mode', bed ? '' : 'office');
-        prev.innerHTML = h; if (bed) { var ph = ''; try { ph = String(appSettings.woBoyPhoto || ''); } catch (e) { /* ignore */ } var sv = prev.querySelector('svg'), im = sv && sv.querySelector('.zb-pimg'); if (im) im.setAttribute('href', ph); if (sv) sv.classList.toggle('zb-photo-on', !!ph); } if (window.IncSky) IncSky.tick(); }
+        prev.innerHTML = h; if (bed) { var ph = ''; try { ph = String(appSettings.woBoyPhoto || ''); } catch (e) { /* ignore */ } var sv = prev.querySelector('svg'), im = sv && sv.querySelector('.zb-pimg'); if (im) im.setAttribute('href', ph); if (sv) sv.classList.toggle('zb-photo-on', !!ph); } if (window.IncDay) IncDay.tick(); }
     prevFill(); setTimeout(prevFill, 1500); setInterval(function () { if (prev.offsetParent) prevFill(); }, 2000);   // follows him into bed and out again
     rs.addEventListener('input', function () { prevFill(); rsPaint(+rs.value); clearTimeout(rsT); rsT = setTimeout(function () { save('woRoomSize', +rs.value); }, 300); });
     box.querySelector('#wo-roomsize-reset').addEventListener('click', function () { rs.value = '320'; rsPaint(320); save('woRoomSize', 320); });
@@ -27595,10 +27600,14 @@ function injectSettings() {
         box.querySelector('#wo-notes-toggle').classList.toggle('active', notesOn()); box.querySelector('#wo-notes-toggle').setAttribute('aria-checked', String(notesOn()));
         box.querySelector('#wo-ai-toggle').classList.toggle('active', aiAllowed()); box.querySelector('#wo-ai-toggle').setAttribute('aria-checked', String(aiAllowed()));
         box.querySelector('#wo-ai-note').textContent = aiTxt();
+        var wxT = box.querySelector('#wo-wx-toggle'), wxOnNow = S('woWeather', true) !== false; wxT.classList.toggle('active', wxOnNow); wxT.setAttribute('aria-checked', String(wxOnNow));
     }
+    var petSel = box.querySelector('#wo-pet'); petSel.value = String(S('woPet', 'cat') || 'cat');
+    petSel.addEventListener('change', function () { save('woPet', petSel.value); try { if (window.IncPet) IncPet.apply(); } catch (e) { /* ignore */ } toast(petSel.value === 'none' ? 'No pet' : 'His ' + petSel.value + ' is home', 'success'); });
     box.addEventListener('click', function (e) {
         if (e.target.closest('#wo-notes-toggle')) { save('woExtractNotes', !notesOn()); paint(); toast(notesOn() ? 'Notes will be copied from work orders' : 'Notes will stay empty', 'success'); }
         if (e.target.closest('#wo-ai-toggle')) { save('woUseAi', !aiAllowed()); paint(); }
+        if (e.target.closest('#wo-wx-toggle')) { var on = S('woWeather', true) === false; save('woWeather', on); paint(); try { if (window.IncDay) { IncDay.tick(); if (on) IncDay.fetchWx(true); } } catch (x) { /* ignore */ } toast(on ? 'Real weather is on' : 'Real weather is off', 'success'); }
     });
     box.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.magic-toggle')) { e.preventDefault(); e.target.click(); } });
     paint();
@@ -28057,6 +28066,18 @@ function addButton() {
     paintButton(); return true;
 }
 /* the sleeping boy: pillow, blanket that breathes, and z z z floating up */
+/* weather on a window pane (Create New Job > his rooms): cloud, fog, rain, snow, lightning and snow on the ledge.
+   Which one shows is set on the page by the real weather (boy.js). Rain and snow fall by moving dashes along lines that
+   stay inside the glass, so nothing spills onto the wall. */
+window.IncWxGlass = window.IncWxGlass || function (x, y, w, h) {
+    var n = Math.max(4, Math.round(w / 7)), r = '', sn = '', i;
+    for (i = 0; i < n; i++) { var lx = x + (i + .5) * w / n; r += '<path class="wx-r r' + (i % 3) + '" d="M' + lx.toFixed(1) + ' ' + y + 'L' + (lx - 2.4).toFixed(1) + ' ' + (y + h) + '"/>'; }
+    for (i = 0; i < n; i++) { var sx = x + (i + .25) * w / n; sn += '<path class="wx-s s' + (i % 3) + '" d="M' + sx.toFixed(1) + ' ' + y + 'V' + (y + h) + '"/>'; }
+    var b = y + h;
+    return '<g class="wx" aria-hidden="true"><rect class="wx-cloud" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '"/><rect class="wx-fog" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '"/>' +
+        '<g class="wx-rain">' + r + '</g><g class="wx-snow">' + sn + '</g><rect class="wx-flash" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '"/>' +
+        '<path class="wx-pile" d="M' + x + ' ' + b + 'q' + (w * .2).toFixed(1) + ' -3 ' + (w * .45).toFixed(1) + ' -2 q' + (w * .3).toFixed(1) + ' 1 ' + (w * .55).toFixed(1) + ' -1.6V' + b + 'Z"/></g>';
+};
 var SLEEPER =
     '<div class="wm-zzz" aria-hidden="true"><svg viewBox="0 0 240 140" class="wm-boy"><defs>' +
     '<linearGradient id="zbWallG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2152"/><stop offset="1" stop-color="#151938"/></linearGradient>' +
@@ -28072,7 +28093,7 @@ var SLEEPER =
     '<g class="sky-d"><rect x="21" y="17" width="46" height="36" fill="url(#zbDayG)"/><rect class="sky-tint" x="21" y="17" width="46" height="36"/><circle class="sky-sun" cx="58" cy="44" r="6" fill="#fde68a" opacity=".95"/><g class="ob-cloud"><ellipse cx="32" cy="26" rx="7" ry="2.8"/><ellipse cx="36.5" cy="24.2" rx="4.6" ry="3"/><ellipse cx="28.6" cy="25" rx="3.2" ry="2.1"/></g></g>' +
     '<g class="sky-n"><rect x="21" y="17" width="46" height="36" fill="url(#zbSkyG)"/>' +
     '<circle cx="55" cy="28" r="7" fill="#fde68a"/><circle cx="58.4" cy="25.6" r="6.2" fill="#0d1436"/>' +
-    '<circle class="zb-star s1" cx="28" cy="23" r=".9"/><circle class="zb-star s2" cx="37" cy="39" r=".8"/><circle class="zb-star s3" cx="45" cy="21" r=".7"/><circle class="zb-star s1" cx="30" cy="47" r=".7"/><circle class="zb-star s2" cx="62" cy="45" r=".9"/><circle class="zb-star s3" cx="48" cy="44" r=".6"/></g>' +
+    '<circle class="zb-star s1" cx="28" cy="23" r=".9"/><circle class="zb-star s2" cx="37" cy="39" r=".8"/><circle class="zb-star s3" cx="45" cy="21" r=".7"/><circle class="zb-star s1" cx="30" cy="47" r=".7"/><circle class="zb-star s2" cx="62" cy="45" r=".9"/><circle class="zb-star s3" cx="48" cy="44" r=".6"/></g>' + window.IncWxGlass(21, 17, 46, 36) +
     '<path class="zb-mull" d="M44 17V53M21 35H67"/><rect class="zb-sill" x="15" y="55" width="58" height="3" rx="1"/>' +
     '<path class="zb-cur" d="M11 10h9c-1.5 14-1.5 30 1.5 48h-11z"/><path class="zb-cur" d="M68 10h9v48h-11c3-18 3-34 2-48z"/><rect class="zb-rod" x="8" y="9" width="72" height="2" rx="1"/>' +
     '<ellipse class="zb-glow" cx="38" cy="86" rx="34" ry="28" fill="url(#zbLampG)"/>' +
@@ -28100,6 +28121,8 @@ var SLEEPER =
     '<g class="zb-arm"><path class="zb-sleeve" d="M112.6 92.6c3.4 4 9.6 5.6 18.2 4.8"/><circle class="zb-skin" cx="132.6" cy="97.2" r="2.1"/></g>' +
     '<g class="zb-ybub"><path class="zb-bub" d="M114 50h32a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-24l-5 4.6v-4.6h-3a4 4 0 0 1-4-4v-5a4 4 0 0 1 4-4z"/><text class="zb-ytx" x="130" y="59.6" text-anchor="middle">Yaaawn…</text></g>' +
     '<ellipse class="zb-slip" cx="96" cy="124" rx="4.4" ry="1.6"/><ellipse class="zb-slip" cx="105" cy="125" rx="4.4" ry="1.6"/>' +
+    '<g class="zb-pet zb-pet-cat" transform="translate(206 91.4)"><path class="pt-tail" d="M-6.5 -1.5c-3 2.6 2 4.6 9 3.6"/><ellipse class="pt-body" cx="0" cy="-3" rx="7.2" ry="3.4"/><path class="pt-stripe" d="M-3 -6.2v2.4M0 -6.4v2.6M3 -6v2.2"/><circle class="pt-head" cx="5.6" cy="-3.6" r="2.9"/><path class="pt-ear" d="M4.2 -6l.6 -2.6 1.8 1.9zM6.8 -6.2l1.6 -2.3 .7 2.6z"/><path class="pt-eyec" d="M6.2 -3.8q.7 .5 1.4 0"/></g>' +
+    '<g class="zb-pet zb-pet-dog" transform="translate(204 91.4)"><path class="pt-tail" d="M-8 -2.6c-3 -1 -4 1.4 -2 3"/><ellipse class="pt-body" cx="0" cy="-3.4" rx="9" ry="3.8"/><ellipse class="pt-head" cx="7.4" cy="-3.6" rx="3.6" ry="3.1"/><ellipse class="pt-snout" cx="10.6" cy="-2.6" rx="1.9" ry="1.3"/><path class="pt-earf" d="M5.6 -6.2c-1.6 .2 -2.2 3 -1 4.8 .9-.6 1.4-2.6 1-4.8z"/><path class="pt-eyec" d="M7.8 -4.4q.7 .5 1.4 0"/></g>' +
     '</g></svg>' +
     '<span class="z z1">z</span><span class="z z2">z</span><span class="z z3">Z</span></div>';
 function ago(t) {
@@ -28116,7 +28139,7 @@ function paintButton() {
     if (sub) sub.textContent = !status || status.error ? (status && status.signin ? 'Sign in with Google to see it' : 'Your IncAtor server is not reachable right now') : !status.gmail ? 'Connect your work order Gmail in Settings first' :
         on ? 'On: Gmail is checked every 5 minutes, even when IncAtor is closed' + (status.settings.start_at ? ' (emails from ' + dayStr(status.settings.start_at) + ')' : '') : 'Off: check by hand with the button below';
     var zz = b.querySelector('#wm-sleep'), sl = sleeping(), sc = sched();
-    if (window.IncSky) IncSky.tick();                                   // clocks show the time now, windows show day or night
+    if (window.IncDay) IncDay.tick();                                   // clocks show the time now, windows show day or night
     var trip = !!(window.IncBoy && IncBoy.seq && IncBoy.seq()) || !!(window.IncHouse && IncHouse.checking && IncHouse.checking());          // checking by hand while asleep: the boy's trip shows the cards
     if (zz) { var ph = ''; try { ph = String(appSettings.woBoyPhoto || ''); } catch (e) { /* ignore */ } var pi = zz.querySelector('.zb-pimg'); if (pi && pi.getAttribute('href') !== ph) { pi.setAttribute('href', ph); } var sv = zz.querySelector('svg'); if (sv) sv.classList.toggle('zb-photo-on', !!ph); }
     if (zz && !trip) { var zt = zz.querySelector('#wm-sleep-t'), nm = ''; try { nm = String(appSettings.woBoyName || '').replace(/\s+/g, ' ').trim().slice(0, 20); } catch (e) { /* ignore */ } if (zt) zt.textContent = nm ? nm + ' is sleeping' : 'Auto Import is sleeping'; }
@@ -28378,6 +28401,7 @@ var css = [
 /* sleeping boy */
 '.wm-sleep { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 14px 12px 12px; margin: 0 0 8px; border-radius: 14px; background: linear-gradient(135deg, rgba(49,46,129,.35), rgba(30,27,75,.2)); border: 1px solid rgba(165,180,252,.22); }',
 '.wm-sleep[hidden] { display: none; } .wm-sltx { min-width: 0; } .wm-sltx b { display: block; font-size: .9rem; } .wm-sltx small { display: block; font-size: .76rem; opacity: .78; line-height: 1.35; margin-top: 2px; }',
+'.zb-pet { display: none; } html[data-pet="cat"] .zb-pet-cat, html[data-pet="dog"] .zb-pet-dog { display: inline; }',
 '.wm-zzz { position: relative; width: 100%; max-width: min(var(--boy-w, 320px), 100%); } .wm-boy { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 8px 22px rgba(0,0,0,.3); }',
 '.zb-skirt { fill: #2a2f66; } .zb-beam { fill: #c7d2fe; opacity: .05; } .zb-wfr { fill: #2d3570; } .zb-mull { stroke: #2d3570; stroke-width: 2.2; fill: none; } .zb-sill { fill: #363f80; }',
 '.zb-cur { fill: #4338ca; opacity: .92; } .zb-rod { fill: #a5b4fc; opacity: .6; }',
@@ -29165,7 +29189,7 @@ var SCENE =
     '<rect class="ob-wfr" x="86" y="12" width="48" height="40" rx="2"/><g class="sky-d"><rect x="89" y="15" width="42" height="34" fill="url(#obSkyG)"/><rect class="sky-tint" x="89" y="15" width="42" height="34"/><circle class="sky-sun" cx="123" cy="42" r="5" fill="#fde68a" opacity=".9"/>' +
     '<g class="ob-cloud"><ellipse cx="99" cy="25" rx="6.5" ry="2.6"/><ellipse cx="103" cy="23.4" rx="4.2" ry="2.8"/><ellipse cx="96" cy="24" rx="3" ry="2"/></g></g>' +
     '<g class="sky-n"><rect x="89" y="15" width="42" height="34" fill="url(#obNightG)"/><circle cx="121" cy="24" r="5.4" fill="#fde68a"/><circle cx="123.6" cy="22.2" r="4.8" fill="#0d1436"/>' +
-    '<circle class="zb-star s1" cx="95" cy="21" r=".8"/><circle class="zb-star s2" cx="104" cy="38" r=".7"/><circle class="zb-star s3" cx="99" cy="29" r=".6"/><circle class="zb-star s2" cx="127" cy="40" r=".8"/><circle class="zb-star s1" cx="113" cy="44" r=".6"/></g>' +
+    '<circle class="zb-star s1" cx="95" cy="21" r=".8"/><circle class="zb-star s2" cx="104" cy="38" r=".7"/><circle class="zb-star s3" cx="99" cy="29" r=".6"/><circle class="zb-star s2" cx="127" cy="40" r=".8"/><circle class="zb-star s1" cx="113" cy="44" r=".6"/></g>' + window.IncWxGlass(89, 15, 42, 34) +
     '<path class="ob-mull" d="M110 15V49M89 32H131"/><rect class="ob-sill" x="83" y="51" width="54" height="3" rx="1"/>' +
     '<path class="ob-pot" d="M117.5 44.5h9l-1.2 6.5h-6.6z"/><path class="ob-leaf" d="M122 44.5c-3.2-4.6-7.4-5.6-9.6-4.6 3.2 1 6.2 2.6 9.6 4.6zM122 44.5c1.4-6.2 4.6-8.8 7.6-8.6-2.4 2-4.6 4.8-7.6 8.6zM122 44.5c-1.2-5.4-.2-9.4 2-11.4.2 4-.2 7.4-2 11.4z"/>' +
     '<g class="ob-clock"><circle class="ob-cf" cx="46" cy="30" r="9.5"/><path class="ob-tick" d="M46 22.2v1.6M46 36.2v1.6M38.2 30h1.6M52.2 30h1.6"/><path class="ob-ch" d="M46 30v-4.6"/><path class="ob-cm" d="M46 30v-6.6"/><circle class="ob-cc" cx="46" cy="30" r="1.1"/></g>' +
@@ -29368,6 +29392,18 @@ var css = [
 '.wm-office { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 10px 12px; margin: 0 0 8px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }',
 '.wm-office[hidden] { display: none; }',
 'html[data-sky="night"] .sky-d { display: none; } html:not([data-sky="night"]) .sky-n { display: none; }',
+'.wx > * { display: none; } .wx-cloud { fill: #64748b; } .wx-fog { fill: #e2e8f0; } .wx-r { fill: none; stroke: #dbeafe; stroke-width: .55; stroke-linecap: round; stroke-dasharray: 3 5; animation: wxRain .42s linear infinite; } .wx-r.r1 { animation-delay: -.14s; } .wx-r.r2 { animation-delay: -.28s; }',
+'.wx-s { fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: .1 7; animation: wxSnow 3.2s linear infinite; } .wx-s.s1 { animation-duration: 2.6s; animation-delay: -1s; } .wx-s.s2 { animation-duration: 3.8s; animation-delay: -2s; }',
+'.wx-flash { fill: #fff; opacity: 0; animation: wxFlash 7s linear infinite; } .wx-pile { fill: #f8fafc; }',
+'html[data-wx="clouds"] .wx-cloud { display: inline; opacity: .16; } html[data-wx="overcast"] .wx-cloud, html[data-wx="drizzle"] .wx-cloud, html[data-wx="rain"] .wx-cloud, html[data-wx="snow"] .wx-cloud { display: inline; opacity: .42; } html[data-wx="storm"] .wx-cloud { display: inline; opacity: .62; fill: #334155; }',
+'html[data-sky="night"][data-wx="rain"] .wx-cloud, html[data-sky="night"][data-wx="snow"] .wx-cloud, html[data-sky="night"][data-wx="storm"] .wx-cloud, html[data-sky="night"][data-wx="overcast"] .wx-cloud { opacity: .72; } html[data-sky="night"][data-wx] .wx-cloud { fill: #1e293b; } html[data-wx="fog"] .wx-fog { display: inline; opacity: .55; } html[data-sky="night"][data-wx="fog"] .wx-fog { opacity: .28; }',
+'html[data-wx="drizzle"] .wx-rain, html[data-wx="rain"] .wx-rain, html[data-wx="storm"] .wx-rain { display: inline; } html[data-wx="drizzle"] .wx-r { stroke-dasharray: 1.6 7; opacity: .7; } html[data-wx="drizzle"] .wx-r.r1 { display: none; } html[data-wx="storm"] .wx-r { stroke-width: .7; animation-duration: .3s; }',
+'html[data-wx="snow"] .wx-snow { display: inline; } html[data-wx="storm"] .wx-flash { display: inline; } html[data-wx="snow"] .wx-pile, html[data-season="winter"] .wx-pile { display: inline; }',
+'html[data-wx="overcast"] .sky-sun, html[data-wx="drizzle"] .sky-sun, html[data-wx="rain"] .sky-sun, html[data-wx="snow"] .sky-sun, html[data-wx="fog"] .sky-sun, html[data-wx="storm"] .sky-sun { display: none; }',
+'html[data-wx="overcast"] .sky-n .zb-star, html[data-wx="drizzle"] .sky-n .zb-star, html[data-wx="rain"] .sky-n .zb-star, html[data-wx="snow"] .sky-n .zb-star, html[data-wx="fog"] .sky-n .zb-star, html[data-wx="storm"] .sky-n .zb-star { display: none; }',
+'html[data-wx="clear"] .sky-d .ob-cloud { display: none; } html[data-wx="overcast"] .ob-cloud ellipse, html[data-wx="rain"] .ob-cloud ellipse, html[data-wx="storm"] .ob-cloud ellipse { fill: #cbd5e1; }',
+'@keyframes wxRain { to { stroke-dashoffset: -16; } } @keyframes wxSnow { to { stroke-dashoffset: -14.2; } } @keyframes wxFlash { 0%, 88%, 93%, 100% { opacity: 0; } 89% { opacity: .75; } 91% { opacity: .2; } 92% { opacity: .6; } }',
+'@media (prefers-reduced-motion: reduce) { .wx-r, .wx-s, .wx-flash { animation: none !important; } }',
 '.sky-tint { fill: #fb923c; opacity: 0; pointer-events: none; } html[data-sky="dawn"] .sky-tint { fill: #f9a8d4; opacity: .42; } html[data-sky="dusk"] .sky-tint { fill: #f97316; opacity: .48; }',
 '.sky-sun { transform: translateY(calc(var(--sun-up, .6) * -12px)); } html[data-sky="dawn"] .sky-sun, html[data-sky="dusk"] .sky-sun { fill: #fb923c; }',
 'html[data-sky="dusk"] .ob-cloud ellipse, html[data-sky="dawn"] .ob-cloud ellipse { fill: #fed7aa; } html[data-sky="dusk"] .ob-beam { fill: #fb923c; opacity: .07; }',
@@ -29496,10 +29532,67 @@ function skyAt(d) {                                                    // night,
     var up = Math.sin(Math.PI * Math.max(0, Math.min(1, (h - t.rise) / (t.set - t.rise))));
     return { phase: ph, up: Math.round(up * 100) / 100, rise: t.rise, set: t.set };
 }
+
+/* ---------------------------------------------------------------- the real weather outside his windows
+   Settings > Work Orders > Real weather in his windows (on unless you switch it off). Every 15 minutes, while you have
+   IncAtor open, it asks Open-Meteo (free, no account) for the weather in Surrey, BC and the windows show clear sky,
+   clouds, fog, drizzle, rain, snow or a storm. If the app's own weather (Settings > Looks) is on, that one is used
+   instead - it follows the place you chose there. */
+var WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=49.19&longitude=-122.85&current=weather_code,cloud_cover,temperature_2m&timezone=America%2FLos_Angeles';
+function wxKind(code, cloud) {
+    code = +code;
+    if (code >= 95) return 'storm';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
+    if (code >= 51 && code <= 57) return 'drizzle';
+    if (code === 45 || code === 48) return 'fog';
+    if (code === 3) return 'overcast';
+    if (code === 2 || (cloud != null && cloud >= 40)) return 'clouds';
+    return 'clear';
+}
+function wxOn() { try { return appSettings.woWeather !== false; } catch (e) { return true; } }
+var wx = null, wxBusy = false;
+try { wx = JSON.parse(localStorage.getItem('incWx') || 'null'); } catch (e) { wx = null; }
+function wxApply() {
+    var r = document.documentElement, k = wxOn() && wx && Date.now() - wx.at < 3 * 3600000 ? wx.kind : '';
+    if (k) { if (r.getAttribute('data-wx') !== k) r.setAttribute('data-wx', k); } else r.removeAttribute('data-wx');
+}
+function wxSet(kind, temp) { wx = { at: Date.now(), kind: kind, temp: temp }; try { localStorage.setItem('incWx', JSON.stringify(wx)); } catch (e) { /* ignore */ } wxApply(); }
+function appWx() {                                                     // the app's own weather (Settings > Looks), if it is fresh: it follows your place
+    try { var a = window.IncWx && IncWx.get && IncWx.get(); if (a && a.code != null && !a.err && Date.now() - a.at < 3600000) return a; } catch (e) { /* ignore */ }
+    return null;
+}
+function wxFetch(force) {
+    if (!wxOn() || wxBusy || document.hidden || (navigator.onLine === false) || !window.fetch) return;
+    var a = appWx(); if (a && (!wx || wx.at < a.at)) { wxSet(wxKind(a.code), a.t); return; }
+    if (!force && wx && Date.now() - wx.at < 15 * 60000) return;
+    wxBusy = true;
+    fetch(WX_URL, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j && j.current && j.current.weather_code != null) wxSet(wxKind(j.current.weather_code, j.current.cloud_cover), j.current.temperature_2m); })
+        .catch(function () { /* offline: the windows keep the last weather (up to 3 hours), then plain sky */ })
+        .then(function () { wxBusy = false; });
+}
+/* seasons and holidays in his house */
+var DIWALI = { 2026: '11-08', 2027: '10-29', 2028: '10-17', 2029: '11-05', 2030: '10-26', 2031: '11-14', 2032: '11-02', 2033: '10-22', 2034: '11-10', 2035: '10-30' };
+function holidays(d) {
+    var m = d.getMonth() + 1, day = d.getDate(), y = d.getFullYear(), out = [];
+    if ((m === 12 && day >= 1) || (m === 1 && day <= 6)) out.push('xmas');
+    if ((m === 12 && day === 31) || (m === 1 && day <= 2)) out.push('newyear');
+    if (m === 10 && day >= 24) out.push('halloween');
+    if ((m === 6 && day >= 28) || (m === 7 && day <= 2)) out.push('canada');
+    var dw = DIWALI[y]; if (dw) { var p = dw.split('-'), dd = new Date(y, +p[0] - 1, +p[1]), diff = Math.round((new Date(y, m - 1, day) - dd) / 86400000); if (diff >= -2 && diff <= 2) out.push('diwali'); }
+    return out;
+}
+function seasonTick(now) {
+    var r = document.documentElement, m = now.getMonth() + 1, season = (m === 12 || m <= 2) ? 'winter' : '';
+    if ((r.getAttribute('data-season') || '') !== season) { if (season) r.setAttribute('data-season', season); else r.removeAttribute('data-season'); }
+    var h = holidays(now).join(' '); if ((r.getAttribute('data-hol') || '') !== h) { if (h) r.setAttribute('data-hol', h); else r.removeAttribute('data-hol'); }
+}
 function skyTick() {
     var now = new Date(), k = skyAt(now), r = document.documentElement, want = k.phase === 'night' ? 'night' : k.phase;
     if (r.getAttribute('data-sky') !== want) r.setAttribute('data-sky', want);
     var up = String(k.up); if (r.style.getPropertyValue('--sun-up') !== up) r.style.setProperty('--sun-up', up);
+    seasonTick(now); wxApply(); wxFetch();
     var h = now.getHours(), m = now.getMinutes(), txt = ((h % 12) || 12) + ':' + String(m).padStart(2, '0');
     Array.prototype.forEach.call(document.querySelectorAll('.zb-clk'), function (c) { if (c.textContent !== txt) c.textContent = txt; });
     var ha = (h % 12) * 30 + m * .5, ma = m * 6;
@@ -29507,8 +29600,9 @@ function skyTick() {
     Array.prototype.forEach.call(document.querySelectorAll('.ob-cm'), function (c) { c.style.animation = 'none'; c.style.transform = 'rotate(' + ma + 'deg)'; });
 }
 setInterval(skyTick, 20000);
+window.addEventListener('incwx', function () { var a = appWx(); if (a && wxOn()) wxSet(wxKind(a.code), a.t); });
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', skyTick); else skyTick();
-window.IncSky = { tick: skyTick, night: isNight, sun: sunTimes, at: skyAt };
+window.IncDay = { tick: skyTick, night: isNight, sun: sunTimes, at: skyAt, wx: function () { return wxOn() && wx ? wx : null; }, setWx: wxSet, wxKind: wxKind, holidays: holidays, fetchWx: wxFetch };
 /* the size of his room (Settings > Work Orders > Size of his room) */
 function roomSize(v) {
     if (v == null) { try { v = appSettings.woRoomSize; } catch (e) { v = null; } }
@@ -29696,8 +29790,9 @@ function build() {
     fx(function () { layer('up'); });
     T(P.EDGE, P.RISE, .8); T(P.RISE, P.STAND, .7);
     phase('walkin', [n + ' is walking to the computer', 'Still a bit sleepy…']);
-    S.push({ dur: walkDur, fn: function (u, tau) { return walkPose(P.STAND.x, 1, tau, tau < 1.6); } });
-    T(walkPose(P.STAND.x, 1, walkDur), P.AT_CHAIR, .35);
+    var G = window.IncGait, gIn = G ? G.plan(P.STAND.x, P.AT_CHAIR.x) : null, gOut = G ? G.plan(P.AT_CHAIR.x, P.STAND.x) : null;   // the same footstep walk as in his house
+    if (gIn) { S.push({ dur: gIn.dur, fn: function (u, tau) { return at(gIn.at(tau), { yawn: tau < 1.6 }); } }); T(gIn.at(gIn.dur), P.AT_CHAIR, .2); }
+    else { S.push({ dur: walkDur, fn: function (u, tau) { return walkPose(P.STAND.x, 1, tau, tau < 1.6); } }); T(walkPose(P.STAND.x, 1, walkDur), P.AT_CHAIR, .35); }
     phase('sit', [n + ' is sitting down', 'At the desk…']);
     T(P.AT_CHAIR, P.LOWER, .55); T(P.LOWER, P.CHAIR, .55);
     phase('boot', [n + ' is turning on the computer', 'Starting up…']);
@@ -29708,11 +29803,11 @@ function build() {
     S.push({ dur: 3.2, fn: function (u, tau) { var o = at(P.CHAIR, { h: -2 }); o.afs = lerp(60, 30, ease(u * 3)); o.afe = lerp(25, 45, ease(u * 3)); o.abs = o.afs - 3; o.abe = o.afe; return o; } });
     phase('standup', [n + ' is getting up', 'Done for now.']);
     T(at(P.CHAIR, { afs: 30, afe: 45, abs: 27, abe: 45 }), P.LOWER, .6); T(P.LOWER, P.AT_CHAIR, .6);
-    T(P.AT_CHAIR, at(P.AT_CHAIR, { dir: -1 }), .4);
+    if (G) S.push({ dur: .5, fn: G.turn(P.AT_CHAIR.x, 1, -1) }); else T(P.AT_CHAIR, at(P.AT_CHAIR, { dir: -1 }), .4);
     phase('walkout', [n + ' is going back to bed', null]);
-    S.push({ dur: walkDur, fn: function (u, tau) { return walkPose(P.AT_CHAIR.x, -1, tau, tau > 1.2 && tau < 3.4); } });
-    T(walkPose(P.AT_CHAIR.x, -1, walkDur), at(P.STAND, { dir: -1 }), .35);
-    T(at(P.STAND, { dir: -1 }), P.STAND, .4);
+    if (gOut) { S.push({ dur: gOut.dur, fn: function (u, tau) { return at(gOut.at(tau), { yawn: tau > 1.2 && tau < 3.4 }); } }); T(gOut.at(gOut.dur), at(P.STAND, { dir: -1 }), .2); }
+    else { S.push({ dur: walkDur, fn: function (u, tau) { return walkPose(P.AT_CHAIR.x, -1, tau, tau > 1.2 && tau < 3.4); } }); T(walkPose(P.AT_CHAIR.x, -1, walkDur), at(P.STAND, { dir: -1 }), .35); }
+    if (G) S.push({ dur: .5, fn: G.turn(P.STAND.x, -1, 1) }); else T(at(P.STAND, { dir: -1 }), P.STAND, .4);
     phase('tobed', [n + ' is going back to sleep', null]);
     T(P.STAND, P.RISE, .7); T(P.RISE, P.EDGE, .8);
     fx(function () { layer('sit'); el.setAttribute('data-q', 'sit'); });
@@ -29768,7 +29863,7 @@ function start(end) {
     el.querySelector('svg').classList.toggle('zb-photo-on', !!ph);
     parts = { world: q('.tr-world'), rig: q('.tr-rig'), lb: q('.tr-lb'), sb: q('.tr-sb'), lf: q('.tr-lf'), sf: q('.tr-sf'), ab: q('.tr-ab'), hb: q('.tr-hb'), af: q('.tr-af'), hf: q('.tr-hf'),
         torso: q('.tr-torso'), head: q('.tr-head'), bub: q('.tr-bub'), legsG: q('.tr-legs'), armbG: q('.tr-armb'), torsoG: q('.tr-torsoP'), headG: q('.tr-headP'), armfG: q('.tr-armf'), qover: q('.tr-qover') };
-    if (window.IncSky) IncSky.tick();
+    if (window.IncDay) IncDay.tick();
     steps = build(); si = 0; done = false; result = ''; onEnd = end || null; active = true;
     el.setAttribute('data-q', 'lie'); layer('lie');
     draw(at(P.LIE, { snap: true, sleepy: true }));
@@ -29866,6 +29961,89 @@ function walkPose(x0, dir, tau, armOver) {
     return o;
 }
 
+/* ------------------------------------------------------------------ walking like a person (planned footsteps)
+   The feet are planned first: each foot is put down at a spot on the floor and stays there while the body passes over
+   it. The heel touches first and the foot rolls flat; later the heel lifts and the toes push off; the foot swings
+   through just above the floor. The hip rides over the feet (lowest when both feet are down), the knees bend where
+   the feet and hip put them (two-bone IK), the arms swing against the legs. He speeds up over the first step, slows
+   down over the last one and brings his feet together when he stops. Turning round is two small steps on the spot. */
+var GROUND = FLOOR - FOOT, LR = L1 + L2 - 0.15, TOE = 5.8, HEEL = 1.6, FY = 1.2;
+function clamp1(v) { return Math.max(-1, Math.min(1, v)); }
+function smooth(u) { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); }
+function ik(hx, hy, ax, ay, dir) {                                      // hip joint -> ankle: thigh angle and knee bend
+    var lx = (ax - hx) * dir, ly = ay - hy, r = Math.sqrt(lx * lx + ly * ly);
+    r = Math.max(Math.abs(L1 - L2) + .5, Math.min(L1 + L2 - .001, r));
+    var a0 = Math.atan2(lx, ly) / D2R;
+    var al = Math.acos(clamp1((L1 * L1 + r * r - L2 * L2) / (2 * L1 * r))) / D2R, be = Math.acos(clamp1((L1 * L1 + L2 * L2 - r * r) / (2 * L1 * L2))) / D2R;
+    return { a: a0 + al, k: 180 - be };
+}
+function footAt(X, d, mode, ang) {                                     // ankle for a foot on the floor: flat, rolling off the toes, or landing on the heel
+    var g = GROUND + FY, bx, by;
+    if (mode === 'toe') { bx = X + TOE - TOE * cosD(ang); by = g - TOE * sinD(ang); return { x: X + d * (bx - X), y: by - FY, f: -ang }; }
+    if (mode === 'heel') { bx = X - HEEL + HEEL * cosD(ang); by = g - HEEL * sinD(ang); return { x: X + d * (bx - X), y: by - FY, f: ang }; }
+    return { x: X, y: GROUND, f: 0 };
+}
+function gait(x0, x1, opt) {
+    opt = opt || {};
+    var d = x1 >= x0 ? 1 : -1, D = Math.abs(x1 - x0), STEP = opt.step || 19, T = opt.stepT || .5;
+    var n = Math.max(1, Math.round(D / STEP)), s = D / n, V = s / T, dl = .1 * T, total = (n + 1) * T;
+    var off = { f: 2 * d, b: -2 * d };
+    function legOf(k) { return k % 2 ? 'f' : 'b'; }                     // step 1 = near leg, then they take turns
+    function plantAfter(leg, k) { var last = 0; for (var j = 1; j <= k; j++) if (legOf(j) === leg) last = j; return x0 + d * Math.min(last, n) * s + off[leg]; }
+    function S(t) {                                                    // distance the hip has gone
+        if (t <= 0) return 0; if (t >= total) return D;
+        if (t < T) { var u = t / T; return V * T * (u * u * u - u * u * u * u / 2); }
+        if (t < n * T) return s / 2 + V * (t - T);
+        var w = (t - n * T) / T; return s / 2 + (n - 1) * s + V * T * (w - (w * w * w - w * w * w * w / 2));
+    }
+    function speedF(t) { if (t < T) return smooth(t / T); if (t > n * T) return 1 - smooth((t - n * T) / T); return 1; }
+    function legState(leg, t) {                                        // where this foot is at time t
+        var k = Math.min(n + 1, Math.max(1, Math.floor(t / T) + 1)), t0 = (k - 1) * T, t1 = k * T;
+        if (legOf(k) === leg && t < total) {                            // this is the stepping foot
+            var P0 = plantAfter(leg, k - 1), P1 = plantAfter(leg, k), first = k === 1, last = k === n + 1;
+            var lift = first ? t0 + dl * .6 : t0 + dl, land = t1 - dl;
+            if (t < lift) { var hr = first ? 8 : 34; return footAt(P0, d, 'toe', hr * (first ? smooth((t - t0) / (lift - t0)) : 1)); }
+            if (t < land) {
+                var q = (t - lift) / (land - lift), A0 = footAt(P0, d, 'toe', first ? 8 : 34), A1 = footAt(P1, d, last ? 'flat' : 'heel', last ? 0 : 14);
+                var e = q < .5 ? 2 * q * q : 1 - 2 * (1 - q) * (1 - q);
+                return { x: A0.x + (A1.x - A0.x) * e, y: lerp(A0.y, A1.y, q) - (last ? 2.2 : 3.4) * Math.sin(Math.PI * Math.pow(q, .8)), f: lerp(A0.f, A1.f, smooth(q)) - 6 * Math.sin(Math.PI * q) * (last ? 0 : 1), air: true };
+            }
+            if (last) return footAt(P1, d, 'flat');
+            var h = Math.max(0, 1 - (t - land) / (.24 * T)); return footAt(P1, d, h > 0 ? 'heel' : 'flat', 14 * h);   // heel down, foot rolls flat
+        }
+        var P = plantAfter(leg, t >= total ? n + 1 : k - 1);            // standing on this foot
+        var nextK = k + 1; while (nextK <= n + 1 && legOf(nextK) !== leg) nextK++;
+        if (nextK <= n + 1 && t < total) {                              // the heel lifts before this foot steps off again
+            var tLift = (nextK - 1) * T + dl, start = tLift - .45 * T;
+            if (t > start) return footAt(P, d, 'toe', 34 * smooth((t - start) / (tLift - start)));
+        }
+        return footAt(P, d, 'flat');
+    }
+    function at(t, armOver) {
+        t = Math.max(0, Math.min(total, t));
+        var hx = x0 + d * S(t), F = legState('f', t), B = legState('b', t), sf = speedF(t);
+        var y = STAND_Y;
+        var lr = LR - .4 * sf;                                          // a soft knee while walking (flattens the bounce)
+        [[F, 1], [B, -1]].forEach(function (p) { if (p[0].air) return; var jx = hx + d * p[1], dx = p[0].x - jx; y = Math.max(y, p[0].y - Math.sqrt(Math.max(0, lr * lr - dx * dx))); });
+        var lf = ik(hx + d, y, F.x, F.y, d), lb = ik(hx - d, y, B.x, B.y, d);
+        var o = { x: hx, y: y, dir: d, t: 2 + 3.2 * sf, h: -1 - 1.2 * sf, lfa: lf.a, lfk: lf.k, lff: F.f, lba: lb.a, lbk: lb.k, lbf: B.f };
+        var swing = function (a) { return -.8 * (a - 4) * sf + 3; };      // arms swing against the legs
+        o.afs = swing(lb.a); o.abs = swing(lf.a); o.afe = 14 + .5 * Math.max(0, o.afs); o.abe = 14 + .5 * Math.max(0, o.abs);
+        if (armOver) for (var kk in armOver) o[kk] = armOver[kk];
+        if (opt.over) for (var k2 in opt.over) o[k2] = opt.over[k2];
+        return o;
+    }
+    return { dur: total, at: at, dir: d };
+}
+function stepTurn(x, from, to, over) {                                 // turning round: two little steps on the spot
+    return function (u) {
+        var o = pose(x, u < .5 ? from : to, STANDP, over), w = u < .5 ? u * 2 : (u - .5) * 2, lift = Math.sin(Math.PI * w);
+        if (u < .5) { o.lfa = 2 + 14 * lift; o.lfk = 2 + 30 * lift; o.lff = 6 * lift; } else { o.lba = -2 + 12 * lift; o.lbk = 2 + 28 * lift; o.lbf = 6 * lift; }
+        o.y = STAND_Y + .6 * lift; o.t = 3 + 2 * lift; return o;
+    };
+}
+window.IncGait = { plan: gait, turn: stepTurn, ik: ik, GROUND: GROUND };
+
 /* ------------------------------------------------------------------ the rooms */
 function prefixIds(html) { return html.replace(/id="(zb|ob)/g, 'id="hs-$1').replace(/url\(#(zb|ob)/g, 'url(#hs-$1'); }
 function innerOf(html, drop) {
@@ -29880,7 +30058,7 @@ function win(x, y, w, h, cls) {                                       // a windo
     return '<rect class="' + cls + '-wfr" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="2"/>' +
         '<g class="sky-d"><rect x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '" fill="url(#hsDayG)"/><rect class="sky-tint" x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '"/><circle class="sky-sun" cx="' + (gx + gw * .75) + '" cy="' + (gy + gh * .72) + '" r="4.6" fill="#fde68a" opacity=".95"/><g class="ob-cloud"><ellipse cx="' + (gx + gw * .3) + '" cy="' + (gy + gh * .3) + '" rx="5.6" ry="2.4"/><ellipse cx="' + (gx + gw * .3 + 3.6) + '" cy="' + (gy + gh * .3 - 1.4) + '" rx="3.6" ry="2.4"/></g></g>' +
         '<g class="sky-n"><rect x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '" fill="url(#hsNightG)"/><circle cx="' + (gx + gw * .72) + '" cy="' + (gy + gh * .3) + '" r="4.4" fill="#fde68a"/><circle cx="' + (gx + gw * .72 + 2.2) + '" cy="' + (gy + gh * .3 - 1.6) + '" r="3.9" fill="#0d1436"/>' +
-            '<circle class="zb-star s1" cx="' + (gx + 5) + '" cy="' + (gy + 6) + '" r=".7"/><circle class="zb-star s2" cx="' + (gx + gw * .4) + '" cy="' + (gy + gh * .7) + '" r=".7"/><circle class="zb-star s3" cx="' + (gx + gw * .2) + '" cy="' + (gy + gh * .45) + '" r=".6"/></g>' +
+            '<circle class="zb-star s1" cx="' + (gx + 5) + '" cy="' + (gy + 6) + '" r=".7"/><circle class="zb-star s2" cx="' + (gx + gw * .4) + '" cy="' + (gy + gh * .7) + '" r=".7"/><circle class="zb-star s3" cx="' + (gx + gw * .2) + '" cy="' + (gy + gh * .45) + '" r=".6"/></g>' + (window.IncWxGlass ? IncWxGlass(gx, gy, gw, gh) : '') +
         '<path class="' + cls + '-mull" d="M' + (x + w / 2) + ' ' + gy + 'V' + (gy + gh) + 'M' + gx + ' ' + (y + h / 2) + 'H' + (gx + gw) + '"/><rect class="' + cls + '-sill" x="' + (x - 3) + '" y="' + (y + h - 1) + '" width="' + (w + 6) + '" height="3" rx="1"/>';
 }
 var DEFS = '<linearGradient id="hsDayG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4f8"/><stop offset=".7" stop-color="#bfdcf7"/><stop offset="1" stop-color="#fbd9a6"/></linearGradient>' +
@@ -29895,6 +30073,11 @@ var LIVING = '<rect x="0" y="0" width="240" height="106" fill="url(#hsLivG)"/><r
     '<g class="hs-door"><rect class="hs-dfr" x="149" y="49" width="27" height="56" rx="1"/><rect class="hs-dleaf" x="151" y="51" width="23" height="53"/><circle class="hs-knob" cx="170" cy="79" r="1.2"/><rect class="hs-dpanel" x="154" y="55" width="17" height="18" rx="1"/><rect class="hs-dpanel" x="154" y="78" width="17" height="22" rx="1"/><rect class="hs-dopen" x="151" y="51" width="23" height="53"/><rect class="hs-dopen2" x="151" y="51" width="4" height="53"/></g>' +
     '<g class="hs-party"><path class="hs-string" d="M92 18l2 20M104 16l-1 22M206 18l1 20"/><ellipse cx="92" cy="14" rx="4.4" ry="5.4" fill="#f43f5e"/><ellipse cx="104" cy="12" rx="4.4" ry="5.4" fill="#22c55e"/><ellipse cx="206" cy="14" rx="4.4" ry="5.4" fill="#eab308"/><path class="hs-banner" d="M120 10q40 12 80 0"/><path d="M128 12l3 6 3-5M146 15l3 6 3-5M166 15l3 6 3-5M184 13l3 6 3-5" fill="#f472b6" stroke="none"/><rect class="hs-lights" x="0" y="0" width="240" height="140"/></g>' +
     '<ellipse class="hs-rug" cx="128" cy="124" rx="70" ry="5"/>' +
+    '<g class="hs-hol hs-xmas"><rect x="35.5" y="118" width="5" height="6" fill="#78350f"/><path class="hs-tree" d="M38 84l-9 12h4l-7 10h4l-7 11h30l-7-11h4l-7-10h4z"/><path class="hs-star" d="M38 79.6l1.2 2.6 2.8.3-2.1 1.9.6 2.8-2.5-1.4-2.5 1.4.6-2.8-2.1-1.9 2.8-.3z"/><circle class="hs-orn o0" cx="34" cy="97" r="1.2"/><circle class="hs-orn o1" cx="42" cy="101" r="1.2"/><circle class="hs-orn o2" cx="31" cy="108" r="1.2"/><circle class="hs-orn o3" cx="45" cy="112" r="1.2"/><circle class="hs-orn o0" cx="38" cy="90" r="1.1"/><circle class="hs-orn o2" cx="39" cy="113" r="1.2"/><rect x="46" y="119" width="6" height="5" rx=".6" fill="#dc2626"/><path d="M49 119v5M46 121.5h6" stroke="#fde68a" stroke-width=".7"/></g>' +
+    '<g class="hs-hol hs-ny"><text class="hs-nyt" x="120" y="11" text-anchor="middle">HAPPY NEW YEAR</text><path class="hs-banner" d="M80 15q40 7 80 0"/></g>' +
+    '<g class="hs-hol hs-diwali"><path class="hs-wire" d="M0 7q60 6 120 1t120 1"/><circle class="hs-bulb b0" cx="4.0" cy="8.1" r="1.1"/><circle class="hs-bulb b1" cx="13.6" cy="10.2" r="1.1"/><circle class="hs-bulb b2" cx="23.2" cy="7.2" r="1.1"/><circle class="hs-bulb b3" cx="32.8" cy="9.3" r="1.1"/><circle class="hs-bulb b0" cx="42.4" cy="7.2" r="1.1"/><circle class="hs-bulb b1" cx="52.0" cy="10.2" r="1.1"/><circle class="hs-bulb b2" cx="61.6" cy="8.1" r="1.1"/><circle class="hs-bulb b3" cx="71.2" cy="10.2" r="1.1"/><circle class="hs-bulb b0" cx="80.8" cy="7.2" r="1.1"/><circle class="hs-bulb b1" cx="90.4" cy="9.3" r="1.1"/><circle class="hs-bulb b2" cx="100.0" cy="7.2" r="1.1"/><circle class="hs-bulb b3" cx="109.6" cy="10.2" r="1.1"/><circle class="hs-bulb b0" cx="119.2" cy="8.1" r="1.1"/><circle class="hs-bulb b1" cx="128.8" cy="10.2" r="1.1"/><circle class="hs-bulb b2" cx="138.4" cy="7.2" r="1.1"/><circle class="hs-bulb b3" cx="148.0" cy="9.3" r="1.1"/><circle class="hs-bulb b0" cx="157.6" cy="7.2" r="1.1"/><circle class="hs-bulb b1" cx="167.2" cy="10.2" r="1.1"/><circle class="hs-bulb b2" cx="176.8" cy="8.1" r="1.1"/><circle class="hs-bulb b3" cx="186.4" cy="10.2" r="1.1"/><circle class="hs-bulb b0" cx="196.0" cy="7.2" r="1.1"/><circle class="hs-bulb b1" cx="205.6" cy="9.3" r="1.1"/><circle class="hs-bulb b2" cx="215.2" cy="7.2" r="1.1"/><circle class="hs-bulb b3" cx="224.8" cy="10.2" r="1.1"/><circle class="hs-bulb b0" cx="234.4" cy="8.1" r="1.1"/><g class="hs-diya" transform="translate(22 53)"><path d="M-3 0h6l-1.2 1.8h-3.6z" fill="#c2410c"/><path class="hs-dflame" d="M0 -.2c-1-1.4 0-2.8 0-3.4.6.8 1 2 0 3.4z"/></g><g class="hs-diya" transform="translate(54 53)"><path d="M-3 0h6l-1.2 1.8h-3.6z" fill="#c2410c"/><path class="hs-dflame" d="M0 -.2c-1-1.4 0-2.8 0-3.4.6.8 1 2 0 3.4z"/></g><g class="hs-diya" transform="translate(130 44)"><path d="M-3 0h6l-1.2 1.8h-3.6z" fill="#c2410c"/><path class="hs-dflame" d="M0 -.2c-1-1.4 0-2.8 0-3.4.6.8 1 2 0 3.4z"/></g></g>' +
+    '<g class="hs-hol hs-halloween"><ellipse cx="112" cy="40.4" rx="4.6" ry="3.6" fill="#f97316"/><path d="M112 37v-1.6" stroke="#3f6212" stroke-width="1.1"/><path d="M109.6 39.4l1 1 1-1M112.6 39.4l1 1 1-1M109.8 42h4.4l-.8.9-.7-.6-.7.6-.7-.6-.7.6z" fill="#422006"/></g>' +
+    '<g class="hs-hol hs-canada"><path d="M111 44V30" stroke="#94a3b8" stroke-width=".8"/><rect x="111" y="30" width="12" height="6.4" fill="#fff"/><rect x="111" y="30" width="3" height="6.4" fill="#dc2626"/><rect x="120" y="30" width="3" height="6.4" fill="#dc2626"/><path d="M117 31.2l.6 1.3 1-.4-.3 1.6.9.2-1.4 1-.1.9-.7-.3-.7.3-.1-.9-1.4-1 .9-.2-.3-1.6 1 .4z" fill="#dc2626"/></g>' +
     '<rect class="hs-sofa2" x="64" y="84" width="84" height="24" rx="6"/><rect class="hs-sofa" x="66" y="101" width="80" height="8" rx="3"/><rect class="hs-sofa" x="60" y="94" width="12" height="24" rx="4"/><rect class="hs-sofa" x="140" y="94" width="12" height="24" rx="4"/><rect class="hs-sofa2" x="64" y="108" width="84" height="10" rx="2"/><path class="hs-leg" d="M68 118v6M144 118v6"/>' +
     '<rect class="hs-pillow" x="74" y="90" width="14" height="11" rx="3" transform="rotate(-8 81 95)"/>' +
     '<rect class="hs-wood" x="158" y="109" width="32" height="3" rx="1"/><path class="hs-leg" d="M161 112v12M187 112v12"/><g class="hs-mess"><rect class="hs-cup c1" x="163" y="104" width="4" height="5" rx=".8"/><rect class="hs-cup c2" x="170" y="104" width="4" height="5" rx=".8"/><rect class="hs-cup c3" x="180" y="104" width="4" height="5" rx=".8"/><path class="hs-bowl" d="M174 108h7a3.5 2.4 0 0 1-7 0z"/><circle cx="176" cy="107" r=".9" fill="#facc15"/><circle cx="178.6" cy="106.6" r=".9" fill="#facc15"/></g>' +
@@ -30010,7 +30193,7 @@ function houseHtml() {
     return prefixIds('<svg class="ob-svg hs-svg" viewBox="0 0 240 140" aria-hidden="true"><defs>' + B.defs + O.defs + DEFS + '<clipPath id="hs-view"><rect x="0" y="0" width="240" height="140" rx="14"/></clipPath></defs>' +
         '<g clip-path="url(#hs-view)"><g class="hs-world">' + B.body + QFLAT + '<g transform="translate(240 0)">' + O.body + '</g>' +
         '<g transform="translate(480 0)">' + LIVING + '</g><g transform="translate(720 0)">' + KITCHEN + '</g>' + DOOR(240) + DOOR(480) + DOOR(720) + CHAIR +
-        rigHtml('hs-f1') + rigHtml('hs-f2') + rigHtml('hs-me') +
+        petHtml() + rigHtml('hs-f1') + rigHtml('hs-f2') + rigHtml('hs-me') +
         '<g class="hs-bub"><path class="ob-bub" d="M2 0h34a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4H14l-5 4.6V13H2a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4z"/><text class="ob-ytx hs-btx" x="17" y="9.6" text-anchor="middle"></text></g>' +
         '</g></g></svg>');
 }
@@ -30043,7 +30226,8 @@ var ACT = {
     eat:    { room: 'kitchen', label: 'Eating' },
     dishes: { room: 'kitchen', label: 'Washing the dishes' },
     party:  { room: 'living', label: 'Friends are over - party!' },
-    tidy:   { room: 'living', label: 'Cleaning up after the party' }
+    tidy:   { room: 'living', label: 'Cleaning up after the party' },
+    rainwatch: { room: 'living', label: 'Watching the rain' }
 };
 function mealName(h) { return h < 11 ? 'breakfast' : h < 15.5 ? 'lunch' : 'dinner'; }
 var plan = [], lastMeal = '', lastParty = 0, lastAct = '';
@@ -30054,6 +30238,8 @@ function nextActivity(now) {
     if (meal && lastMeal !== key + meal) { lastMeal = key + meal; plan = meal === 'breakfast' ? ['cook', 'eat', 'dishes'] : ['cook', 'eat', 'dishes']; if (meal === 'breakfast') plan.unshift('coffee'); return plan.shift(); }
     if (!working() && (day === 5 || day === 6) && h >= 19 && h < 23 && Date.now() - lastParty > 3 * 3600000 && Math.random() < .5) { lastParty = Date.now(); return 'party'; }
     var w = { read: 4, tv: h >= 17 ? 4 : 1.5, vacuum: h < 17 ? 1.4 : .4, plants: h < 12 ? 1.2 : .5, coffee: h < 15 ? 1.2 : .3, snack: 1 };
+    var wk = window.IncDay && IncDay.wx && IncDay.wx() ? IncDay.wx().kind : '';
+    if (/rain|drizzle|storm|snow/.test(wk)) { w.rainwatch = 1.6; w.plants = .25; w.vacuum = (w.vacuum || 1) * 1.3; }   // a wet day: more indoor time
     delete w[lastAct];
     var tot = 0, k; for (k in w) tot += w[k]; var r = Math.random() * tot;
     for (k in w) { r -= w[k]; if (r <= 0) return k; }
@@ -30066,7 +30252,13 @@ var steps = [], si = 0, stepAt = 0, raf = 0, running = false, state = { x: SPOTS
 var act = '', actLabel = '', checking = null, lastFrame = 0;
 function scene(k, on) { if (el) el.classList.toggle('hsx-' + k, !!on); }   // switches on the card (hsx-): what is going on in the house
 function say(a, b) { if (!el) return; var t = el.querySelector('#wm-home-t'), s0 = el.querySelector('#wm-home-s'); if (t && t.textContent !== a) t.textContent = a; if (s0 && s0.textContent !== b) s0.textContent = b; }
-function bubble(text, x, y) { if (!bub) return; if (!text) { bub.style.opacity = '0'; return; } bub.querySelector('.hs-btx').textContent = text; bub.setAttribute('transform', 'translate(' + f1(x - 17) + ' ' + f1(y) + ')'); bub.style.opacity = '1'; }
+var bubTxt = '';
+function bubble(text, x, y) {
+    if (!bub) return; if (!text) { bub.style.opacity = '0'; return; }
+    var w = Math.max(30, Math.round(text.length * 3.05 + 9));
+    if (text !== bubTxt) { bubTxt = text; bub.querySelector('.hs-btx').textContent = text; bub.querySelector('.hs-btx').setAttribute('x', String(w / 2 - 2)); bub.querySelector('.ob-bub').setAttribute('d', 'M2 0h' + (w - 6) + 'a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4H14l-5 4.6V13H2a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4z'); }
+    var bx = Math.max(camX + 4, Math.min(camX + 236 - w, x - 12));            // stays inside the picture
+    bub.setAttribute('transform', 'translate(' + f1(bx) + ' ' + f1(Math.max(2, y)) + ')'); bub.style.opacity = '1'; }
 
 function push(st) { steps.push(st); }
 function T(A, B, d, ex) { push({ dur: d, fn: function (u) { return at(mix(A, B, easeIO(u)), ex || {}); } }); }
@@ -30078,13 +30270,12 @@ function walkTo(x, dir, armOver) {                                       // he w
     if (state.sit) standUpFrom(state.x, state.dir);
     var x0 = state.x, d = x > x0 ? 1 : -1, dist = Math.abs(x - x0);
     if (dist > 3) {
-        if (d !== state.dir) { T(pose(x0, state.dir, STANDP), pose(x0, d, STANDP), .3); }
-        var dur = dist / SPEED;
-        push({ dur: dur, fn: function (u, tau) { return walkPose(x0, d, tau, armOver); } });
-        T(walkPose(x0, d, dur, armOver), pose(x, d, STANDP, armOver), .3);
+        if (d !== state.dir) push({ dur: .5, fn: stepTurn(x0, state.dir, d, armOver) });
+        var g = gait(x0, x, { over: armOver });
+        push({ dur: g.dur, fn: function (u, tau) { return g.at(tau); } });
         state.dir = d;
-    }
-    if (dir && dir !== state.dir) T(pose(x, state.dir, STANDP), pose(x, dir, STANDP), .3);
+    } else if (dist > .5) T(pose(x0, state.dir, STANDP, armOver), pose(x, state.dir, STANDP, armOver), .35);
+    if (dir && dir !== state.dir) push({ dur: .5, fn: stepTurn(x, state.dir, dir, armOver) });
     state.x = x; state.dir = dir || state.dir;
 }
 function title(label) { run(function () { act = label; say(who() + ' is at home', label + ' · ' + offLine()); }); }
@@ -30166,6 +30357,13 @@ function plans(a) {
         run(function () { scene('dooropen', false); scene('party', false); friends(false); });
         plans('tidy');                                                  // after they leave, he cleans up
         break;
+    case 'rainwatch':
+        var snowy = window.IncDay && IncDay.wx && IncDay.wx() && IncDay.wx().kind === 'snow', RW = SPOTS.window + 16;
+        walkTo(RW, -1); title(snowy ? 'Watching the snow' : (window.IncDay && IncDay.wx() && IncDay.wx().kind === 'storm' ? 'Watching the storm' : ACT.rainwatch.label));
+        T(pose(RW, -1, STANDP), pose(RW, -1, STANDP, { h: -6, t: 1, afs: 18, afe: 70, abs: 12, abe: 74 }), .8);              // arms folded, looking out
+        hold(pose(RW, -1, STANDP, { h: -6, t: 1, afs: 18, afe: 70, abs: 12, abe: 74 }), 14, function (o, u, tau) { o.h = -6 - 2 * Math.sin(tau * .5); });
+        T(pose(RW, -1, STANDP, { h: -6, t: 1, afs: 18, afe: 70, abs: 12, abe: 74 }), pose(RW, -1, STANDP), .7);
+        break;
     case 'tidy':
         title(ACT.tidy.label);
         ['c1', 'c2', 'c3'].forEach(function (c, i) {
@@ -30185,9 +30383,10 @@ var fx = [];
 function friends(on) { [f1r, f2r].forEach(function (r) { if (r) r.g.style.display = on ? '' : 'none'; }); }
 function friendsIn() {
     var d0 = SPOTS.door;
-    push({ dur: 3.6, both: true, fn: function (u, tau) {
-        fx[0] = walkPose(d0, -1, tau * .9); fx[0].op = Math.min(1, tau / .6); if (fx[0].x < d0 - 66) fx[0] = pose(d0 - 66, -1, STANDP);
-        fx[1] = tau < .9 ? at(pose(d0, -1, STANDP), { op: 0 }) : walkPose(d0, -1, tau - .9); fx[1].op = Math.min(1, Math.max(0, (tau - .9) / .6)); if (fx[1].x < d0 - 36) fx[1] = pose(d0 - 36, -1, STANDP);
+    var g0 = gait(d0, d0 - 66, { stepT: .52 }), g1 = gait(d0, d0 - 36, { stepT: .48 });
+    push({ dur: Math.max(3.6, g0.dur, g1.dur + .9), both: true, fn: function (u, tau) {
+        fx[0] = g0.at(tau); fx[0].op = Math.min(1, tau / .6);
+        fx[1] = tau < .9 ? at(pose(d0, -1, STANDP), { op: 0 }) : g1.at(tau - .9); fx[1].op = Math.min(1, Math.max(0, (tau - .9) / .6));
         var o = pose(SPOTS.door - 96, 1, STANDP, { afs: 140, afe: 10 }); o.talk = tau > 1 && tau < 2.4; return o; } });
 }
 function dance(sec) {
@@ -30202,9 +30401,10 @@ function dance(sec) {
 }
 function friendsOut() {
     var d0 = SPOTS.door;
-    push({ dur: 3.4, both: true, fn: function (u, tau) {
-        fx[0] = walkPose(d0 - 66, 1, tau); if (fx[0].x > d0) fx[0] = pose(d0, 1, STANDP, { op: 0 }); fx[0].op = fx[0].x > d0 - 8 ? Math.max(0, (d0 - fx[0].x) / 8) : 1;
-        fx[1] = walkPose(d0 - 36, 1, tau * 1.1); if (fx[1].x > d0) fx[1] = pose(d0, 1, STANDP, { op: 0 }); fx[1].op = fx[1].x > d0 - 8 ? Math.max(0, (d0 - fx[1].x) / 8) : 1;
+    var g0 = gait(d0 - 66, d0 + 4, { stepT: .5 }), g1 = gait(d0 - 36, d0 + 4, { stepT: .46 });
+    push({ dur: Math.max(3.4, g0.dur + .5, g1.dur + .5), both: true, fn: function (u, tau) {
+        fx[0] = tau < .5 ? stepTurn(d0 - 66, -1, 1)(tau / .5) : g0.at(tau - .5); fx[0].op = fx[0].x > d0 - 8 ? Math.max(0, (d0 - fx[0].x) / 8) : 1;
+        fx[1] = tau < .5 ? stepTurn(d0 - 36, -1, 1)(tau / .5) : g1.at(tau - .5); fx[1].op = fx[1].x > d0 - 8 ? Math.max(0, (d0 - fx[1].x) / 8) : 1;
         var o = pose(SPOTS.door - 96, 1, STANDP, { afs: 140, afe: 10 }); o.talk = tau < 1.4; return o; } });
 }
 /* "Check Gmail" while he is at home: he goes to the office and comes back */
@@ -30217,7 +30417,7 @@ function officeTrip() {
     hold(pose(SPOTS.chair, 1, SEATP, { afs: 66, afe: 18, abs: 20, abe: 40, t: 8, h: -6 }), 1.3);
     run(function () { el.removeAttribute('data-boot'); say(who() + ' is checking your emails…', 'Checking Gmail by hand for new work orders'); checking.at = performance.now(); });
     push({ dur: Infinity, typing: true, fn: function (u, tau) { var o = pose(SPOTS.chair, 1, SEATP, { afs: 60, afe: 25 + 5 * Math.sin(tau * 18), abs: 57, abe: 28 + 5 * Math.sin(tau * 18 + 1.7), h: -4, t: 4 }); return o; } });
-    run(function () { say(who() + ' finished checking', checking.result || 'Done'); });
+    run(function () { say(who() + ' finished checking', checking.result || 'Done'); if (/\b[1-9]\d* work orders?\b/.test(checking.result || '') && !/^No\b/.test(checking.result || '')) cheer('Yes!'); });
     hold(pose(SPOTS.chair, 1, SEATP, { afs: 30, afe: 45, abs: 27, abe: 45, h: -2 }), 3.2);
     run(function () { el.setAttribute('data-mode', 'idle'); var cb = checking && checking.end; checking = null; if (cb) try { cb(); } catch (e) { /* ignore */ } });
     standUpFrom(SPOTS.chair, 1);
@@ -30236,7 +30436,7 @@ function travelSec() {                                                 // how lo
     return (sit ? 1.1 : 0) + Math.abs(x - SPOTS.chairStand) / SPEED + .9 + 1.1 + 1.3 + .6;
 }
 function dutyDue(now) {
-    if (!working() || checking || duty || !(window.IncBoy && IncBoy.nextCheck)) return;
+    if (!working() || checking || duty || morning || !(window.IncBoy && IncBoy.nextCheck)) return;
     var nx = IncBoy.nextCheck(now);
     if (nx && nx !== lastDuty && now >= nx - (LEAD + travelSec()) * 1000) { lastDuty = nx; interrupt(function () { dutyTrip(nx); }); return; }
     var pm = IncBoy.lastMark ? IncBoy.lastMark(now) : 0;                 // you opened the page while a check is still running
@@ -30303,7 +30503,8 @@ function dutyAfter(back) {
             hold(pose(BN, -1, SEATP, { chair: 1 }), 4.8, function (o, u, tau) {
                 var c2 = (tau % 1.6) / 1.6, dn = c2 < .25 ? ease(c2 / .25) : c2 < .45 ? 1 : 1 - ease((c2 - .45) / .4);
                 o.prop = 'stamp'; o.afs = lerp(78, 50, dn); o.afe = lerp(40, 46, dn); o.abs = 52; o.abe = 50; o.h = 12; o.t = 8; });
-            run(function () { el.setAttribute('data-act', 'none'); say(who() + ' finished checking', res); });
+            run(function () { el.setAttribute('data-act', 'none'); say(who() + ' finished checking', res); cheer('Yes!'); });
+            hold(pose(BN, -1, SEATP, { chair: 1 }), 2.6);
         } else {
             run(function () { say(who() + ' finished checking', 'Not a work order'); });
             T(pose(BN, -1, SEATP, READ), pose(BN, -1, SEATP, { chair: 1, afs: 50, afe: 40 }), .6);
@@ -30341,7 +30542,7 @@ function goToBed() {
     run(function () { say(n + ' is sleeping', 'Wakes up at ' + wakeText()); state = { x: BED.LIE.x, dir: 1, sit: true, where: 'bed' }; });
     hold(BED.LIE, 1.2, function (o) { o.sleepy = true; });
     run(function () {                                                   // asleep: the bedroom card takes over
-        bedding = null; slept = true; steps = []; si = 0;
+        bedding = null; slept = true; steps = []; si = 0; lastBedSeen = Date.now();
         if (el) el.hidden = true; if (running) { running = false; cancelAnimationFrame(raf); }
         try { if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
         var z = document.getElementById('wm-sleep'); if (z && !home()) z.hidden = false;
@@ -30353,6 +30554,141 @@ function bedDue() {                                                    // bedtim
     bedding = { at: Date.now() }; interrupt(goToBed);
 }
 
+var morning = false, lastBedSeen = 0, ALARM = { x: 53, y: 72 };
+function wakeUp() {
+    var n = who(), UP = pose(152, 1, STANDP), REACH = at(BED.LIE, { afs: 208, afe: 12 }), ARMSUP = pose(152, 1, STANDP, { afs: 172, afe: 8, abs: 168, abe: 10, h: -10, t: -2 });
+    run(function () { act = ''; scene('alarm', true); say(n + ' is waking up', 'The alarm went off · good morning'); });
+    hold(BED.LIE, 2.2, function (o) { o.sleepy = true; o.say = 'Beep beep!'; o.sayX = ALARM.x; o.sayY = ALARM.y; });
+    T(BED.LIE, REACH, .7, { sleepy: true, say: 'Beep beep!', sayX: ALARM.x, sayY: ALARM.y });         // reaches over and switches it off
+    run(function () { scene('alarm', false); });
+    T(REACH, BED.LIE, .6); hold(BED.LIE, .6);
+    T(BED.LIE, BED.STRETCH, 1.1, { yawn: true }); hold(BED.STRETCH, .5, function (o) { o.yawn = true; }); T(BED.STRETCH, BED.LIE, .9, { yawn: true });
+    run(function () { layerMe('sit'); say(n + ' is getting up', 'Good morning'); });
+    T(BED.LIE, BED.SITBED, 1.2);
+    run(function () { if (el) el.setAttribute('data-q', 'off'); });
+    T(BED.SITBED, BED.EDGE, 1.0);
+    run(function () { layerMe('up'); });
+    T(BED.EDGE, BED.RISE, .8); T(BED.RISE, UP, .7);
+    T(UP, ARMSUP, .9, { yawn: true }); hold(ARMSUP, .8, function (o) { o.yawn = true; }); T(ARMSUP, UP, .8);   // a big stretch
+    run(function () { state = { x: 152, dir: 1, sit: false, where: '' }; morning = false; plans(working() ? 'read' : 'coffee'); });
+}
+function startMorning() {                                              // the sleeping picture is replaced by the house, him still in bed
+    if (!el || !el.querySelector('svg')) { if (!build()) return false; }
+    morning = true; slept = false; lastBedSeen = 0;
+    steps = []; si = 0; stepAt = performance.now(); state = { x: BED.LIE.x, dir: 1, sit: true, where: 'bed' };
+    layerMe('lie'); drawRig(me, at(BED.LIE, { sleepy: true })); camX = 0; camTarget = 0; world.setAttribute('transform', 'translate(0 0)');
+    pet.x = 205; pet.y = 91.4; pet.mode = 'curl'; pet.dir = -1; pet.jump = null; pet.still = 0;   // the pet was asleep on the bed too
+    wakeUp(); return true;
+}
+
+/* Tap him: he waves and tells you something useful (a new line each tap). He cheers when a work order comes in or
+   when you save a big job (a new job of $1,000 or more with GST). */
+var tapUntil = 0, tapMsg = '', tapI = 0, cheerUntil = 0, cheerMsg = '', cheerAt = 0, cheerHop = false, pendingCheer = null;
+function todayOrders() { var m = M(), s0 = m && m.status ? m.status() : null, n = 0, day = new Date().toDateString(); ((s0 && s0.checks) || []).forEach(function (c) { if (c && c.at && new Date(c.at).toDateString() === day) n += +c.found || 0; }); return n; }
+function wxWords() {
+    var w = window.IncDay && IncDay.wx && IncDay.wx(); if (!w) return '';
+    var t = w.temp != null && isFinite(w.temp) ? ', ' + Math.round(w.temp) + '°C' : '';
+    return ({ clear: 'Clear skies', clouds: 'A bit cloudy', overcast: 'Grey out there', fog: 'Foggy out', drizzle: 'Drizzly out', rain: 'It’s raining', snow: 'It’s snowing!', storm: 'Stormy out' }[w.kind] || '') + t;
+}
+function tapLines() {
+    var nm = who() === 'He' ? '' : who(), out = [nm ? 'Hi! I’m ' + nm : 'Hi!'];
+    var n = todayOrders(); out.push(n ? n + ' work order' + (n === 1 ? '' : 's') + ' today' : 'No work orders yet today');
+    if (working()) { var nx = nextCheckT(); if (nx) out.push('Next check ' + clockT(nx)); }
+    else { var m = M(), w = m && m.wakeAt ? m.wakeAt() : null; if (w) out.push('Back to work ' + clockT(w)); }
+    var ww = wxWords(); if (ww) out.push(ww);
+    return out;
+}
+function onTap(ev) {
+    if (!me || !me.pose) return;
+    var L = tapLines(); tapMsg = L[tapI % L.length]; tapI++;
+    tapUntil = performance.now() + 2800;
+    if (ev && ev.preventDefault) ev.preventDefault();
+}
+function cheer(msg, hop) { cheerMsg = msg || 'Yes!'; cheerHop = !!hop; cheerAt = performance.now(); cheerUntil = cheerAt + 2600; }
+window.addEventListener('incjobsaved', function (e) {
+    var d = e && e.detail || {}, t = +(d.entry && (d.entry.total || d.entry.amount)) || 0;
+    if (!d.isNew || t < 1000) return;
+    var msg = 'Big job! $' + Math.round(t).toLocaleString('en-CA');
+    if (el && !el.hidden && running) cheer(msg, true); else pendingCheer = { msg: msg, at: Date.now() };   // he cheers when you next see him
+});
+function overlay(o, now) {                                             // waving / cheering on top of whatever he is doing
+    if (o.t < -45) { if (now < tapUntil) { o.say = 'Zzz…'; } return o; }       // in bed
+    var busyArm = !!o.prop;
+    if (now < cheerUntil) {
+        var c = (now - cheerAt) / 1000, pump = Math.abs(Math.sin(c * 7.5));
+        if (busyArm) { o.abs = 150 + 20 * pump; o.abe = 15 + 35 * pump; } else { o.afs = 150 + 20 * pump; o.afe = 15 + 35 * pump; o.abs = 30; o.abe = 60; }
+        o.h = -8; o.say = cheerMsg; o.talk = true;
+        if (cheerHop && o.y < 100 && c < 1.7) { var hop = Math.max(0, Math.sin(c * 7.4)); o.y -= 5 * hop; o.lfk = 4 + 18 * (1 - hop); o.lbk = 4 + 18 * (1 - hop); o.lff = -10 * hop; o.lbf = -10 * hop; }
+    } else if (now < tapUntil) {
+        var w = (now - (tapUntil - 2800)) / 1000, wave = Math.sin(w * 13);
+        if (busyArm) { o.abs = 158 + 12 * wave; o.abe = 28 + 18 * wave; } else { o.afs = 158 + 12 * wave; o.afe = 28 + 18 * wave; }
+        o.say = tapMsg; o.h = (o.h || 0) - 4;
+    }
+    return o;
+}
+
+/* ------------------------------------------------------------------ his pet (Settings > Work Orders > His pet)
+   It trots after him, sits when he stops, curls up for a nap on the sofa next to him, sits by his chair, sleeps at the
+   foot of his bed - and jumps up and down when it needs to. Drawn in three shapes: walking/standing, sitting, curled. */
+function petKind() { var v = String(S('woPet', 'cat') || 'cat'); return v === 'dog' || v === 'none' ? v : 'cat'; }
+function petHtml() {
+    return '<g class="hs-pet" style="display:none">' +
+        '<g class="pt-walk"><path class="pt-tail pt-wtail" d="M-7 -8c-4 -3 -5 -8 -3 -11"/><path class="pt-leg pt-l1" d="M-4.5 -5V0"/><path class="pt-leg pt-l2" d="M5 -5V0"/>' +
+            '<ellipse class="pt-body" cx="0" cy="-7.2" rx="8" ry="4"/><path class="pt-stripe" d="M-3 -10.6v2.4M0 -11v2.8M3 -10.6v2.4"/><path class="pt-leg pt-l3 pt-near" d="M-3 -5V0"/><path class="pt-leg pt-l4 pt-near" d="M6.4 -5V0"/>' +
+            '<g class="pt-headg"><circle class="pt-head" cx="9" cy="-11.4" r="3.6"/><ellipse class="pt-snout" cx="12.4" cy="-10.6" rx="1.8" ry="1.2"/><path class="pt-ear" d="M7 -14.2l.6 -3 2.2 2.2zM10.2 -14.4l1.8 -2.6 .8 3z"/><path class="pt-earf" d="M7.2 -14c-1.8 .2 -2.4 3.4 -1 5.4 1-.7 1.5-3 1-5.4z"/><circle class="pt-eye" cx="10.6" cy="-12" r=".55"/><circle class="pt-nose" cx="13.6" cy="-11" r=".55"/></g></g>' +
+        '<g class="pt-sit"><path class="pt-tail" d="M-4 -1c3 1.6 8 1.6 10 .2"/><ellipse class="pt-body" cx="-.5" cy="-6.6" rx="4.8" ry="6.2"/><path class="pt-stripe" d="M-3.4 -9h2.2M-3.6 -6.6h2.4"/><path class="pt-leg pt-near" d="M2.6 -6V0M4 -6V0"/>' +
+            '<g class="pt-headg"><circle class="pt-head" cx="2.6" cy="-14.4" r="3.6"/><ellipse class="pt-snout" cx="6" cy="-13.6" rx="1.8" ry="1.2"/><path class="pt-ear" d="M.6 -17.2l.6 -3 2.2 2.2zM3.8 -17.4l1.8 -2.6 .8 3z"/><path class="pt-earf" d="M.8 -17c-1.8 .2 -2.4 3.4 -1 5.4 1-.7 1.5-3 1-5.4z"/><circle class="pt-eye" cx="4.2" cy="-15" r=".55"/><circle class="pt-nose" cx="7.2" cy="-14" r=".55"/></g></g>' +
+        '<g class="pt-curl"><path class="pt-tail" d="M-6.5 -1.5c-3 2.6 2 4.6 9 3.6"/><ellipse class="pt-body" cx="0" cy="-3" rx="7.2" ry="3.4"/><path class="pt-stripe" d="M-3 -6.2v2.4M0 -6.4v2.6M3 -6v2.2"/>' +
+            '<g class="pt-headg"><circle class="pt-head" cx="5.6" cy="-3.6" r="2.9"/><ellipse class="pt-snout" cx="8.2" cy="-2.8" rx="1.5" ry="1"/><path class="pt-ear" d="M4.2 -6l.6 -2.6 1.8 1.9zM6.8 -6.2l1.6 -2.3 .7 2.6z"/><path class="pt-earf" d="M4.4 -6c-1.6 .2 -2 2.8 -.8 4.4.8-.6 1.2-2.4.8-4.4z"/><path class="pt-eyec" d="M6.2 -3.8q.7 .5 1.4 0"/></g><text class="pt-z" x="8" y="-8">z</text></g>' +
+        '</g>';
+}
+var pet = { x: SPOTS.sofa + 26, y: FLOOR, dir: -1, mode: 'sit', ph: 0, still: 0, jump: null }, petG = null, petLast = 0, petLegs = [], petBody = null;
+var PET_SPEED = 50;
+function petTarget(o) {                                                // where it wants to be, given what he is doing
+    if (o.t < -45) return { x: 205, y: 91.4, mode: 'curl', dir: -1 };                                                           // at the foot of his bed
+    if (o.y > 100 && Math.abs(o.x - SPOTS.sofa) < 8) return { x: SPOTS.sofa + 26, y: 101.4, mode: 'curl', dir: -1 };            // napping next to him on the sofa
+    if (o.y > 100) return { x: o.x - 22 * o.dir, y: FLOOR, mode: 'sit', dir: o.dir };                                            // sitting by his chair
+    return { x: o.x - 20 * o.dir, y: FLOOR, mode: null, dir: o.dir };                                                           // following him
+}
+function petStep(o, now) {
+    if (!petG) return;
+    var dt = Math.min(.1, petLast ? (now - petLast) / 1000 : 0); petLast = now;
+    var T0 = petTarget(o), dx = T0.x - pet.x, moving = false;
+    if (pet.jump) {                                                    // in the air
+        var j = pet.jump, u = Math.min(1, (now - j.at) / 450); pet.x = lerp(j.x0, j.x1, u); pet.y = lerp(j.y0, j.y1, u) - 7 * Math.sin(Math.PI * u); pet.mode = 'walk';
+        if (u >= 1) { pet.jump = null; pet.y = j.y1; }
+    } else if (Math.abs(T0.y - pet.y) > .5) {                          // up onto the sofa or bed (or back down): get close, then jump
+        if (T0.y < pet.y && Math.abs(dx) > 12) { pet.x += Math.sign(dx) * Math.min(Math.abs(dx) - 10, PET_SPEED * dt); pet.dir = Math.sign(dx) || pet.dir; moving = true; }
+        else pet.jump = { at: now, x0: pet.x, x1: T0.y < pet.y ? T0.x : pet.x + Math.sign(dx || pet.dir) * Math.min(14, Math.abs(dx) + 6), y0: pet.y, y1: T0.y < pet.y ? T0.y : FLOOR };
+    } else if (Math.abs(dx) > (T0.mode ? 1.5 : 6)) {                   // trot after him
+        var v = Math.min(PET_SPEED, 18 + Math.abs(dx) * 2.2);
+        pet.x += Math.sign(dx) * Math.min(Math.abs(dx), v * dt); pet.dir = Math.sign(dx); moving = true;
+    }
+    if (moving) { pet.ph += dt * 9; pet.still = 0; pet.mode = 'walk'; }
+    else if (!pet.jump) {
+        pet.still += dt;
+        if (T0.mode) { pet.mode = T0.mode; pet.dir = T0.dir; }
+        else pet.mode = pet.still > 20 ? 'curl' : pet.still > 1.2 ? 'sit' : 'stand';
+    }
+    var sc = petKind() === 'dog' ? 1.22 : 1, flip = pet.dir < 0 ? -1 : 1;
+    petG.setAttribute('transform', 'translate(' + f1(pet.x) + ' ' + f1(pet.y) + ') scale(' + f1(flip * sc) + ' ' + sc + ')');
+    petG.setAttribute('data-m', pet.mode === 'walk' || pet.mode === 'stand' ? 'walk' : pet.mode);
+    if (pet.mode === 'walk' && moving) {                               // legs move as it trots
+        var a = 26 * Math.sin(pet.ph), b = 26 * Math.sin(pet.ph + Math.PI);
+        petLegs[0].setAttribute('transform', 'rotate(' + f1(a) + ' -4.5 -5)'); petLegs[1].setAttribute('transform', 'rotate(' + f1(b) + ' 5 -5)');
+        petLegs[2].setAttribute('transform', 'rotate(' + f1(b) + ' -3 -5)'); petLegs[3].setAttribute('transform', 'rotate(' + f1(a) + ' 6.4 -5)');
+    } else petLegs.forEach(function (l) { if (l) l.removeAttribute('transform'); });
+}
+function petApply() {
+    var k = petKind(); document.documentElement.setAttribute('data-pet', k);
+    if (!svg) return; var g = svg.querySelector('.hs-pet'); if (!g) return;
+    g.style.display = k === 'none' ? 'none' : ''; g.setAttribute('data-kind', k); petG = k === 'none' ? null : g;
+    petLegs = ['.pt-l1', '.pt-l2', '.pt-l3', '.pt-l4'].map(function (q0) { return g.querySelector(q0); });
+}
+window.IncPet = { apply: petApply, state: function () { return { x: pet.x, y: pet.y, mode: pet.mode, kind: petKind() }; } };
+try { document.documentElement.setAttribute('data-pet', petKind()); } catch (e) { /* settings not loaded yet */ }
+window.addEventListener('load', function () { document.documentElement.setAttribute('data-pet', petKind()); });
+
 /* ------------------------------------------------------------------ running it */
 function frame(now) {
     if (!running) return;
@@ -30362,20 +30698,22 @@ function frame(now) {
     dutyDue(Date.now()); bedDue();
     var st = steps[si];
     while (st && st.dur === 0) { si++; stepAt = now; st.run(); st = steps[si]; }
-    if (!st) { steps = []; si = 0; stepAt = now; if (!checking && !duty && !bedding && home()) { var a = nextActivity(); plans(a); } return; }
+    if (!st) { steps = []; si = 0; stepAt = now; if (!checking && !duty && !bedding && !morning && home()) { var a = nextActivity(); plans(a); } return; }
     var tau = (now - stepAt) / 1000;
     if (st.typing) { if (checking && checking.done && tau > 2.5) { si++; stepAt = now; return; } }
     if (st.wait) { if (duty && duty.phase === 'check') pollDuty(); if (st.wait()) { si++; stepAt = now; return; } }
     var u = st.dur === Infinity ? 0 : Math.min(1, tau / st.dur);
     var o = st.fn(u, Math.min(tau, st.dur));
-    drawRig(me, o);
+    if (now < tapUntil || now < cheerUntil) o = overlay(at(o, {}), now);
+    drawRig(me, o); petStep(o, now);
     if (o.chair && chairG) chairG.setAttribute('transform', 'translate(' + f1(o.x + 5 * o.dir) + ' 126) scale(' + o.dir + ' 1)');
     if (st.both) { drawRig(f1r, fx[0]); drawRig(f2r, fx[1]); }
     var want = Math.max(0, Math.min(WORLD_W - 240, o.x - 120)); if (o.t < -45) want = 0;   // lying in bed: the same view as the sleeping picture
     if (camTarget == null) camX = want; else camX += (want - camX) * .1;
     camTarget = want;
     world.setAttribute('transform', 'translate(' + f1(-camX) + ' 0)');
-    if (o.yawn) bubble('Yaaawn…', o.t < -45 ? o.x - 40 : o.x, o.t < -45 ? o.y - 46 : o.y - 66);
+    if (o.say) bubble(o.say, o.sayX != null ? o.sayX : o.x, o.sayY != null ? o.sayY : o.y - 66);
+    else if (o.yawn) bubble('Yaaawn…', o.t < -45 ? o.x - 40 : o.x, o.t < -45 ? o.y - 46 : o.y - 66);
     else if (o.talk) bubble(act === ACT.party.label ? 'Ha ha!' : 'Ha!', o.x, o.y - 66); else bubble('');
     if (u >= 1 && st.dur !== Infinity) { si++; stepAt = now; }
 }
@@ -30393,6 +30731,8 @@ function build() {
     el = card(); if (!el) return false;
     el.querySelector('.ob-scene').innerHTML = houseHtml();
     svg = el.querySelector('svg'); world = svg.querySelector('.hs-world'); bub = svg.querySelector('.hs-bub'); chairG = svg.querySelector('.hs-chairg'); el.setAttribute('data-act', 'none');
+    petApply();
+    el.querySelector('.ob-scene').addEventListener('click', onTap); el.querySelector('.ob-scene').setAttribute('title', 'Tap ' + (who() === 'He' ? 'him' : who()));
     me = makeRig(svg, 'hs-me', { sh: '#3b82f6', sh2: '#2563eb', pa: '#64748b', pa2: '#4b5563', sk: '#f2c29b', sk2: '#dba87f', ha: '#3a2a1f', so: '#e2e8f0' });
     f1r = makeRig(svg, 'hs-f1', { sh: '#22c55e', sh2: '#16a34a', pa: '#1e293b', pa2: '#0f172a', sk: '#8d5524', sk2: '#744216', ha: '#111827', so: '#111827' });
     f2r = makeRig(svg, 'hs-f2', { sh: '#f97316', sh2: '#ea580c', pa: '#334155', pa2: '#1e293b', sk: '#f1c27d', sk2: '#d9a85f', ha: '#7c2d12', so: '#111827' });
@@ -30400,18 +30740,21 @@ function build() {
     var ph = ''; try { ph = String(appSettings.woBoyPhoto || ''); } catch (e) { /* ignore */ }
     var img = svg.querySelector('.zb-pimg'); if (img) img.setAttribute('href', ph); svg.classList.toggle('zb-photo-on', !!ph);
     scene('mug', true);
-    if (window.IncSky) IncSky.tick();
+    if (window.IncDay) IncDay.tick();
     return true;
 }
 function onAdd() { return !document.hidden && document.body && document.body.getAttribute('data-pg') === 'add'; }
 function sync() {
     var want = atHome() || !!checking || !!duty;
+    if (onAdd() && autoOn() && offWork() && inBedtime() && !bedding) lastBedSeen = Date.now();           // you are watching him sleep
+    if (want && !checking && !duty && !morning && lastBedSeen && Date.now() - lastBedSeen < 8000 && onAdd() && home()) startMorning();   // wake-up time came while you watched
     if (want && slept && el) { slept = false; steps = []; si = 0; state = { x: SPOTS.sofa, dir: 1, sit: true, where: 'sofa' }; layerMe('up'); camTarget = null; }   // a new day
     var c = document.getElementById('wm-home');
     if (!want) { if (c) c.hidden = true; if (running) { running = false; cancelAnimationFrame(raf); } return; }
     if (!el || !el.querySelector('svg')) { if (!build()) return; steps = []; si = 0; state = { x: SPOTS.sofa, dir: 1, sit: true, where: 'sofa' }; camTarget = null; }
     var z = document.getElementById('wm-sleep'); if (z) z.hidden = true;
     el.hidden = false;
+    if (pendingCheer && onAdd()) { if (Date.now() - pendingCheer.at < 120000) cheer(pendingCheer.msg, true); pendingCheer = null; }
     if (onAdd()) { if (!running) { running = true; stepAt = performance.now() - 0; lastFrame = 0; raf = requestAnimationFrame(frame); } }
     else if (running) { running = false; cancelAnimationFrame(raf); }
 }
@@ -30421,6 +30764,7 @@ document.addEventListener('visibilitychange', function () { setTimeout(sync, 50)
 function check(end) {                                                  // Check Gmail by hand while he is at home
     if (!atHome() || !el) return false;
     if (bedding) { bedding = null; layerMe('up'); }
+    morning = false;
     checking = { done: false, result: '', end: end, at: 0 }; duty = null;
     interrupt(officeTrip);
     sync();
@@ -30437,9 +30781,24 @@ function plans_after_current(f) { interrupt(f); }
 function guessState() { var p = me && me.pose; if (!p) return state; return { x: p.x, dir: p.dir, sit: p.y > 100, where: '' }; }
 
 var css = [
-'.wm-home .hs-svg { display: block; } .wm-home .zb-quilt { fill: url(#hs-zbQuiltG); }',
+'.hs-hol { display: none; } html[data-hol~="xmas"] .hs-xmas, html[data-hol~="newyear"] .hs-ny, html[data-hol~="diwali"] .hs-diwali, html[data-hol~="halloween"] .hs-halloween, html[data-hol~="canada"] .hs-canada { display: inline; }',
+'.hs-tree { fill: #15803d; } .hs-star { fill: #fde047; } .hs-orn { animation: hsTw 1.8s ease-in-out infinite; } .hs-orn.o0 { fill: #ef4444; } .hs-orn.o1 { fill: #fde047; animation-delay: .45s; } .hs-orn.o2 { fill: #60a5fa; animation-delay: .9s; } .hs-orn.o3 { fill: #f472b6; animation-delay: 1.35s; }',
+'.hs-nyt { fill: #fde68a; font: 800 6.4px/1 sans-serif; letter-spacing: .6px; } .hs-wire { fill: none; stroke: #334155; stroke-width: .5; }',
+'.hs-bulb { animation: hsTw 1.6s ease-in-out infinite; } .hs-bulb.b0 { fill: #fbbf24; } .hs-bulb.b1 { fill: #f472b6; animation-delay: .4s; } .hs-bulb.b2 { fill: #34d399; animation-delay: .8s; } .hs-bulb.b3 { fill: #60a5fa; animation-delay: 1.2s; }',
+'.hs-dflame { fill: #fbbf24; transform-box: fill-box; transform-origin: 50% 100%; animation: hsFlame .4s ease-in-out infinite alternate; }',
+'@keyframes hsTw { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }',
+'.wm-home .zb-pet { display: none !important; } .hs-pet .pt-walk, .hs-pet .pt-sit, .hs-pet .pt-curl { display: none; } .hs-pet[data-m="walk"] .pt-walk, .hs-pet[data-m="sit"] .pt-sit, .hs-pet[data-m="curl"] .pt-curl { display: inline; }',
+'.pt-body, .pt-head, .pt-ear { fill: #f59e0b; } .pt-stripe { fill: none; stroke: #b45309; stroke-width: .9; stroke-linecap: round; } .pt-leg { fill: none; stroke: #d97706; stroke-width: 2; stroke-linecap: round; } .pt-near { stroke: #f59e0b; }',
+'.pt-tail { fill: none; stroke: #d97706; stroke-width: 2; stroke-linecap: round; } .pt-eye, .pt-nose { fill: #1f2937; } .pt-eyec { fill: none; stroke: #1f2937; stroke-width: .6; stroke-linecap: round; } .pt-snout, .pt-earf { display: none; }',
+'.pt-z { fill: #c7d2fe; font: 700 4px/1 sans-serif; opacity: .8; animation: ptZ 3s ease-in-out infinite; } @keyframes ptZ { 0%, 100% { opacity: 0; transform: translateY(0); } 50% { opacity: .9; transform: translateY(-2px); } }',
+'.hs-pet[data-kind="dog"] .pt-body, .hs-pet[data-kind="dog"] .pt-head { fill: #a16207; } .hs-pet[data-kind="dog"] .pt-stripe, .hs-pet[data-kind="dog"] .pt-ear { display: none; } .hs-pet[data-kind="dog"] .pt-snout, .hs-pet[data-kind="dog"] .pt-earf { display: inline; }',
+'.hs-pet[data-kind="dog"] .pt-leg, .hs-pet[data-kind="dog"] .pt-tail { stroke: #854d0e; } .hs-pet[data-kind="dog"] .pt-near { stroke: #a16207; } .pt-snout { fill: #ca8a04; } .pt-earf { fill: #713f12; }',
+'.zb-pet-dog .pt-body, .zb-pet-dog .pt-head { fill: #a16207; } .zb-pet-dog .pt-tail { stroke: #854d0e; } .zb-pet-dog .pt-snout, .zb-pet-dog .pt-earf { display: inline; }',
+'.hs-pet[data-kind="dog"] .pt-wtail { animation: ptWag .35s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 100% 100%; } @keyframes ptWag { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }',
+'.wm-home .ob-scene { cursor: pointer; -webkit-tap-highlight-color: transparent; } .wm-home .hs-svg { display: block; } .wm-home .zb-quilt { fill: url(#hs-zbQuiltG); }',
 '.hs-eyec { fill: none; stroke: #1f2937; stroke-width: .9; stroke-linecap: round; display: none; } .hs-sleepy .tr-eyeo { display: none; } .hs-sleepy .hs-eyec { display: inline; }',
 '.hs-qover { opacity: 0; } .hs-qlie, .hs-qsit { transition: opacity .5s ease; } .wm-home[data-q="lie"] .hs-qover, .wm-home[data-q="sit"] .hs-qover { opacity: 1; } .wm-home[data-q="lie"] .hs-qsit, .wm-home[data-q="sit"] .hs-qlie { opacity: 0; }',
+'.wm-home.hsx-alarm .zb-clk { animation: hsAlarm .5s steps(2) infinite; } @keyframes hsAlarm { 50% { opacity: .15; } }',
 '.hs-qflat { transition: opacity .5s ease; } .wm-home[data-q="lie"] .hs-qflat, .wm-home[data-q="sit"] .hs-qflat { opacity: 0; }',
 '.hs-skirt { fill: #4a3424; } .hs-wfr { fill: #37415f; } .hs-mull { stroke: #37415f; stroke-width: 2; fill: none; } .hs-sill { fill: #475175; }',
 '.hs-pot { fill: #c2410c; } .hs-leaf { fill: #22c55e; } .hs-drops circle { fill: #7dd3fc; opacity: 0; } .wm-home.hsx-water .hs-drops circle { animation: hsDrop 1s linear infinite; } .wm-home.hsx-water .hs-drops circle:nth-child(2) { animation-delay: .3s; } .wm-home.hsx-water .hs-drops circle:nth-child(3) { animation-delay: .6s; }',
@@ -30478,13 +30837,14 @@ inject();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
 
 window.IncHouse = {
-    atHome: atHome, inBedtime: inBedtime, bedding: function () { return !!bedding; }, sync: sync, check: check,
+    atHome: atHome, inBedtime: inBedtime, bedding: function () { return !!bedding; }, morning: function () { return morning; }, _wake: function () { return startMorning(); }, sync: sync, check: check,
     done: function (text) { if (checking) { checking.done = true; checking.result = text || 'Done'; } },
     checking: function () { return !!checking; }, working: working,
     duty: function () { return duty ? { mark: duty.mark, phase: duty.phase, result: duty.c } : null; },
     activity: function () { return act; }, pose: function () { return me && me.pose; }, cam: function () { return camX; },
     plan: function (a) { if (!el) return; steps = steps.slice(0, si + 1); plans_after_current(function () { plans(a); }); },
-    _next: nextActivity, _spots: SPOTS
+    _next: nextActivity, _spots: SPOTS, pet: function () { return IncPet.state(); }, tap: onTap, cheer: cheer, tapLines: tapLines,
+    _show: function (o, cx) { if (!me) return; running = false; cancelAnimationFrame(raf); drawRig(me, o); camX = cx == null ? Math.max(0, Math.min(WORLD_W - 240, o.x - 120)) : cx; world.setAttribute('transform', 'translate(' + f1(-camX) + ' 0)'); }   // tests: draw one pose
 };
 })();
 
@@ -31647,7 +32007,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v53)';
+var VERSION = '2026.11.14 (v54)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;

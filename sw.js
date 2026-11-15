@@ -1,6 +1,6 @@
 /* IncAtor service worker: lets the app open instantly and when offline, and shows work order notifications from your IncAtor server.
    Your data is never touched (it lives in the browser / your Google Drive). */
-var CACHE = 'incator-v53';
+var CACHE = 'incator-v54';
 self.addEventListener('install', function (e) { self.skipWaiting(); });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); }));
@@ -9,6 +9,7 @@ self.addEventListener('fetch', function (e) {
   var r = e.request, u = new URL(r.url);
   if (r.method !== 'GET') return;
   if (/(^|\.)(google|googleapis|gstatic|googleusercontent)\.com$/.test(u.hostname) && !/fonts\./.test(u.hostname)) return;   // never cache sign-in or Drive traffic
+  if (/(^|\.)open-meteo\.com$/.test(u.hostname)) return;              // the weather outside his windows: always live
   // the page itself is always fetched fresh from GitHub (not from the browser's 10-minute cache), so an upload shows up right away
   e.respondWith(
     fetch(r.mode === 'navigate' || /\.html?$/.test(u.pathname) ? new Request(r.url, { cache: 'no-cache', credentials: 'same-origin' }) : r).then(function (res) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(r, copy); }); return res; })
