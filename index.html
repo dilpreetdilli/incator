@@ -29379,7 +29379,7 @@ var css = [
 '.ob-cloud ellipse { fill: #fff; opacity: .88; } .ob-cloud { animation: obCloud 26s ease-in-out infinite alternate; }',
 '.ob-pot { fill: #c2410c; } .ob-leaf { fill: #22c55e; transform-box: fill-box; transform-origin: 50% 100%; animation: obSway 5s ease-in-out infinite; }',
 '.ob-cf { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.3; } .ob-tick { stroke: #94a3b8; stroke-width: .9; } .ob-ch, .ob-cm { stroke: #334155; stroke-width: 1.3; stroke-linecap: round; fill: none; } .ob-cc { fill: #334155; }',
-'.ob-cm { transform-box: view-box; transform-origin: 46px 30px; animation: obTurn 10s linear infinite; } .ob-ch { transform-box: view-box; transform-origin: 46px 30px; animation: obTurn 120s linear infinite; }',
+'.ob-cm { transform-box: fill-box; transform-origin: 50% 100%; animation: obTurn 10s linear infinite; } .ob-ch { transform-box: fill-box; transform-origin: 50% 100%; animation: obTurn 120s linear infinite; }',
 '.ob-brk { stroke: #6b4a2a; stroke-width: 1.6; } .ob-lbl { fill: rgba(255,255,255,.8); }',
 '.ob-wood2 { fill: #9a6a3c; } .ob-ped { fill: #a87244; } .ob-drw { stroke: #7f5530; stroke-width: .8; } .ob-knob { fill: #e7c49a; } .ob-shad { fill: #000; opacity: .28; }',
 '.ob-paper { fill: #f8fafc; stroke: #cbd5e1; stroke-width: .35; } .ob-tray { fill: #64748b; } .ob-sheet { fill: #f8fafc; } .ob-mark rect { fill: #dc2626; opacity: 0; }',
@@ -29992,7 +29992,7 @@ var BEDROOM_X = 0, OFFICE_X = 240, LIVING_X = 480, KITCHEN_X = 720, WORLD_W = 96
 var SPOTS = {                                                          // where things happen (world x)
     sofa: LIVING_X + 104, tv: LIVING_X + 104, window: LIVING_X + 52, door: LIVING_X + 162, table: LIVING_X + 172,
     coffee: KITCHEN_X + 36, sink: KITCHEN_X + 70, stove: KITCHEN_X + 102, fridge: KITCHEN_X + 150, dine: KITCHEN_X + 188,
-    chair: 353, chairStand: 351, deskStand: 372, bench: 336, bed: 152
+    chair: 353, chairStand: 351, bench: 336, bed: 152
 };
 function houseHtml() {
     var B = innerOf((window.IncMail && IncMail.sleeperHtml && IncMail.sleeperHtml()) || '', ['.zb-head', '.zb-pj', '.zb-neck', '.zb-arm', '.zb-ybub', '.zb-blank']);
@@ -30214,15 +30214,15 @@ function officeTrip() {
 }
 
 /* Working hours (inside your Auto Import schedule): your server checks Gmail every 5 minutes. He lives his day at home
-   and is at the computer in the office 10 seconds before each check. He stands at the desk while it runs. Only when the
-   check finds a new email does he sit down: he takes it to the workbench and reads it to see if it is a work order
+   and is sitting at the computer in the office 10 seconds before each check, and stays in his chair while it runs.
+   When the check finds a new email he rolls his chair over to the workbench and reads it to see if it is a work order
    (a work order gets stamped). Then he goes back home to what he was doing. */
 var LEAD = 10, GIVEUP = 90000, duty = null, lastDuty = 0;
-var DESKP = { t: 14, h: 9, afs: 52, afe: 40, abs: 46, abe: 44 };
+var TYPEP = { chair: 1, afs: 60, afe: 25, abs: 57, abe: 28, h: -4, t: 4 };
 function resultFor(mark) { var m = M(), s0 = m && m.status ? m.status() : null, l = s0 && s0.checks && s0.checks[0]; return l && Date.parse(l.at) >= mark - 20000 ? l : null; }
 function travelSec() {                                                 // how long until he is ready at the computer
     var p = me && me.pose, x = p ? p.x : state.x, sit = p ? p.y > 100 : state.sit;
-    return (sit ? 1.1 : 0) + Math.abs(x - SPOTS.deskStand) / SPEED + .9 + .5 + 1.3 + .5 + .6;
+    return (sit ? 1.1 : 0) + Math.abs(x - SPOTS.chairStand) / SPEED + .9 + 1.1 + 1.3 + .6;
 }
 function dutyDue(now) {
     if (!working() || checking || duty || !(window.IncBoy && IncBoy.nextCheck)) return;
@@ -30246,41 +30246,42 @@ function later(build) {                                                // add st
     Array.prototype.splice.apply(steps, [si, 0].concat(add));
 }
 function dutyTrip(mark) {
-    var back = lastAct || 'read', D = SPOTS.deskStand;
+    var back = lastAct || 'read', CH = SPOTS.chair;
     duty = { mark: mark, phase: 'go', c: null, polling: false, lastPoll: 0 };
     run(function () { act = ''; say(who() + ' is going to the office', 'Email check at ' + clockT(mark)); });
-    walkTo(D, 1);
-    var ON = pose(D, 1, STANDP, { t: 12, h: 6, afs: 64, afe: 16 });
-    T(pose(D, 1, STANDP), ON, .5);
+    walkTo(SPOTS.chairStand, 1);
+    T(pose(SPOTS.chairStand, 1, STANDP), pose(CH - 1, 1, LOWERP), .55); T(pose(CH - 1, 1, LOWERP), pose(CH, 1, SEATP, TYPEP), .55);   // sits down in his chair
+    state.x = CH; state.sit = true; state.dir = 1;
+    var ON = pose(CH, 1, SEATP, { chair: 1, afs: 66, afe: 18, abs: 20, abe: 40, t: 8, h: -6 });
     run(function () { el.setAttribute('data-mode', 'pc'); el.setAttribute('data-boot', ''); say(who() + ' is turning on the computer', 'Email check at ' + clockT(mark)); });
     hold(ON, 1.3);
-    T(ON, pose(D, 1, STANDP, DESKP), .5);
+    T(ON, pose(CH, 1, SEATP, TYPEP), .4);
     run(function () { el.removeAttribute('data-boot'); duty.phase = 'wait'; });
     push({ dur: Infinity, wait: function () { return Date.now() >= duty.mark; }, fn: function (u, tau) {
         var left = Math.max(1, Math.ceil((duty.mark - Date.now()) / 1000));
         say(who() + ' is ready at the computer', 'Checking your emails in ' + left + ' s');
-        var o = pose(D, 1, STANDP, DESKP); o.h = 9 + 2 * Math.sin(tau * .9); return o; } });
+        var o = pose(CH, 1, SEATP, TYPEP); o.h = -4 + 2 * Math.sin(tau * .9); return o; } });
     run(function () { duty.phase = 'check'; say(who() + ' is checking your emails…', 'Looking in Gmail for new emails'); });
-    push({ dur: Infinity, wait: function () { return !!duty.c; }, fn: function (u, tau) { var o = pose(D, 1, STANDP, DESKP); o.afe = 40 + 4 * Math.sin(tau * 9); o.h = 9 + 1.5 * Math.sin(tau * 1.3); return o; } });
+    push({ dur: Infinity, wait: function () { return !!duty.c; }, fn: function (u, tau) {                // typing away
+        return pose(CH, 1, SEATP, at(TYPEP, { afe: 25 + 5 * Math.sin(tau * 18), abe: 28 + 5 * Math.sin(tau * 18 + 1.7) })); } });
     run(function () { later(function () { dutyAfter(back); }); });
 }
 function dutyAfter(back) {
-    var c = duty.c, D = SPOTS.deskStand, CH = SPOTS.chair, BN = SPOTS.bench;
+    var c = duty.c, CH = SPOTS.chair, BN = SPOTS.bench;
     var res = c.giveup ? 'Finished on your server' : (window.IncBoy && IncBoy.summary ? IncBoy.summary(c) : 'Done');
     duty.phase = 'after';
-    state.x = D; state.dir = 1; state.sit = false;
-    if (c.error || c.giveup || !(c.emails > 0)) {                         // nothing new: he goes straight back home
+    state.x = CH; state.dir = 1; state.sit = true;
+    if (c.error || c.giveup || !(c.emails > 0)) {                         // nothing new: he gets up and goes back home
         run(function () { say(who() + ' finished checking', c.error || c.giveup ? res : 'No new emails'); });
-        hold(pose(D, 1, STANDP, DESKP), 3);
-        T(pose(D, 1, STANDP, DESKP), pose(D, 1, STANDP), .5);
-    } else {                                                           // a new email: he sits down at the workbench to read it
+        T(pose(CH, 1, SEATP, TYPEP), pose(CH, 1, SEATP, { chair: 1, afs: 30, afe: 45, abs: 27, abe: 45, h: -2 }), .5);
+        hold(pose(CH, 1, SEATP, { chair: 1, afs: 30, afe: 45, abs: 27, abe: 45, h: -2 }), 2.6);
+        run(function () { el.setAttribute('data-mode', 'idle'); });
+        standUpFrom(CH, 1);
+    } else {                                                           // a new email: he rolls over to the workbench to read it
         var n = c.emails, wo = c.found > 0;
         run(function () { say(who() + ' found ' + n + ' new email' + (n === 1 ? '' : 's'), 'Taking it to the workbench to see if it is a work order'); });
-        hold(pose(D, 1, STANDP, DESKP), 1.6);
-        T(pose(D, 1, STANDP, DESKP), pose(D, 1, STANDP), .5);
-        walkTo(SPOTS.chairStand, 1);
-        T(pose(SPOTS.chairStand, 1, STANDP), pose(CH - 1, 1, LOWERP), .55); T(pose(CH - 1, 1, LOWERP), pose(CH, 1, SEATP, { chair: 1 }), .55);
-        T(pose(CH, 1, SEATP, { chair: 1 }), pose(CH, -1, SEATP, { chair: 1 }), .5);           // swivels round on the chair
+        hold(pose(CH, 1, SEATP, TYPEP), 1.6);
+        T(pose(CH, 1, SEATP, TYPEP), pose(CH, -1, SEATP, { chair: 1 }), .5);                  // swivels round on the chair
         T(pose(CH, -1, SEATP, { chair: 1 }), pose(BN, -1, SEATP, { chair: 1 }), 1.2);         // and rolls over to the workbench
         var READ = { chair: 1, prop: 'paper', afs: 58, afe: 62, abs: 54, abe: 66, h: 14, t: 6, propRot: -6 };
         run(function () { el.setAttribute('data-mode', 'idle'); say(who() + ' is reading the email', 'Is it a work order?'); });
@@ -31592,7 +31593,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v51)';
+var VERSION = '2026.11.14 (v52)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
