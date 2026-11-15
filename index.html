@@ -28069,7 +28069,7 @@ var SLEEPER =
     '<rect x="0" y="0" width="240" height="106" fill="url(#zbWallG)"/><rect x="0" y="104" width="240" height="36" fill="url(#zbFloorG)"/><rect class="zb-skirt" x="0" y="103" width="240" height="2.4"/>' +
     '<polygon class="zb-beam" points="22,56 70,56 132,112 40,112"/>' +
     '<rect class="zb-wfr" x="18" y="14" width="52" height="42" rx="2"/>' +
-    '<g class="sky-d"><rect x="21" y="17" width="46" height="36" fill="url(#zbDayG)"/><circle cx="58" cy="44" r="6" fill="#fde68a" opacity=".95"/><g class="ob-cloud"><ellipse cx="32" cy="26" rx="7" ry="2.8"/><ellipse cx="36.5" cy="24.2" rx="4.6" ry="3"/><ellipse cx="28.6" cy="25" rx="3.2" ry="2.1"/></g></g>' +
+    '<g class="sky-d"><rect x="21" y="17" width="46" height="36" fill="url(#zbDayG)"/><rect class="sky-tint" x="21" y="17" width="46" height="36"/><circle class="sky-sun" cx="58" cy="44" r="6" fill="#fde68a" opacity=".95"/><g class="ob-cloud"><ellipse cx="32" cy="26" rx="7" ry="2.8"/><ellipse cx="36.5" cy="24.2" rx="4.6" ry="3"/><ellipse cx="28.6" cy="25" rx="3.2" ry="2.1"/></g></g>' +
     '<g class="sky-n"><rect x="21" y="17" width="46" height="36" fill="url(#zbSkyG)"/>' +
     '<circle cx="55" cy="28" r="7" fill="#fde68a"/><circle cx="58.4" cy="25.6" r="6.2" fill="#0d1436"/>' +
     '<circle class="zb-star s1" cx="28" cy="23" r=".9"/><circle class="zb-star s2" cx="37" cy="39" r=".8"/><circle class="zb-star s3" cx="45" cy="21" r=".7"/><circle class="zb-star s1" cx="30" cy="47" r=".7"/><circle class="zb-star s2" cx="62" cy="45" r=".9"/><circle class="zb-star s3" cx="48" cy="44" r=".6"/></g>' +
@@ -29162,7 +29162,7 @@ var SCENE =
     '<g clip-path="url(#ob-frame)">' +
     '<rect x="0" y="0" width="240" height="106" fill="url(#obWallG)"/><rect x="0" y="104" width="240" height="36" fill="url(#obFloorG)"/><rect class="ob-skirt" x="0" y="103" width="240" height="2.4"/>' +
     '<polygon class="ob-beam" points="89,49 131,49 158,104 64,104"/>' +
-    '<rect class="ob-wfr" x="86" y="12" width="48" height="40" rx="2"/><g class="sky-d"><rect x="89" y="15" width="42" height="34" fill="url(#obSkyG)"/><circle cx="123" cy="42" r="5" fill="#fde68a" opacity=".9"/>' +
+    '<rect class="ob-wfr" x="86" y="12" width="48" height="40" rx="2"/><g class="sky-d"><rect x="89" y="15" width="42" height="34" fill="url(#obSkyG)"/><rect class="sky-tint" x="89" y="15" width="42" height="34"/><circle class="sky-sun" cx="123" cy="42" r="5" fill="#fde68a" opacity=".9"/>' +
     '<g class="ob-cloud"><ellipse cx="99" cy="25" rx="6.5" ry="2.6"/><ellipse cx="103" cy="23.4" rx="4.2" ry="2.8"/><ellipse cx="96" cy="24" rx="3" ry="2"/></g></g>' +
     '<g class="sky-n"><rect x="89" y="15" width="42" height="34" fill="url(#obNightG)"/><circle cx="121" cy="24" r="5.4" fill="#fde68a"/><circle cx="123.6" cy="22.2" r="4.8" fill="#0d1436"/>' +
     '<circle class="zb-star s1" cx="95" cy="21" r=".8"/><circle class="zb-star s2" cx="104" cy="38" r=".7"/><circle class="zb-star s3" cx="99" cy="29" r=".6"/><circle class="zb-star s2" cx="127" cy="40" r=".8"/><circle class="zb-star s1" cx="113" cy="44" r=".6"/></g>' +
@@ -29272,6 +29272,7 @@ async function poll() {
 function tick() {
     var h = host(); if (!h) return;
     if (seq || (window.IncTrip && IncTrip.active())) return;            // on his trip to the office: the trip runs itself
+    if (window.IncHouse && IncHouse.atHome && IncHouse.atHome() && !(manual && !IncHouse.checking())) { h.hidden = true; if (!manual) set(''); return; }   // he lives in the house between checks
     var show = manual || (autoOn() && !asleep());
     if (!show) { h.hidden = true; if (!manual) set(''); return; }
     ensure(h); h.hidden = false;
@@ -29339,7 +29340,7 @@ function leaveSoon() {                                                // show th
 function setManual(on, text) {
     if (on) {
         if (seq || (window.IncTrip && IncTrip.active())) return;
-        if (autoOn() && asleep() && onAdd() && window.IncHouse && IncHouse.atHome() && IncHouse.check(function () {   // at home: he walks to the office and back
+        if (autoOn() && onAdd() && window.IncHouse && IncHouse.atHome() && IncHouse.check(function () {   // at home (working or off work): he walks to the office and back
             manual = false; until = 0; set('');
             try { if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
         })) { manual = true; until = 0; result = ''; return; }
@@ -29367,6 +29368,9 @@ var css = [
 '.wm-office { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 10px 12px; margin: 0 0 8px; border-radius: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }',
 '.wm-office[hidden] { display: none; }',
 'html[data-sky="night"] .sky-d { display: none; } html:not([data-sky="night"]) .sky-n { display: none; }',
+'.sky-tint { fill: #fb923c; opacity: 0; pointer-events: none; } html[data-sky="dawn"] .sky-tint { fill: #f9a8d4; opacity: .42; } html[data-sky="dusk"] .sky-tint { fill: #f97316; opacity: .48; }',
+'.sky-sun { transform: translateY(calc(var(--sun-up, .6) * -12px)); } html[data-sky="dawn"] .sky-sun, html[data-sky="dusk"] .sky-sun { fill: #fb923c; }',
+'html[data-sky="dusk"] .ob-cloud ellipse, html[data-sky="dawn"] .ob-cloud ellipse { fill: #fed7aa; } html[data-sky="dusk"] .ob-beam { fill: #fb923c; opacity: .07; }',
 'html[data-sky="night"] .ob-beam { fill: #c7d2fe; opacity: .05; } html:not([data-sky="night"]) .zb-beam { fill: #fde68a; opacity: .07; } html:not([data-sky="night"]) .zb-glow { opacity: .3 !important; animation: none; }',
 '.ob-scene { width: 100%; max-width: min(var(--boy-w, 320px), 100%); } .ob-svg { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 8px 22px rgba(0,0,0,.28); }',
 '.ob-tx b { display: block; font-size: .92rem; } .ob-tx small { display: block; font-size: .76rem; opacity: .78; line-height: 1.35; margin-top: 2px; }',
@@ -29482,10 +29486,20 @@ function sunTimes(d) {
     var tz = -d.getTimezoneOffset() / 60, noon = 12 + (tz * 15 - LNG) / 15 - eot / 60;
     return { rise: noon - half, set: noon + half };
 }
-function isNight(d) { d = d || new Date(); var t = sunTimes(d), h = d.getHours() + d.getMinutes() / 60; return h < t.rise - .25 || h > t.set + .25; }
+function isNight(d) { d = d || new Date(); var t = sunTimes(d), h = d.getHours() + d.getMinutes() / 60; return h < t.rise - .4 || h > t.set + .4; }
+function skyAt(d) {                                                    // night, dawn, day or dusk - and how high the sun is (0 low .. 1 noon)
+    var t = sunTimes(d), h = d.getHours() + d.getMinutes() / 60, ph;
+    if (h < t.rise - .4 || h > t.set + .4) ph = 'night';
+    else if (h < t.rise + .6) ph = 'dawn';
+    else if (h > t.set - .6) ph = 'dusk';
+    else ph = 'day';
+    var up = Math.sin(Math.PI * Math.max(0, Math.min(1, (h - t.rise) / (t.set - t.rise))));
+    return { phase: ph, up: Math.round(up * 100) / 100, rise: t.rise, set: t.set };
+}
 function skyTick() {
-    var now = new Date(), night = isNight(now), r = document.documentElement, want = night ? 'night' : 'day';
+    var now = new Date(), k = skyAt(now), r = document.documentElement, want = k.phase === 'night' ? 'night' : k.phase;
     if (r.getAttribute('data-sky') !== want) r.setAttribute('data-sky', want);
+    var up = String(k.up); if (r.style.getPropertyValue('--sun-up') !== up) r.style.setProperty('--sun-up', up);
     var h = now.getHours(), m = now.getMinutes(), txt = ((h % 12) || 12) + ':' + String(m).padStart(2, '0');
     Array.prototype.forEach.call(document.querySelectorAll('.zb-clk'), function (c) { if (c.textContent !== txt) c.textContent = txt; });
     var ha = (h % 12) * 30 + m * .5, ma = m * 6;
@@ -29494,7 +29508,7 @@ function skyTick() {
 }
 setInterval(skyTick, 20000);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', skyTick); else skyTick();
-window.IncSky = { tick: skyTick, night: isNight, sun: sunTimes };
+window.IncSky = { tick: skyTick, night: isNight, sun: sunTimes, at: skyAt };
 /* the size of his room (Settings > Work Orders > Size of his room) */
 function roomSize(v) {
     if (v == null) { try { v = appSettings.woRoomSize; } catch (e) { v = null; } }
@@ -29506,7 +29520,9 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 window.addEventListener('load', function () { roomSize(); });
 
 window.IncBoy = {
-    sceneHtml: function () { return SCENE; }, roomSize: roomSize,
+    sceneHtml: function () { return SCENE; }, roomSize: roomSize, summary: summary,
+    nextCheck: function (t) { var nx = nextMark(t || Date.now()), k = 0; while (!willRun(nx) && k++ < 2016) nx += FIVE; return nx; },
+    lastMark: function (t) { var pm = nextMark(t || Date.now()) - FIVE; return willRun(pm) ? pm : 0; },
     tick: tick, manual: setManual, seq: function () { return (window.IncTrip && IncTrip.active() && IncTrip.phase()) || (window.IncHouse && IncHouse.checking() ? 'home-check' : '') || (seq ? seq.phase : ''); },
     mode: function () { return mode; },
     act: function () { return ACTS[actI]; },
@@ -29855,7 +29871,7 @@ function innerOf(html, drop) {
 function win(x, y, w, h, cls) {                                       // a window that shows day or night
     var gx = x + 3, gy = y + 3, gw = w - 6, gh = h - 6;
     return '<rect class="' + cls + '-wfr" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="2"/>' +
-        '<g class="sky-d"><rect x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '" fill="url(#hsDayG)"/><circle cx="' + (gx + gw * .75) + '" cy="' + (gy + gh * .72) + '" r="4.6" fill="#fde68a" opacity=".95"/><g class="ob-cloud"><ellipse cx="' + (gx + gw * .3) + '" cy="' + (gy + gh * .3) + '" rx="5.6" ry="2.4"/><ellipse cx="' + (gx + gw * .3 + 3.6) + '" cy="' + (gy + gh * .3 - 1.4) + '" rx="3.6" ry="2.4"/></g></g>' +
+        '<g class="sky-d"><rect x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '" fill="url(#hsDayG)"/><rect class="sky-tint" x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '"/><circle class="sky-sun" cx="' + (gx + gw * .75) + '" cy="' + (gy + gh * .72) + '" r="4.6" fill="#fde68a" opacity=".95"/><g class="ob-cloud"><ellipse cx="' + (gx + gw * .3) + '" cy="' + (gy + gh * .3) + '" rx="5.6" ry="2.4"/><ellipse cx="' + (gx + gw * .3 + 3.6) + '" cy="' + (gy + gh * .3 - 1.4) + '" rx="3.6" ry="2.4"/></g></g>' +
         '<g class="sky-n"><rect x="' + gx + '" y="' + gy + '" width="' + gw + '" height="' + gh + '" fill="url(#hsNightG)"/><circle cx="' + (gx + gw * .72) + '" cy="' + (gy + gh * .3) + '" r="4.4" fill="#fde68a"/><circle cx="' + (gx + gw * .72 + 2.2) + '" cy="' + (gy + gh * .3 - 1.6) + '" r="3.9" fill="#0d1436"/>' +
             '<circle class="zb-star s1" cx="' + (gx + 5) + '" cy="' + (gy + 6) + '" r=".7"/><circle class="zb-star s2" cx="' + (gx + gw * .4) + '" cy="' + (gy + gh * .7) + '" r=".7"/><circle class="zb-star s3" cx="' + (gx + gw * .2) + '" cy="' + (gy + gh * .45) + '" r=".6"/></g>' +
         '<path class="' + cls + '-mull" d="M' + (x + w / 2) + ' ' + gy + 'V' + (gy + gh) + 'M' + gx + ' ' + (y + h / 2) + 'H' + (gx + gw) + '"/><rect class="' + cls + '-sill" x="' + (x - 3) + '" y="' + (y + h - 1) + '" width="' + (w + 6) + '" height="3" rx="1"/>';
@@ -29898,7 +29914,7 @@ var KITCHEN = '<rect x="0" y="0" width="240" height="106" fill="url(#hsKitG)"/><
     '<g transform="translate(188 126)"><rect class="hs-chair" x="-8" y="-46" width="3.2" height="46" rx="1.2"/><rect class="hs-chair" x="-8" y="-22" width="18" height="3" rx="1"/><path class="hs-leg" d="M8 -19v19"/></g>' +
     '<rect class="hs-endwall" x="236" y="0" width="4" height="140"/>';
 var DOOR = function (x) { return '<rect class="tr-wall" x="' + (x - 8) + '" y="0" width="16" height="106"/><rect class="tr-hall" x="' + (x - 6) + '" y="34" width="12" height="70"/><path class="tr-frame" d="M' + (x - 7) + ' 104V33h14v71"/>'; };
-var CHAIR = '<g transform="translate(358 126)"><ellipse class="ob-shad" cx="0" cy=".6" rx="16" ry="2"/><rect class="ob-ch1" x="-17" y="-50" width="6" height="30" rx="3"/><rect class="ob-ch2" x="-14.5" y="-22" width="3" height="5"/>' +
+var CHAIR = '<g class="hs-chairg" transform="translate(358 126)"><ellipse class="ob-shad" cx="0" cy=".6" rx="16" ry="2"/><rect class="ob-ch1" x="-17" y="-50" width="6" height="30" rx="3"/><rect class="ob-ch2" x="-14.5" y="-22" width="3" height="5"/>' +
     '<rect class="ob-ch2" x="-14" y="-20.5" width="28" height="5" rx="2.5"/><rect class="ob-ch2" x="-1.4" y="-15.5" width="2.8" height="10"/><path class="ob-base" d="M-13 -4.2H13"/>' +
     '<circle class="ob-wheel" cx="-11" cy="-2" r="1.9"/><circle class="ob-wheel" cx="0" cy="-2" r="1.9"/><circle class="ob-wheel" cx="11" cy="-2" r="1.9"/></g>';
 var QFLAT = '<g><path class="zb-quilt" d="M150 98c2-4 6-6 12-6 20 0 42-.6 64 0v16H150z"/><path class="zb-sheet" d="M150 98c2-4 6-6 12-6l3 .4c-5 1.2-8 3.4-9 5.6z"/><path class="zb-fold" d="M170 97c14 1 32 1 50-1"/></g>';
@@ -29952,7 +29968,7 @@ function drawRig(r, o) {
     if (kind) {
         var p = r.prop.firstChild, rot = o.propRot || 0, px = HF[0], py = HF[1];
         if (kind === 'vacuum') { px = HF[0]; py = HF[1]; p.setAttribute('d', 'M' + f1(px) + ' ' + f1(py) + 'L' + f1(px + 14) + ' ' + f1(-o.y + FLOOR - 3)); var hd = r.prop.childNodes[1]; hd.setAttribute('x', f1(px + 11)); hd.setAttribute('y', f1(-o.y + FLOOR - 4.6)); }
-        else if (kind === 'book2') { px = (HF[0] + HB[0]) / 2; py = (HF[1] + HB[1]) / 2; p.setAttribute('transform', 'translate(' + f1(px) + ' ' + f1(py) + ') rotate(' + f1(rot) + ')'); }
+        else if (kind === 'book2' || kind === 'paper') { px = (HF[0] + HB[0]) / 2; py = (HF[1] + HB[1]) / 2; p.setAttribute('transform', 'translate(' + f1(px) + ' ' + f1(py) + ') rotate(' + f1(rot) + ')'); }
         else p.setAttribute('transform', 'translate(' + f1(px) + ' ' + f1(py) + ') rotate(' + f1(rot) + ')');
     }
 }
@@ -29966,7 +29982,9 @@ var PROPS = {
     plate: '<g><ellipse cx="0" cy="0" rx="5" ry="1.2" fill="#f8fafc"/></g>',
     vacuum: '<path fill="none" stroke="#64748b" stroke-width="1.6" stroke-linecap="round"/><rect width="8" height="3" rx="1" fill="#ef4444"/>',
     remote: '<g><rect x="-1" y="-3.5" width="2" height="5" rx=".6" fill="#111827"/></g>',
-    phone: '<g><rect x="-1.4" y="-4" width="2.8" height="5.4" rx=".6" fill="#111827"/></g>'
+    phone: '<g><rect x="-1.4" y="-4" width="2.8" height="5.4" rx=".6" fill="#111827"/></g>',
+    paper: '<g><rect x="-4.5" y="-6" width="9" height="11.5" rx=".6" fill="#f8fafc" stroke="#cbd5e1" stroke-width=".4"/><path d="M-3 -3.6h6M-3 -1.6h6M-3 .4h4M-3 2.4h5" stroke="#94a3b8" stroke-width=".6"/><rect x="-3" y="-5.2" width="3.6" height="1" fill="#2563eb"/></g>',
+    stamp: '<g><circle cx="0" cy="-6.4" r="1.6" fill="#92400e"/><rect x="-1.1" y="-5.4" width="2.2" height="3.6" fill="#92400e"/><rect x="-3" y="-2" width="6" height="2.2" rx=".5" fill="#b91c1c"/></g>'
 };
 
 /* ------------------------------------------------------------------ the house */
@@ -29974,7 +29992,7 @@ var BEDROOM_X = 0, OFFICE_X = 240, LIVING_X = 480, KITCHEN_X = 720, WORLD_W = 96
 var SPOTS = {                                                          // where things happen (world x)
     sofa: LIVING_X + 104, tv: LIVING_X + 104, window: LIVING_X + 52, door: LIVING_X + 162, table: LIVING_X + 172,
     coffee: KITCHEN_X + 36, sink: KITCHEN_X + 70, stove: KITCHEN_X + 102, fridge: KITCHEN_X + 150, dine: KITCHEN_X + 188,
-    chair: 353, chairStand: 351, bed: 152
+    chair: 353, chairStand: 351, deskStand: 372, bench: 336, bed: 152
 };
 function houseHtml() {
     var B = innerOf((window.IncMail && IncMail.sleeperHtml && IncMail.sleeperHtml()) || '', ['.zb-head', '.zb-pj', '.zb-neck', '.zb-arm', '.zb-ybub', '.zb-blank']);
@@ -29999,7 +30017,9 @@ function inBedtime(d) {                                                 // Setti
 function M() { return window.IncMail || null; }
 function autoOn() { var s = M() && M().status ? M().status() : null; return !!(s && !s.error && s.gmail && s.settings && s.settings.auto_on); }
 function offWork() { var m = M(); return !!(m && m.sleeping && m.sleeping()); }
-function atHome() { return autoOn() && offWork() && !inBedtime(); }
+function calm() { try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
+function working() { return autoOn() && !offWork(); }                 // inside your Auto Import schedule
+function atHome() { return autoOn() && (offWork() ? !inBedtime() : !calm()); }   // working: at home between checks; off work: until bedtime
 
 var ACT = {
     read:   { room: 'living', label: 'Reading a book on the sofa' },
@@ -30021,7 +30041,7 @@ function nextActivity(now) {
     var d = now || new Date(), h = d.getHours() + d.getMinutes() / 60, day = d.getDay(), key = d.toDateString() + ':';
     var meal = (h >= 6.5 && h < 10) ? 'breakfast' : (h >= 11.75 && h < 14) ? 'lunch' : (h >= 17.25 && h < 20) ? 'dinner' : '';
     if (meal && lastMeal !== key + meal) { lastMeal = key + meal; plan = meal === 'breakfast' ? ['cook', 'eat', 'dishes'] : ['cook', 'eat', 'dishes']; if (meal === 'breakfast') plan.unshift('coffee'); return plan.shift(); }
-    if ((day === 5 || day === 6) && h >= 19 && h < 23 && Date.now() - lastParty > 3 * 3600000 && Math.random() < .5) { lastParty = Date.now(); return 'party'; }
+    if (!working() && (day === 5 || day === 6) && h >= 19 && h < 23 && Date.now() - lastParty > 3 * 3600000 && Math.random() < .5) { lastParty = Date.now(); return 'party'; }
     var w = { read: 4, tv: h >= 17 ? 4 : 1.5, vacuum: h < 17 ? 1.4 : .4, plants: h < 12 ? 1.2 : .5, coffee: h < 15 ? 1.2 : .3, snack: 1 };
     delete w[lastAct];
     var tot = 0, k; for (k in w) tot += w[k]; var r = Math.random() * tot;
@@ -30030,7 +30050,7 @@ function nextActivity(now) {
 }
 
 /* ------------------------------------------------------------------ the director: steps for him (and friends) */
-var el = null, svg = null, me = null, f1r = null, f2r = null, world = null, bub = null, camX = 0, camTarget = null;
+var chairG = null, el = null, svg = null, me = null, f1r = null, f2r = null, world = null, bub = null, camX = 0, camTarget = null;
 var steps = [], si = 0, stepAt = 0, raf = 0, running = false, state = { x: SPOTS.sofa, dir: 1, sit: true, where: 'sofa' };
 var act = '', actLabel = '', checking = null, lastFrame = 0;
 function scene(k, on) { if (el) el.classList.toggle('hsx-' + k, !!on); }   // switches on the card (hsx-): what is going on in the house
@@ -30057,7 +30077,11 @@ function walkTo(x, dir, armOver) {                                       // he w
     state.x = x; state.dir = dir || state.dir;
 }
 function title(label) { run(function () { act = label; say(who() + ' is at home', label + ' · ' + offLine()); }); }
-function offLine() { var m = M(), w = m && m.wakeAt ? m.wakeAt() : null; return 'Off work, back at ' + (w ? new Date(w).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'your scheduled time'); }
+function clockT(t) { return new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+function nextCheckT() { return window.IncBoy && IncBoy.nextCheck ? IncBoy.nextCheck() : 0; }
+function offLine() {
+    if (working()) { var nx = nextCheckT(); return nx ? 'Next email check at ' + clockT(nx) : 'Working'; }
+    var m = M(), w = m && m.wakeAt ? m.wakeAt() : null; return 'Off work, back at ' + (w ? clockT(w) : 'your scheduled time'); }
 
 function plans(a) {
     lastAct = a; var X = state;
@@ -30177,7 +30201,7 @@ function officeTrip() {
     var back = { x: state.x, dir: state.dir, sit: state.sit, act: lastAct };
     run(function () { act = ''; say(who() + ' is going to the office', 'To check your emails'); });
     walkTo(SPOTS.chairStand, 1);
-    T(pose(SPOTS.chairStand, 1, STANDP), pose(SPOTS.chair - 1, 1, LOWERP), .55); T(pose(SPOTS.chair - 1, 1, LOWERP), pose(SPOTS.chair, 1, SEATP, { afs: 60, afe: 25, abs: 57, abe: 28 }), .55); state.x = SPOTS.chair; state.sit = true; state.dir = 1;
+    T(pose(SPOTS.chairStand, 1, STANDP), pose(SPOTS.chair - 1, 1, LOWERP), .55); T(pose(SPOTS.chair - 1, 1, LOWERP), pose(SPOTS.chair, 1, SEATP, { chair: 1, afs: 60, afe: 25, abs: 57, abe: 28 }), .55); state.x = SPOTS.chair; state.sit = true; state.dir = 1;
     run(function () { el.setAttribute('data-mode', 'pc'); el.setAttribute('data-boot', ''); say(who() + ' is turning on the computer', 'Starting up…'); });
     hold(pose(SPOTS.chair, 1, SEATP, { afs: 66, afe: 18, abs: 20, abe: 40, t: 8, h: -6 }), 1.3);
     run(function () { el.removeAttribute('data-boot'); say(who() + ' is checking your emails…', 'Checking Gmail by hand for new work orders'); checking.at = performance.now(); });
@@ -30189,20 +30213,115 @@ function officeTrip() {
     run(function () { plans(back.act || 'read'); });
 }
 
+/* Working hours (inside your Auto Import schedule): your server checks Gmail every 5 minutes. He lives his day at home
+   and is at the computer in the office 10 seconds before each check. He stands at the desk while it runs. Only when the
+   check finds a new email does he sit down: he takes it to the workbench and reads it to see if it is a work order
+   (a work order gets stamped). Then he goes back home to what he was doing. */
+var LEAD = 10, GIVEUP = 90000, duty = null, lastDuty = 0;
+var DESKP = { t: 14, h: 9, afs: 52, afe: 40, abs: 46, abe: 44 };
+function resultFor(mark) { var m = M(), s0 = m && m.status ? m.status() : null, l = s0 && s0.checks && s0.checks[0]; return l && Date.parse(l.at) >= mark - 20000 ? l : null; }
+function travelSec() {                                                 // how long until he is ready at the computer
+    var p = me && me.pose, x = p ? p.x : state.x, sit = p ? p.y > 100 : state.sit;
+    return (sit ? 1.1 : 0) + Math.abs(x - SPOTS.deskStand) / SPEED + .9 + .5 + 1.3 + .5 + .6;
+}
+function dutyDue(now) {
+    if (!working() || checking || duty || !(window.IncBoy && IncBoy.nextCheck)) return;
+    var nx = IncBoy.nextCheck(now);
+    if (nx && nx !== lastDuty && now >= nx - (LEAD + travelSec()) * 1000) { lastDuty = nx; interrupt(function () { dutyTrip(nx); }); return; }
+    var pm = IncBoy.lastMark ? IncBoy.lastMark(now) : 0;                 // you opened the page while a check is still running
+    if (pm && pm !== lastDuty && now - pm < 30000 && !resultFor(pm)) { lastDuty = pm; interrupt(function () { dutyTrip(pm); }); }
+}
+function pollDuty() {
+    if (!duty || duty.c || duty.polling) return;
+    var now = Date.now();
+    if (now > duty.mark + GIVEUP) { duty.c = { giveup: true }; return; }
+    var l = resultFor(duty.mark); if (l) { duty.c = l; return; }
+    if (now < duty.mark + 2000 || now - duty.lastPoll < 2000) return;
+    duty.polling = true; duty.lastPoll = now;
+    var m = M(); Promise.resolve(m && m.refresh ? m.refresh(true) : null).catch(function () { /* try again */ }).then(function () {
+        if (!duty) return; duty.polling = false; var r = resultFor(duty.mark); if (r) duty.c = r; });
+}
+function later(build) {                                                // add steps right after the one running now
+    var keep = steps; steps = []; build(); var add = steps; steps = keep;
+    Array.prototype.splice.apply(steps, [si, 0].concat(add));
+}
+function dutyTrip(mark) {
+    var back = lastAct || 'read', D = SPOTS.deskStand;
+    duty = { mark: mark, phase: 'go', c: null, polling: false, lastPoll: 0 };
+    run(function () { act = ''; say(who() + ' is going to the office', 'Email check at ' + clockT(mark)); });
+    walkTo(D, 1);
+    var ON = pose(D, 1, STANDP, { t: 12, h: 6, afs: 64, afe: 16 });
+    T(pose(D, 1, STANDP), ON, .5);
+    run(function () { el.setAttribute('data-mode', 'pc'); el.setAttribute('data-boot', ''); say(who() + ' is turning on the computer', 'Email check at ' + clockT(mark)); });
+    hold(ON, 1.3);
+    T(ON, pose(D, 1, STANDP, DESKP), .5);
+    run(function () { el.removeAttribute('data-boot'); duty.phase = 'wait'; });
+    push({ dur: Infinity, wait: function () { return Date.now() >= duty.mark; }, fn: function (u, tau) {
+        var left = Math.max(1, Math.ceil((duty.mark - Date.now()) / 1000));
+        say(who() + ' is ready at the computer', 'Checking your emails in ' + left + ' s');
+        var o = pose(D, 1, STANDP, DESKP); o.h = 9 + 2 * Math.sin(tau * .9); return o; } });
+    run(function () { duty.phase = 'check'; say(who() + ' is checking your emails…', 'Looking in Gmail for new emails'); });
+    push({ dur: Infinity, wait: function () { return !!duty.c; }, fn: function (u, tau) { var o = pose(D, 1, STANDP, DESKP); o.afe = 40 + 4 * Math.sin(tau * 9); o.h = 9 + 1.5 * Math.sin(tau * 1.3); return o; } });
+    run(function () { later(function () { dutyAfter(back); }); });
+}
+function dutyAfter(back) {
+    var c = duty.c, D = SPOTS.deskStand, CH = SPOTS.chair, BN = SPOTS.bench;
+    var res = c.giveup ? 'Finished on your server' : (window.IncBoy && IncBoy.summary ? IncBoy.summary(c) : 'Done');
+    duty.phase = 'after';
+    state.x = D; state.dir = 1; state.sit = false;
+    if (c.error || c.giveup || !(c.emails > 0)) {                         // nothing new: he goes straight back home
+        run(function () { say(who() + ' finished checking', c.error || c.giveup ? res : 'No new emails'); });
+        hold(pose(D, 1, STANDP, DESKP), 3);
+        T(pose(D, 1, STANDP, DESKP), pose(D, 1, STANDP), .5);
+    } else {                                                           // a new email: he sits down at the workbench to read it
+        var n = c.emails, wo = c.found > 0;
+        run(function () { say(who() + ' found ' + n + ' new email' + (n === 1 ? '' : 's'), 'Taking it to the workbench to see if it is a work order'); });
+        hold(pose(D, 1, STANDP, DESKP), 1.6);
+        T(pose(D, 1, STANDP, DESKP), pose(D, 1, STANDP), .5);
+        walkTo(SPOTS.chairStand, 1);
+        T(pose(SPOTS.chairStand, 1, STANDP), pose(CH - 1, 1, LOWERP), .55); T(pose(CH - 1, 1, LOWERP), pose(CH, 1, SEATP, { chair: 1 }), .55);
+        T(pose(CH, 1, SEATP, { chair: 1 }), pose(CH, -1, SEATP, { chair: 1 }), .5);           // swivels round on the chair
+        T(pose(CH, -1, SEATP, { chair: 1 }), pose(BN, -1, SEATP, { chair: 1 }), 1.2);         // and rolls over to the workbench
+        var READ = { chair: 1, prop: 'paper', afs: 58, afe: 62, abs: 54, abe: 66, h: 14, t: 6, propRot: -6 };
+        run(function () { el.setAttribute('data-mode', 'idle'); say(who() + ' is reading the email', 'Is it a work order?'); });
+        T(pose(BN, -1, SEATP, { chair: 1 }), pose(BN, -1, SEATP, READ), .6);
+        hold(pose(BN, -1, SEATP, READ), 4.5, function (o, u, tau) { o.h = 14 + 2 * Math.sin(tau * .9); });
+        if (wo) {
+            run(function () { el.setAttribute('data-act', 'stamp'); say(who() + ' found a work order!', 'Stamping it · ' + res); });
+            hold(pose(BN, -1, SEATP, { chair: 1 }), 4.8, function (o, u, tau) {
+                var c2 = (tau % 1.6) / 1.6, dn = c2 < .25 ? ease(c2 / .25) : c2 < .45 ? 1 : 1 - ease((c2 - .45) / .4);
+                o.prop = 'stamp'; o.afs = lerp(78, 50, dn); o.afe = lerp(40, 46, dn); o.abs = 52; o.abe = 50; o.h = 12; o.t = 8; });
+            run(function () { el.setAttribute('data-act', 'none'); say(who() + ' finished checking', res); });
+        } else {
+            run(function () { say(who() + ' finished checking', 'Not a work order'); });
+            T(pose(BN, -1, SEATP, READ), pose(BN, -1, SEATP, { chair: 1, afs: 50, afe: 40 }), .6);
+            hold(pose(BN, -1, SEATP, { chair: 1, afs: 50, afe: 40 }), 1.6);
+        }
+        T(pose(BN, -1, SEATP, { chair: 1 }), pose(CH, -1, SEATP, { chair: 1 }), 1.2);         // rolls the chair back to the computer
+        T(pose(CH, -1, SEATP, { chair: 1 }), pose(CH, 1, SEATP, { chair: 1 }), .5);
+        state.x = CH; state.dir = 1; state.sit = true;
+        standUpFrom(CH, 1);
+    }
+    run(function () { el.setAttribute('data-mode', 'idle'); duty = null; plans(back); });
+}
+
 /* ------------------------------------------------------------------ running it */
 function frame(now) {
     if (!running) return;
     raf = requestAnimationFrame(frame);
     if (now - lastFrame < 30) return;                                   // ~30 frames a second is plenty
     lastFrame = now;
+    dutyDue(Date.now());
     var st = steps[si];
     while (st && st.dur === 0) { si++; stepAt = now; st.run(); st = steps[si]; }
-    if (!st) { steps = []; si = 0; stepAt = now; if (!checking) { var a = nextActivity(); plans(a); } return; }
+    if (!st) { steps = []; si = 0; stepAt = now; if (!checking && !duty) { var a = nextActivity(); plans(a); } return; }
     var tau = (now - stepAt) / 1000;
     if (st.typing) { if (checking && checking.done && tau > 2.5) { si++; stepAt = now; return; } }
+    if (st.wait) { if (duty && duty.phase === 'check') pollDuty(); if (st.wait()) { si++; stepAt = now; return; } }
     var u = st.dur === Infinity ? 0 : Math.min(1, tau / st.dur);
     var o = st.fn(u, Math.min(tau, st.dur));
     drawRig(me, o);
+    if (o.chair && chairG) chairG.setAttribute('transform', 'translate(' + f1(o.x + 5 * o.dir) + ' 126) scale(' + o.dir + ' 1)');
     if (st.both) { drawRig(f1r, fx[0]); drawRig(f2r, fx[1]); }
     var want = Math.max(0, Math.min(WORLD_W - 240, o.x - 120));
     if (camTarget == null) camX = want; else camX += (want - camX) * .1;
@@ -30224,7 +30343,7 @@ function card() {
 function build() {
     el = card(); if (!el) return false;
     el.querySelector('.ob-scene').innerHTML = houseHtml();
-    svg = el.querySelector('svg'); world = svg.querySelector('.hs-world'); bub = svg.querySelector('.hs-bub');
+    svg = el.querySelector('svg'); world = svg.querySelector('.hs-world'); bub = svg.querySelector('.hs-bub'); chairG = svg.querySelector('.hs-chairg'); el.setAttribute('data-act', 'none');
     me = makeRig(svg, 'hs-me', { sh: '#3b82f6', sh2: '#2563eb', pa: '#64748b', pa2: '#4b5563', sk: '#f2c29b', sk2: '#dba87f', ha: '#3a2a1f', so: '#e2e8f0' });
     f1r = makeRig(svg, 'hs-f1', { sh: '#22c55e', sh2: '#16a34a', pa: '#1e293b', pa2: '#0f172a', sk: '#8d5524', sk2: '#744216', ha: '#111827', so: '#111827' });
     f2r = makeRig(svg, 'hs-f2', { sh: '#f97316', sh2: '#ea580c', pa: '#334155', pa2: '#1e293b', sk: '#f1c27d', sk2: '#d9a85f', ha: '#7c2d12', so: '#111827' });
@@ -30237,12 +30356,11 @@ function build() {
 }
 function onAdd() { return !document.hidden && document.body && document.body.getAttribute('data-pg') === 'add'; }
 function sync() {
-    var want = atHome() || !!checking;
+    var want = atHome() || !!checking || !!duty;
     var c = document.getElementById('wm-home');
     if (!want) { if (c) c.hidden = true; if (running) { running = false; cancelAnimationFrame(raf); } return; }
     if (!el || !el.querySelector('svg')) { if (!build()) return; steps = []; si = 0; state = { x: SPOTS.sofa, dir: 1, sit: true, where: 'sofa' }; camTarget = null; }
     var z = document.getElementById('wm-sleep'); if (z) z.hidden = true;
-    var o = document.getElementById('wm-boy'); if (o && !checking) o.hidden = true;
     el.hidden = false;
     if (onAdd()) { if (!running) { running = true; stepAt = performance.now() - 0; lastFrame = 0; raf = requestAnimationFrame(frame); } }
     else if (running) { running = false; cancelAnimationFrame(raf); }
@@ -30252,7 +30370,7 @@ document.addEventListener('visibilitychange', function () { setTimeout(sync, 50)
 
 function check(end) {                                                  // Check Gmail by hand while he is at home
     if (!atHome() || !el) return false;
-    checking = { done: false, result: '', end: end, at: 0 };
+    checking = { done: false, result: '', end: end, at: 0 }; duty = null;
     interrupt(officeTrip);
     sync();
     return true;
@@ -30283,7 +30401,7 @@ var css = [
 '.hs-oven { fill: #374151; } .hs-ovenw { fill: #111827; } .hs-counter { fill: #e5e7eb; } .hs-sink { fill: #94a3b8; } .hs-tap { fill: none; stroke: #cbd5e1; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; } .hs-burner { fill: #111827; }',
 '.hs-bubbles circle { fill: #e0f2fe; opacity: 0; } .wm-home.hsx-wash .hs-bubbles circle { animation: hsBub 1.4s ease-in-out infinite; } .wm-home.hsx-wash .hs-bubbles circle:nth-child(2n) { animation-delay: .5s; }',
 '.hs-steam path { fill: none; stroke: rgba(255,255,255,.6); stroke-width: .9; stroke-linecap: round; opacity: 0; } .wm-home.hsx-cook .hs-steam path { animation: obSteam 2s ease-in-out infinite; } .wm-home.hsx-cook .hs-steam path:nth-child(2) { animation-delay: 1s; }',
-'.hs-flame path { fill: none; stroke: #f97316; stroke-width: .9; opacity: 0; } .wm-home.hsx-cook .hs-flame path { opacity: 1; animation: hsFlame .3s ease-in-out infinite alternate; }',
+'.hs-flame path { fill: none; stroke: #f97316; stroke-width: .9; opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; } .wm-home.hsx-cook .hs-flame path { opacity: 1; animation: hsFlame .3s ease-in-out infinite alternate; }',
 '.hs-food { display: none; } .wm-home.hsx-food .hs-food { display: inline; } .hs-mugk { fill: #ef4444; display: none; } .wm-home.hsx-mug .hs-mugk { display: inline; }',
 '.hs-fridge { fill: #e2e8f0; } .hs-fridgel { stroke: #94a3b8; stroke-width: .8; } .hs-fdoor { display: none; } .wm-home.hsx-fridge .hs-fdoor { display: inline; } .wm-home.hsx-fridge .hs-fdoor rect { transform-box: fill-box; transform-origin: 0 50%; transform: scaleX(.25); }',
 '.hs-cord { stroke: #94a3b8; stroke-width: .6; } .hs-lamp { fill: #fbbf24; } .hs-chair { fill: #8a5d34; } .hs-endwall { fill: #1f1a30; }',
@@ -30307,7 +30425,8 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 window.IncHouse = {
     atHome: atHome, inBedtime: inBedtime, sync: sync, check: check,
     done: function (text) { if (checking) { checking.done = true; checking.result = text || 'Done'; } },
-    checking: function () { return !!checking; },
+    checking: function () { return !!checking; }, working: working,
+    duty: function () { return duty ? { mark: duty.mark, phase: duty.phase, result: duty.c } : null; },
     activity: function () { return act; }, pose: function () { return me && me.pose; }, cam: function () { return camX; },
     plan: function (a) { if (!el) return; steps = steps.slice(0, si + 1); plans_after_current(function () { plans(a); }); },
     _next: nextActivity, _spots: SPOTS
@@ -31473,7 +31592,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v50)';
+var VERSION = '2026.11.14 (v51)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
