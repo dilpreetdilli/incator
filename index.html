@@ -31732,17 +31732,34 @@ function mwrap(s, size, bold, maxmm) { return wrap(String(s == null ? '' : s).sp
 
 /* ------------------------------------------------------------------ where your logo sits (Settings > Invoice Details > Invoice Logo:
    Logo size and Logo position). Shared by the invoice on screen and the PDF, so both always match. All in millimetres on A4. */
-function logoGeom(hasLogo) {
+/* the logo's own shape (width / height): its box is exactly the logo, with no empty band above or below a wide logo */
+var asp = { key: '', r: 0, busy: '' };
+function logoAspect() {
+    var src = logoSrc(); if (!src) return 1;
+    var key = src.length + '|' + src.slice(-48);
+    if (asp.key === key && asp.r) return asp.r;
+    if (asp.busy !== key) {
+        asp.busy = key;
+        var im = new Image();
+        im.onload = function () { if (asp.busy !== key) return; asp.key = key; asp.r = (im.naturalWidth || 1) / (im.naturalHeight || 1); asp.busy = ''; try { document.dispatchEvent(new Event('inc-logo-tinted')); } catch (e) { /* ignore */ } };
+        im.onerror = function () { if (asp.busy === key) asp.busy = ''; };
+        try { im.src = src; } catch (e) { /* ignore */ }
+    }
+    return 1;                                                           // until it has been measured (a moment)
+}
+function logoGeom(hasLogo, ratio) {
     var sz = +S('invoiceLogoSize', 18); if (!(sz >= 10 && sz <= 45)) sz = Math.max(10, Math.min(45, sz || 18));
+    var r = ratio || (hasLogo ? logoAspect() : 1); if (!(r > 0) || !isFinite(r)) r = 1;
+    var w = r >= 1 ? sz : sz * r, h = r >= 1 ? sz / r : sz;             // Logo size is its longest side
     var xv = S('invoiceLogoX', null), def = xv === null || xv === '' || xv === undefined || !isFinite(+xv);
-    var x = def ? 146 - sz : Math.max(10, Math.min(200 - sz, +xv));     // its usual spot: right of the wave, your name beside it (a bigger logo grows to the left)
+    var x = def ? 146 - w : Math.max(10, Math.min(200 - w, +xv));       // its usual spot: right of the wave, your name beside it (a bigger logo grows to the left)
     var yv = S('invoiceLogoY', null), ydef = yv === null || yv === '' || yv === undefined || !isFinite(+yv);
-    var y = ydef ? Math.max(3, 18 - sz / 2) : Math.max(3, Math.min(62 - sz, +yv));   // it grows from its middle (up and down evenly); you can move it down to just above "Invoice To"
+    var y = ydef ? Math.max(3, 18 - h / 2) : Math.max(3, Math.min(62 - h, +yv));   // it grows from its middle (up and down evenly); up to 3 mm from the top, down to just above "Invoice To"
     var tx, align, tmax;                                                 // your name and address keep out of its way
-    if (!hasLogo || x + sz <= 126 || y >= 32) { tx = 196; align = 'right'; tmax = 66; }    // no logo, or it is out on the left (or below your name): name top right
-    else if (196 - (x + sz + 3) >= 40) { tx = x + sz + 3; align = 'left'; tmax = 196 - tx; }   // room to its right
+    if (!hasLogo || x + w <= 126 || y >= 32) { tx = 196; align = 'right'; tmax = 66; }     // no logo, or it is out on the left (or below your name): name top right
+    else if (196 - (x + w + 3) >= 40) { tx = x + w + 3; align = 'left'; tmax = 196 - tx; }    // room to its right
     else { tx = x - 3; align = 'right'; tmax = Math.max(30, Math.min(70, tx - 120)); }      // logo far right: name to its left (kept off the dark wave)
-    return { size: sz, x: x, y: y, tx: tx, align: align, tmax: tmax, def: def, ydef: ydef, ymax: 62 - sz };
+    return { size: sz, w: w, h: h, x: x, y: y, tx: tx, align: align, tmax: tmax, def: def, ydef: ydef, ymax: 62 - h, xmax: 200 - w };
 }
 window.IncLogoGeom = logoGeom;
 /* "INVOICE" and the line under it: they stay put unless the logo is in their way. Then they slide (or shrink a little)
@@ -31759,7 +31776,7 @@ var TW = 47, TH = 17.4;                                                // its si
 function titleGeom(LG, hasLogo) {
     var def = { x: 14, y: 12.6, s: 1, moved: false };
     if (!hasLogo || !LG) return def;
-    var m = 2.5, L0 = LG.x - m, L1 = LG.x + LG.size + m, T0 = LG.y - m, T1 = LG.y + LG.size + m;
+    var m = 2.5, L0 = LG.x - m, L1 = LG.x + (LG.w || LG.size) + m, T0 = LG.y - m, T1 = LG.y + (LG.h || LG.size) + m;
     var hits = function (x, y, s) { return !(x + TW * s <= L0 || x >= L1 || y + TH * s <= T0 || y >= T1); };
     if (!hits(14, 12.6, 1)) return def;
     var best = null, bc = 1e9;
@@ -31871,7 +31888,7 @@ function draw(d, logo) {
     A.top.forEach(function (s) { p.path(s[1], s[0]); });
 
     /* you: logo, then your name and address, top right (a clear block the waves never reach) */
-    var hasLogo = !!(d.wantLogo && logo), LG = logoGeom(hasLogo), tmax = LG.tmax;
+    var hasLogo = !!(d.wantLogo && logo), LG = logoGeom(hasLogo, logo && logo.w && logo.h ? logo.w / logo.h : 0), tmax = LG.tmax;
 
     /* INVOICE, white on the navy wave (moved out of the logo's way when it is in the way) */
     var TG = titleGeom(LG, hasLogo), ts = TG.s;
@@ -31879,7 +31896,7 @@ function draw(d, logo) {
     p.rrect(TG.x + 0.5 * ts, TG.y + 16.4 * ts, 34 * ts, 0.9 * ts, 0.4 * ts, '#ffffff'); p.rrect(TG.x + 34.5 * ts, TG.y + 16.4 * ts, 13 * ts, 0.9 * ts, 0.4 * ts, A.blueL);
 
     if (hasLogo) {
-        var bh = LG.size, bw = LG.size, k = Math.min(bw / logo.w, bh / logo.h), lw = logo.w * k, lh = logo.h * k;
+        var bh = LG.h, bw = LG.w, k = Math.min(bw / logo.w, bh / logo.h), lw = logo.w * k, lh = logo.h * k;
         p.image(X(LG.x + (bw - lw) / 2), Y(LG.y + (bh - lh) / 2 + lh), X(lw), X(lh));
     }
     var nm = mwrap(d.co, 10.5, true, tmax).slice(0, 2), addr = mwrap(d.coAddr, 7.4, false, tmax), ty = 12.5;
@@ -32060,11 +32077,11 @@ function titleCss(LG, has) {                                          // INVOICE
 }
 
 /* where the logo and your name go (the same numbers the PDF uses) */
-function geom(has) { return window.IncLogoGeom ? IncLogoGeom(has) : { size: 18, x: 128, y: 9, tx: has ? 149 : 196, align: has ? 'left' : 'right', tmax: has ? 47 : 66 }; }
+function geom(has) { return window.IncLogoGeom ? IncLogoGeom(has) : { size: 18, w: 18, h: 18, xmax: 182, ymax: 44, x: 128, y: 9, tx: has ? 149 : 196, align: has ? 'left' : 'right', tmax: has ? 47 : 66 }; }
 function geomCss(g) {
     var f = function (v) { return (Math.round(v * 100) / 100) + 'mm'; };
     return {
-        img: 'left:' + f(g.x) + ';top:' + f(g.y) + ';width:' + f(g.size) + ';height:' + f(g.size),
+        img: 'left:' + f(g.x) + ';top:' + f(g.y) + ';width:' + f(g.w || g.size) + ';height:' + f(g.h || g.size),
         text: g.align === 'left' ? 'left:' + f(g.tx) + ';right:auto;width:' + f(g.tmax) + ';justify-content:flex-start;text-align:left'
                                  : 'right:' + f(210 - g.tx) + ';left:auto;width:' + f(g.tmax) + ';justify-content:flex-end;text-align:right'
     };
@@ -32617,21 +32634,22 @@ function onSlide(e) {
     if (k === 'col' && t.getAttribute('data-ilc') === 'pick' && e.type === 'click') return;   // the colour picker reports when you choose
     if (k === 'reset') { appSettings.invoiceLogoSize = 18; appSettings.invoiceLogoX = null; appSettings.invoiceLogoY = null; }
     else if (k === 'size') {                                             // it grows and shrinks around its middle: it stays where you put it
-        var sz = +t.value, g0 = geom(true), cx = g0.x + g0.size / 2, cy = g0.y + g0.size / 2, r1 = function (v) { return Math.round(v * 10) / 10; };
+        var sz = +t.value, g0 = geom(true), cx = g0.x + g0.w / 2, cy = g0.y + g0.h / 2, r1 = function (v) { return Math.round(v * 10) / 10; };
+        var rr = g0.w / g0.h, w = rr >= 1 ? sz : sz * rr, h = rr >= 1 ? sz / rr : sz;
         appSettings.invoiceLogoSize = sz;
-        if (!g0.def) appSettings.invoiceLogoX = r1(Math.max(10, Math.min(200 - sz, cx - sz / 2)));
-        if (!g0.ydef) appSettings.invoiceLogoY = r1(Math.max(3, Math.min(62 - sz, cy - sz / 2)));
+        if (!g0.def) appSettings.invoiceLogoX = r1(Math.max(10, Math.min(200 - w, cx - w / 2)));
+        if (!g0.ydef) appSettings.invoiceLogoY = r1(Math.max(3, Math.min(62 - h, cy - h / 2)));
     }
     else if (k === 'col') { var v = t.getAttribute('data-ilc'); if (v === 'pick') v = t.value; appSettings.invoiceLogoColor = /^#[0-9a-f]{6}$/i.test(v || '') ? v.toLowerCase() : ''; paintLogoUi(); }
-    else if (k === 'x') appSettings.invoiceLogoX = Math.min(+t.value, 200 - sizeNow());
-    else if (k === 'y') appSettings.invoiceLogoY = Math.max(3, Math.min(+t.value, 62 - sizeNow()));
+    else if (k === 'x') appSettings.invoiceLogoX = Math.max(10, Math.min(+t.value, geom(true).xmax));
+    else if (k === 'y') appSettings.invoiceLogoY = Math.max(3, Math.min(+t.value, geom(true).ymax));
     else return;
     paintSliders(); miniPaint();
     if (ctx && el && el.classList.contains('on')) { el.querySelector('#inv-sheet').innerHTML = sheetHtml(ctx.group || [], ctx.o || {}); }
     clearTimeout(slT); slT = setTimeout(function () { try { saveSettings(); } catch (x) { /* ignore */ } if (ctx && el && el.classList.contains('on')) paint(); }, 450);   // saved (and the PDF redone) once you stop
 }
 function paintSliders() {
-    var sz = sizeNow(), x = xNow(), maxX = 200 - sz, y = yNow(), maxY = 62 - sz;
+    var G = geom(true), sz = sizeNow(), x = xNow(), maxX = Math.floor(G.xmax), y = yNow(), maxY = Math.floor(G.ymax), lw = G.w, lh = G.h;
     var col = window.IncInvPdf && IncInvPdf.logoColour ? IncInvPdf.logoColour() : '', std = ['', '#ffffff', '#0b2a6b', '#000000'].indexOf(col) >= 0;
     Array.prototype.forEach.call(document.querySelectorAll('.ilb-sws'), function (w) {
         Array.prototype.forEach.call(w.querySelectorAll('[data-ilc]'), function (sw) {
@@ -32643,11 +32661,11 @@ function paintSliders() {
     Array.prototype.forEach.call(document.querySelectorAll('.ilb-sl'), function (b) {
         var si = b.querySelector('[data-ils=size]'), xi = b.querySelector('[data-ils=x]'), yi = b.querySelector('[data-ils=y]');
         if (yi) { yi.max = String(maxY); if (+yi.value !== y && document.activeElement !== yi) yi.value = y; }
-        var yv = b.querySelector('[data-ilv=y]'); if (yv) yv.textContent = y <= 12 ? 'Top' : y >= maxY - 4 ? 'Bottom' : (y + sz / 2 <= 31 ? 'Higher' : 'Lower');
+        var yv = b.querySelector('[data-ilv=y]'); if (yv) yv.textContent = y <= 12 ? 'Top' : y >= maxY - 4 ? 'Bottom' : (y + lh / 2 <= 31 ? 'Higher' : 'Lower');
         if (si && +si.value !== sz && document.activeElement !== si) si.value = sz;
         if (xi) { xi.max = String(maxX); if (+xi.value !== x && document.activeElement !== xi) xi.value = x; }
         var sv = b.querySelector('[data-ilv=size]'); if (sv) sv.textContent = sz + ' mm';
-        var xv = b.querySelector('[data-ilv=x]'); if (xv) xv.textContent = x <= 40 ? 'Left' : x >= maxX - 12 ? 'Right' : x + sz / 2 >= 92 && x + sz / 2 <= 118 ? 'Middle' : (x < 100 ? 'Left side' : 'Right side');
+        var xv = b.querySelector('[data-ilv=x]'); if (xv) xv.textContent = x <= 40 ? 'Left' : x >= maxX - 12 ? 'Right' : x + lw / 2 >= 92 && x + lw / 2 <= 118 ? 'Middle' : (x < 100 ? 'Left side' : 'Right side');
     });
 }
 function miniPaint() {                                                  // Settings: the top of your invoice, small, as it will look
@@ -32796,7 +32814,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.15 (v58)';
+var VERSION = '2026.11.15 (v59)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
