@@ -4492,6 +4492,7 @@
         /* Settings: click a section to open only its settings */
         .acc-section { padding: 14px 18px !important; }
         .acc-section .acc-head { cursor: pointer; margin-bottom: 0 !important; align-items: center; -webkit-user-select: none; user-select: none; }
+        .acc-section .acc-head > .live-calc-icon { flex-shrink: 0; }   /* a long two-line description must not squeeze the icon (Data > Google Drive Backup) */
         .acc-section.acc-open .acc-head { margin-bottom: 16px !important; }
         .acc-chev { margin-left: auto; flex-shrink: 0; font-size: 18px; opacity: 0.85; transition: transform 0.25s ease; }
         .acc-section.acc-open .acc-chev { transform: rotate(180deg); }
@@ -6852,7 +6853,7 @@ setTimeout(wrap, 500);
                                 </div>
                                 <div>
                                     <h3 class="live-calc-title" style="color: #f59e0b;">Backup Reminders</h3>
-                                    <p class="text-gray-400 text-sm">Your data lives only in this browser</p>
+                                    <p class="text-gray-400 text-sm" id="backup-rem-sub">Your data lives only in this browser</p>
                                 </div>
                             </div>
                             <div class="space-y-6">
@@ -18393,7 +18394,7 @@ function addPagesFromFiles(files, key) {
     if (!list.length) { showToast('Please choose photo files (JPG, PNG, WebP)', 'error'); return Promise.resolve(); }
     const room = MAX_PAGES - UI.pages[key].length;
     if (room <= 0) { showToast(`You can add up to ${MAX_PAGES} photos at a time`, 'error'); return Promise.resolve(); }
-    return Promise.all(list.slice(0, room).map(f => smartCrop(f).then(c => makePage(c.blob).then(p => { p.cropped = c.cropped; return p; })).then(p => p, () => { showToast(`${f.name || 'A file'} could not be opened as a photo`, 'error'); return null; }))).then(got => {
+    return Promise.all(list.slice(0, room).map(f => smartCrop(f).then(c => makePage(c.blob).then(p => { p.cropped = c.cropped; p.orig = f; return p; })).then(p => p, () => { showToast(`${f.name || 'A file'} could not be opened as a photo`, 'error'); return null; }))).then(got => {
         got.forEach(p => { if (p) UI.pages[key].push(p); });                       // keep the order you picked them in (page 1, page 2...), whichever opened first
         if (list.length > room) showToast(`Only the first ${MAX_PAGES} photos were added`, 'info'); renderPanel(); });
 }
@@ -18431,29 +18432,34 @@ function openCamera() {
     let torchOn = false, starting = false, waitT = 0, autoT = 0, steady = 0, lastBox = null, shotBox = null, cool = 0;
     const ol = ov.querySelector('.rc-cam-ol'), stEl = ov.querySelector('.rc-cam-st'), autoBtn = ov.querySelector('[data-cam="auto"]');
     const readBtn = ov.querySelector('[data-cam="autoread"]'), lightBtn = ov.querySelector('[data-cam="autolight"]'), torchBtn = ov.querySelector('.rc-cam-torch');
-    let torchOk = false, darkN = 0, manualOff = false, darkTold = false, lightT = 0;
+    let torchOk = false, darkN = 0, manualOff = false, darkTold = false, lightT = 0, liveAt = 0, lookAt = 0;   // liveAt: the picture started; lookAt: started looking for the next receipt
     function setTorch(v, auto) {                                     // the phone's flashlight (only where the browser allows it)
         if (!torchOk || !live.stream) return false;
         try { live.stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: !!v }] }).catch(() => { /* not allowed */ }); } catch (e) { return false; }
         torchOn = !!v; torchBtn.classList.toggle('on', torchOn); torchBtn.setAttribute('aria-pressed', String(torchOn));
-        if (auto && v) stEl.textContent = 'It is dark - the light is on';
+        if (auto && v) stEl.textContent = auto === 'help' ? 'Light on to help find the receipt' : 'It is dark - the light is on';
         return true;
     }
     const lumaC = document.createElement('canvas'); lumaC.width = 48; lumaC.height = 27;
     function luma() {                                               // how bright the picture is, 0 (black) to 255 (white)
         try { const x = lumaC.getContext('2d', { willReadFrequently: true }); x.drawImage(video, 0, 0, 48, 27); const d = x.getImageData(0, 0, 48, 27).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114; return t / (d.length / 4); } catch (e) { return 255; }
     }
-    function lightTick() {                                          // Auto Light: twice a second, is it too dark?
-        if (gone()) return;
-        lightT = setTimeout(lightTick, 500);
-        if (!autoLightOn() || torchOn || manualOff || !video.videoWidth || document.hidden) { darkN = 0; return; }
+    function lightTick() {                                          // Auto Light: four times a second. Too dark: the light comes on at once.
+        if (gone()) return;                                          // And when Auto Capture has not managed a photo within 3 seconds, the light comes on to help.
+        lightT = setTimeout(lightTick, 250);
+        if (!video.videoWidth) { liveAt = 0; return; }
+        if (!liveAt) { liveAt = Date.now(); if (!lookAt) lookAt = liveAt; }
+        if (!autoLightOn() || torchOn || manualOff || document.hidden) { darkN = 0; return; }
+        if (Date.now() - liveAt < 600) return;                       // the camera is still finding its exposure
         const y = luma();
         darkN = y < 62 ? darkN + 1 : 0;
-        if (darkN >= 3) {
+        if (darkN >= 1) {
             darkN = 0;
             if (torchOk) setTorch(true, true);
             else if (!darkTold) { darkTold = true; stEl.textContent = 'Too dark to see the receipt - turn on a light. This phone\'s browser does not let IncAtor use the flashlight.'; }
+            return;
         }
+        if (torchOk && autoCapOn() && lookAt && Date.now() - lookAt > 3000 && UI.pages[key].length < MAX_PAGES) setTorch(true, 'help');
     }
     const paintAuto = () => { const on = autoCapOn(), rd = autoReadOn(), lt = autoLightOn(); lightBtn.classList.toggle('on', lt); lightBtn.setAttribute('aria-checked', String(lt)); autoBtn.classList.toggle('on', on); autoBtn.setAttribute('aria-checked', String(on)); readBtn.classList.toggle('on', rd); readBtn.setAttribute('aria-checked', String(rd)); readBtn.hidden = !on; if (!on) { stEl.textContent = ''; drawBox(null); } };
     function drawBox(box, good) {                                   // the outline of the receipt the camera sees
@@ -18465,16 +18471,16 @@ function openCamera() {
     }
     function autoTick() {                                           // a few times a second: is there a receipt, and is it held still?
         if (gone()) return;
-        autoT = setTimeout(autoTick, 260);
+        autoT = setTimeout(autoTick, 140);
         if (!autoCapOn() || !window.IncCrop || !video.videoWidth || document.hidden || UI.pages[key].length >= MAX_PAGES) return;
         let r; try { r = IncCrop.detect(video, video.videoWidth, video.videoHeight); } catch (e) { return; }
         const ok = r.conf >= 0.6 && r.box;
-        if (!ok) { steady = 0; lastBox = null; drawBox(null); stEl.textContent = 'Looking for a receipt...'; if (shotBox) shotBox = null; return; }
-        if (shotBox && IncCrop.iou(r.box, shotBox) > 0.55) { drawBox(r.box, true); stEl.textContent = 'Taken. Move to the next part of the receipt, or tap Read.'; return; }
-        steady = lastBox && IncCrop.iou(r.box, lastBox) > 0.9 ? steady + 1 : 0; lastBox = r.box;
-        drawBox(r.box, steady >= 3);
-        stEl.textContent = steady >= 3 ? 'Hold still...' : 'Receipt found - hold steady';
-        if (steady >= 5 && Date.now() > cool) { steady = 0; shotBox = r.box; cool = Date.now() + 1500; takeShot(true); }
+        if (!ok) { steady = 0; lastBox = null; drawBox(null); if (!torchOn || stEl.textContent.indexOf('Light on') < 0) stEl.textContent = 'Looking for a receipt...'; if (shotBox) { shotBox = null; lookAt = Date.now(); } return; }
+        if (shotBox && IncCrop.iou(r.box, shotBox) > 0.55) { drawBox(r.box, true); stEl.textContent = 'Taken. Move to the next part of the receipt, or tap Read.'; lookAt = Date.now(); return; }
+        steady = lastBox && IncCrop.iou(r.box, lastBox) > 0.88 ? steady + 1 : 0; lastBox = r.box;       // checked about 7 times a second: a steady receipt is taken in about half a second
+        drawBox(r.box, steady >= 2);
+        stEl.textContent = steady >= 2 ? 'Hold still...' : 'Receipt found - hold steady';
+        if (steady >= 3 && Date.now() > cool) { steady = 0; shotBox = r.box; cool = Date.now() + 1200; takeShot(true); }
     }
     function takeShot(auto) {
         if (!video.videoWidth) { showToast('The camera is still starting', 'info'); return; }
@@ -18482,8 +18488,8 @@ function openCamera() {
         const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight; c.getContext('2d').drawImage(video, 0, 0);
         flash.style.opacity = '.85'; setTimeout(() => { flash.style.opacity = '0'; }, 120);
         if (!auto && autoCapOn() && lastBox) shotBox = lastBox;
-        c.toBlob(bl => { if (!bl) return; smartCrop(bl).then(cr => makePage(cr.blob).then(p => {
-            p.cropped = cr.cropped; p.auto = !!auto; UI.pages[key].push(p); sync();
+        c.toBlob(bl => { if (!bl) return; lookAt = Date.now(); smartCrop(bl).then(cr => makePage(cr.blob).then(p => {
+            p.cropped = cr.cropped; p.orig = bl; p.auto = !!auto; UI.pages[key].push(p); sync();
             if (auto && autoReadOn() && !gone()) { stEl.textContent = 'Taken - reading it now...'; setTimeout(() => { if (gone() || !UI.pages[key].length) return; stop(); renderPanel(); readPages(key); }, 700); }   // Auto Read
         })); }, 'image/jpeg', 0.92);
     }
@@ -18524,7 +18530,7 @@ function openCamera() {
             showWait('The camera could not start.', true);                                                     // busy, or the phone needs a moment
         });
     }
-    paintAuto(); autoT = setTimeout(autoTick, 900); lightT = setTimeout(lightTick, 1200);
+    paintAuto(); autoT = setTimeout(autoTick, 350); lightT = setTimeout(lightTick, 300);
     const stopAuto0 = live.stopAuto; live.stopAuto = () => { stopAuto0(); clearTimeout(lightT); };
     live.onVis = () => { if (gone() || document.hidden) return; if (!live.stream || !live.stream.getVideoTracks().some(t => t.readyState === 'live')) { live.stream = null; start(); } };
     document.addEventListener('visibilitychange', live.onVis);
@@ -18670,7 +18676,8 @@ Return ONLY one JSON object, no other text, with exactly these keys:
  "other_numbers": [{"label": string as printed, "value": string}] - any other reference numbers (Ref #, RRN, Trace, Batch). Do NOT include store, terminal, register, lane, cashier, server, table, phone, card, account, membership or GST registration numbers,
  "payment": string or null - Visa, Mastercard, Amex, Debit, Cash, E-transfer or Cheque,
  "gst_number": string or null - the business GST/HST registration number (9 digits + RT + 4 digits),
- "items": [{"desc": string, "qty": number, "amount": number - the line amount as printed, "category": one of ${JSON.stringify(AI.CAT_IDS)}}]}
+ "items": [{"desc": string, "qty": number, "amount": number - the line amount as printed, "category": one of ${JSON.stringify(AI.CAT_IDS)}}],
+ "photos": [{"corners": [[x, y], [x, y], [x, y], [x, y]] or null, "box_2d": [ymin, xmin, ymax, xmax] or null}] - one entry for EACH photo, in the order given. "corners" are the four corners of the receipt paper itself (top-left, top-right, bottom-right, bottom-left of the paper as it lies in the photo, even when it is tilted or rotated), and "box_2d" is the smallest box around the whole paper. All values are integers from 0 to 1000, as a fraction of the photo's width (x) and height (y). Include the whole paper with all its printing; leave out the table, hands and background.}
 Item categories: use "Tools & equipment" for ANY tool or equipment (power tools, hand tools, blades, bits, ladders, tarps, extension cords, batteries for tools), even when it was bought at a grocery, department or warehouse store. Use "Groceries" for food and household groceries.
 Rules: copy numbers exactly as printed, keeping letters, dashes and leading zeros. Use null for anything not on the receipt; never guess. Amounts are plain numbers without $ signs. Never add GST or PST on top of the total. If several photos are given, they are pages of the same receipt.`;
 }
@@ -18681,6 +18688,73 @@ async function aiImage(blob) {
     const c = paint(im, Math.max(1, Math.round(d.w * s)), Math.max(1, Math.round(d.h * s)), false), data = c.toDataURL('image/jpeg', 0.85);
     if (im.close) { try { im.close(); } catch (e) { /* ignore */ } }
     return data.slice(data.indexOf(',') + 1);
+}
+
+/* ---- AI smart crop: while the AI reads the receipt it also says where the paper is in each photo (its four corners).
+   The photo is then cut out along those corners and straightened, and that is the picture that is kept and backed up
+   to Google Drive. When the AI gives no usable corners, the on-phone crop (or the whole photo) stays. ---- */
+function quadOf(ph, W, H) {
+    const ok = v => typeof v === 'number' && isFinite(v);
+    let q = null;
+    if (ph && Array.isArray(ph.corners) && ph.corners.length === 4 && ph.corners.every(c => Array.isArray(c) && ok(c[0]) && ok(c[1]))) q = ph.corners.map(c => [c[0] / 1000 * W, c[1] / 1000 * H]);
+    else if (ph && Array.isArray(ph.box_2d) && ph.box_2d.length === 4 && ph.box_2d.every(ok)) { const b = ph.box_2d.map(v => v / 1000); q = [[b[1] * W, b[0] * H], [b[3] * W, b[0] * H], [b[3] * W, b[2] * H], [b[1] * W, b[2] * H]]; }
+    if (!q) return null;
+    q = q.map(c => [Math.max(0, Math.min(W, c[0])), Math.max(0, Math.min(H, c[1]))]);
+    const cx = q.reduce((a, c) => a + c[0], 0) / 4, cy = q.reduce((a, c) => a + c[1], 0) / 4;          // put the corners in order round the middle: TL, TR, BR, BL
+    q.sort((a, b) => Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx));
+    let tl = 0; q.forEach((c, i) => { if (c[0] + c[1] < q[tl][0] + q[tl][1]) tl = i; }); q = q.slice(tl).concat(q.slice(0, tl));
+    let area = 0, sgn = 0, convex = true;
+    for (let i = 0; i < 4; i++) {
+        const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4]; area += a[0] * b[1] - b[0] * a[1];
+        const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); if (cr !== 0) { if (!sgn) sgn = Math.sign(cr); else if (Math.sign(cr) !== sgn) convex = false; }
+    }
+    area = Math.abs(area) / 2;
+    if (!convex || area < 0.06 * W * H) return null;                     // not a sensible shape for a receipt
+    if (area > 0.96 * W * H) return 'whole';                             // the receipt fills the photo: nothing to cut away
+    const m = 0.008 * Math.max(W, H);                                    // a thin margin so no printing is cut off
+    return q.map(c => [Math.max(0, Math.min(W, c[0] + (c[0] < cx ? -m : m))), Math.max(0, Math.min(H, c[1] + (c[1] < cy ? -m : m)))]);
+}
+function homography(q, w, h) {                                          // maps the output rectangle (0..w, 0..h) onto the corners in the photo
+    const [x0, y0] = q[0], [x1, y1] = q[1], [x2, y2] = q[2], [x3, y3] = q[3];
+    const dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2, sx = x0 - x1 + x2 - x3, sy = y0 - y1 + y2 - y3;
+    let g = 0, hh = 0; const den = dx1 * dy2 - dx2 * dy1;
+    if (Math.abs(den) > 1e-9) { g = (sx * dy2 - dx2 * sy) / den; hh = (dx1 * sy - sx * dy1) / den; }
+    const a = x1 - x0 + g * x1, b = x3 - x0 + hh * x3, c = x0, d = y1 - y0 + g * y1, e = y3 - y0 + hh * y3, f = y0;
+    return (u, v) => { u /= w; v /= h; const z = g * u + hh * v + 1; return [(a * u + b * v + c) / z, (d * u + e * v + f) / z]; };
+}
+async function warpQuad(blob, ph) {
+    const im = await decodeImage(blob), d = dimsOf(im);
+    const sIn = Math.min(1, 2600 / Math.max(d.w, d.h)), W = Math.round(d.w * sIn), H = Math.round(d.h * sIn);
+    const q = quadOf(ph, W, H); if (!q || q === 'whole') { if (im.close) { try { im.close(); } catch (e) { /* ignore */ } } return q === 'whole' ? { whole: true } : null; }
+    const src = paint(im, W, H, false); if (im.close) { try { im.close(); } catch (e) { /* ignore */ } }
+    const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    let ow = (len(q[0], q[1]) + len(q[3], q[2])) / 2, oh = (len(q[0], q[3]) + len(q[1], q[2])) / 2;
+    const k = Math.min(1, 2400 / Math.max(ow, oh)); ow = Math.max(40, Math.round(ow * k)); oh = Math.max(40, Math.round(oh * k));
+    const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    const out = document.createElement('canvas'); out.width = ow; out.height = oh;
+    const ox = out.getContext('2d'), od = ox.createImageData(ow, oh), o = od.data, map = homography(q, ow, oh);
+    for (let y = 0; y < oh; y++) {
+        for (let x = 0; x < ow; x++) {
+            const p = map(x + .5, y + .5), fx = Math.max(0, Math.min(W - 1.001, p[0] - .5)), fy = Math.max(0, Math.min(H - 1.001, p[1] - .5));
+            const ix = fx | 0, iy = fy | 0, ax = fx - ix, ay = fy - iy, i00 = (iy * W + ix) * 4, i10 = i00 + 4, i01 = i00 + W * 4, i11 = i01 + 4, j = (y * ow + x) * 4;
+            for (let ch = 0; ch < 3; ch++) o[j + ch] = (sd[i00 + ch] * (1 - ax) + sd[i10 + ch] * ax) * (1 - ay) + (sd[i01 + ch] * (1 - ax) + sd[i11 + ch] * ax) * ay;
+            o[j + 3] = 255;
+        }
+    }
+    ox.putImageData(od, 0, 0);
+    const bl = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.9));
+    return bl ? { blob: bl, w: ow, h: oh } : null;
+}
+async function aiCropPages(pages, photos) {                            // never fails: a page the AI could not place keeps its photo
+    for (let i = 0; i < pages.length; i++) {
+        const pg = pages[i], ph = photos[i]; if (!pg || !ph) continue;
+        try {
+            const r = await warpQuad(pg.orig || pg.blob, ph);
+            if (r && r.whole) { if (pg.orig && pg.blob !== pg.orig) { pg.blob = pg.orig; pg.thumb = await thumbOf(pg.orig); } pg.aiCrop = 'whole'; continue; }
+            if (!r) continue;
+            pg.blob = r.blob; pg.thumb = await thumbOf(r.blob); pg.cropped = true; pg.aiCrop = true;
+        } catch (e) { /* keep the photo as it is */ }
+    }
 }
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
 async function geminiModels(key) {
@@ -18744,14 +18818,15 @@ async function claudeRun(key, content, maxTokens) {
 async function aiRead(pages, pm) {
     const p = aiProvider(), key = aiKey(); if (p === 'off' || !key) throw aiErr('off', 'The AI reader is off.');
     pm && pm.set('Preparing the photo...', 12, '');
-    const imgs = []; for (const pg of pages.slice(0, 6)) imgs.push(await aiImage(pg.blob));
+    const imgs = []; for (const pg of pages.slice(0, 6)) imgs.push(await aiImage(pg.orig || pg.blob));     // the whole photo: the AI finds the receipt in it and crops it below
     pm && pm.set(`Reading with ${AI_PROVIDERS[p].name}...`, 40, 'This takes a few seconds.');
     const prompt = aiPrompt();
     const out = p === 'gemini'
         ? await geminiRun(key, imgs.map(b => ({ inline_data: { mime_type: 'image/jpeg', data: b } })).concat([{ text: prompt }]))
         : await claudeRun(key, imgs.map(b => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b } })).concat([{ type: 'text', text: prompt }]));
-    const res = AI.fromAi(parseAiJson(out.text), { now: new Date(), dateOrder: dateOrderFor });
+    const raw = parseAiJson(out.text), res = AI.fromAi(raw, { now: new Date(), dateOrder: dateOrderFor });
     if (!(res.total > 0) && !res.store) throw aiErr('empty', 'The AI could not read this photo.');
+    if (cropOn()) { pm && pm.set('Cropping the photo...', 90, ''); await aiCropPages(pages.slice(0, 6), Array.isArray(raw.photos) ? raw.photos : []); }
     res.aiName = AI_PROVIDERS[p].name; res.aiModel = out.model;
     return res;
 }
@@ -27744,6 +27819,19 @@ window.IncWO = {
 };
 })();
 
+/* Settings > Backup Reminders: say where your data really is. Signed in to Google Drive: it is stored there. */
+(function () {
+    function paintBackupSub() {
+        var el = document.getElementById('backup-rem-sub'); if (!el) return;
+        var c = window.IncAtorCloud, on = false; try { on = !!(c && !c.setupMode && c.session && c.session()); } catch (e) { on = false; }
+        var t = on ? 'Your data is securely stored in the Drive' : 'Your data lives only in this browser';
+        if (el.textContent !== t) el.textContent = t;
+    }
+    window.IncBackupSub = paintBackupSub;
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paintBackupSub); else paintBackupSub();
+    setInterval(paintBackupSub, 4000);
+})();
+
 </script>
 <script id="incator-woserver">
 /* =================================================================================================================
@@ -30004,14 +30092,17 @@ function gait(x0, x1, opt) {
             var lift = first ? t0 + dl * .6 : t0 + dl, land = t1 - dl;
             if (t < lift) { var hr = first ? 8 : 34; return footAt(P0, d, 'toe', hr * (first ? smooth((t - t0) / (lift - t0)) : 1)); }
             if (t < land) {
-                var q = (t - lift) / (land - lift), A0 = footAt(P0, d, 'toe', first ? 8 : 34), A1 = footAt(P1, d, last ? 'flat' : 'heel', last ? 0 : 14);
+                var q = (t - lift) / (land - lift), A0 = footAt(P0, d, 'toe', first ? 8 : 34), A1 = footAt(P1, d, last ? 'flat' : 'heel', last ? 0 : 10);
                 var e = q < .5 ? 2 * q * q : 1 - 2 * (1 - q) * (1 - q);
-                return { x: A0.x + (A1.x - A0.x) * e, y: lerp(A0.y, A1.y, q) - (last ? 2.2 : 3.4) * Math.sin(Math.PI * Math.pow(q, .8)), f: lerp(A0.f, A1.f, smooth(q)) - 6 * Math.sin(Math.PI * q) * (last ? 0 : 1), air: true };
+                var arc = Math.sin(Math.PI * Math.pow(q, .85));                // lifts off and sets down gently (no speed at either end)
+                return { x: A0.x + (A1.x - A0.x) * e, y: lerp(A0.y, A1.y, smooth(q)) - (last ? 2.2 : 3.2) * arc * arc, f: lerp(A0.f, A1.f, smooth(q)) - 6 * Math.sin(Math.PI * q) * (last ? 0 : 1), air: true };
             }
             if (last) return footAt(P1, d, 'flat');
-            var h = Math.max(0, 1 - (t - land) / (.24 * T)); return footAt(P1, d, h > 0 ? 'heel' : 'flat', 14 * h);   // heel down, foot rolls flat
+            var h = 1 - smooth((t - land) / (.5 * T)); return footAt(P1, d, h > 0 ? 'heel' : 'flat', 10 * h);   // heel down, then the foot rolls flat softly
         }
         var P = plantAfter(leg, t >= total ? n + 1 : k - 1);            // standing on this foot
+        var lastJ = 0; for (var jj = 1; jj <= Math.min(n, t >= total ? n + 1 : k - 1); jj++) if (legOf(jj) === leg) lastJ = jj;
+        if (lastJ && t - (lastJ * T - dl) < .5 * T) { var hh = 1 - smooth((t - (lastJ * T - dl)) / (.5 * T)); if (hh > 0) return footAt(P, d, 'heel', 10 * hh); }   // still rolling flat after landing
         var nextK = k + 1; while (nextK <= n + 1 && legOf(nextK) !== leg) nextK++;
         if (nextK <= n + 1 && t < total) {                              // the heel lifts before this foot steps off again
             var tLift = (nextK - 1) * T + dl, start = tLift - .45 * T;
@@ -30019,12 +30110,21 @@ function gait(x0, x1, opt) {
         }
         return footAt(P, d, 'flat');
     }
+    function rawY(t) {                                                 // how low the hip must be for the planted feet to reach the floor
+        t = Math.max(0, Math.min(total, t));
+        var hx = x0 + d * S(t), F = legState('f', t), B = legState('b', t), sf = speedF(t), y = STAND_Y, lr = LR - .4 * sf;
+        [[F, 1], [B, -1]].forEach(function (p) { var jx = hx + d * p[1], dx = p[0].x - jx; y = Math.max(y, p[0].y - Math.sqrt(Math.max(0, lr * lr - dx * dx))); });   // a foot in the air counts too: the hip settles before it lands
+        return y;
+    }
+    function hipY(t) {                                                 // smoothed over a moment, so the body glides (no drop when a foot lands)
+        var r0 = rawY(t), acc = 0, wsum = 0;
+        for (var i = -4; i <= 4; i++) { var w = 1 - Math.abs(i) / 5; acc += rawY(t + i * .022) * w; wsum += w; }
+        return Math.max(acc / wsum, r0 - .45);
+    }
     function at(t, armOver) {
         t = Math.max(0, Math.min(total, t));
         var hx = x0 + d * S(t), F = legState('f', t), B = legState('b', t), sf = speedF(t);
-        var y = STAND_Y;
-        var lr = LR - .4 * sf;                                          // a soft knee while walking (flattens the bounce)
-        [[F, 1], [B, -1]].forEach(function (p) { if (p[0].air) return; var jx = hx + d * p[1], dx = p[0].x - jx; y = Math.max(y, p[0].y - Math.sqrt(Math.max(0, lr * lr - dx * dx))); });
+        var y = hipY(t);
         var lf = ik(hx + d, y, F.x, F.y, d), lb = ik(hx - d, y, B.x, B.y, d);
         var o = { x: hx, y: y, dir: d, t: 2 + 3.2 * sf, h: -1 - 1.2 * sf, lfa: lf.a, lfk: lf.k, lff: F.f, lba: lb.a, lbk: lb.k, lbf: B.f };
         var swing = function (a) { return -.8 * (a - 4) * sf + 3; };      // arms swing against the legs
@@ -30082,7 +30182,26 @@ var LIVING = '<rect x="0" y="0" width="240" height="106" fill="url(#hsLivG)"/><r
     '<rect class="hs-pillow" x="74" y="90" width="14" height="11" rx="3" transform="rotate(-8 81 95)"/>' +
     '<rect class="hs-wood" x="158" y="109" width="32" height="3" rx="1"/><path class="hs-leg" d="M161 112v12M187 112v12"/><g class="hs-mess"><rect class="hs-cup c1" x="163" y="104" width="4" height="5" rx=".8"/><rect class="hs-cup c2" x="170" y="104" width="4" height="5" rx=".8"/><rect class="hs-cup c3" x="180" y="104" width="4" height="5" rx=".8"/><path class="hs-bowl" d="M174 108h7a3.5 2.4 0 0 1-7 0z"/><circle cx="176" cy="107" r=".9" fill="#facc15"/><circle cx="178.6" cy="106.6" r=".9" fill="#facc15"/></g>' +
     '<rect class="hs-wood" x="196" y="100" width="40" height="5" rx="1"/><rect class="hs-wood2" x="198" y="105" width="36" height="21" rx="1"/><path class="hs-drw" d="M199 115h34"/>' +
-    '<rect class="hs-tv" x="199" y="64" width="35" height="22" rx="1.6"/><rect class="hs-tvs" x="201" y="66" width="31" height="18"/><rect class="hs-tvglow" x="201" y="66" width="31" height="18"/><rect class="hs-tv" x="213" y="86" width="7" height="2.2"/><rect class="hs-tv" x="209" y="88" width="15" height="12" fill-opacity="0"/>' +
+    '<rect class="hs-tv" x="199" y="64" width="35" height="22" rx="1.6"/><rect class="hs-tvs" x="201" y="66" width="31" height="18"/><rect class="hs-tvglow" x="201" y="66" width="31" height="18"/>' +
+    '<svg class="hs-tvmv" x="201" y="66" width="31" height="18" viewBox="0 0 62 36" overflow="hidden">' +
+    '<g class="hs-mv hs-mv1"><rect width="62" height="36" fill="#0b1036"/><circle class="mv-tw" cx="6" cy="6" r=".8" fill="#fff"/><circle class="mv-tw t2" cx="20" cy="28" r=".7" fill="#fff"/><circle class="mv-tw" cx="34" cy="8" r=".6" fill="#fff"/><circle class="mv-tw t2" cx="52" cy="20" r=".8" fill="#fff"/><circle class="mv-tw" cx="44" cy="31" r=".6" fill="#fff"/><circle class="mv-tw t2" cx="12" cy="17" r=".5" fill="#fff"/>' +
+    '<g class="mv-planet"><circle cx="48" cy="9" r="5" fill="#f472b6"/><ellipse cx="48" cy="9" rx="8" ry="1.8" fill="none" stroke="#fde68a" stroke-width=".9"/></g><circle cx="10" cy="30" r="9" fill="#334155"/><circle cx="7" cy="27" r="1.6" fill="#475569"/>' +
+    '<g class="mv-rocket"><path class="mv-fire" d="M-1 18l-6 -1.6 2 1.6 -2 1.6z" fill="#f97316"/><path d="M-1 15.6h9c3 0 5 1.2 6 2.4-1 1.2-3 2.4-6 2.4h-9z" fill="#e5e7eb"/><circle cx="8" cy="18" r="1.3" fill="#38bdf8"/><path d="M0 15.6l-2-3h3l2 3zM0 20.4l-2 3h3l2-3z" fill="#ef4444"/></g></g>' +
+    '<g class="hs-mv hs-mv2"><rect width="62" height="36" fill="#0e7490"/><rect y="18" width="62" height="18" fill="#155e75"/><path d="M0 33q15-3 31 0t31 0V36H0z" fill="#fcd34d"/>' +
+    '<path class="mv-weed" d="M8 34q-3-6 0-11t0-11" fill="none" stroke="#22c55e" stroke-width="1.6" stroke-linecap="round"/><path class="mv-weed w2" d="M52 34q3-5 0-10t0-9" fill="none" stroke="#16a34a" stroke-width="1.6" stroke-linecap="round"/>' +
+    '<g class="mv-fish"><path d="M0 0q6-5 12 0-6 5-12 0z" fill="#fb923c"/><path d="M0 0l-4-3v6z" fill="#f97316"/><circle cx="8.6" cy="-.8" r=".8" fill="#111827"/></g>' +
+    '<g class="mv-fish2"><path d="M0 0q-4-3.4-8 0 4 3.4 8 0z" fill="#facc15"/><path d="M0 0l3-2v4z" fill="#eab308"/><circle cx="-5.6" cy="-.5" r=".6" fill="#111827"/></g>' +
+    '<circle class="mv-bub" cx="20" cy="34" r="1" fill="none" stroke="#a5f3fc" stroke-width=".5"/><circle class="mv-bub b2" cx="40" cy="34" r=".8" fill="none" stroke="#a5f3fc" stroke-width=".5"/></g>' +
+    '<g class="hs-mv hs-mv3"><rect width="62" height="36" fill="#93c5fd"/><circle cx="52" cy="8" r="4" fill="#fde047"/>' +
+    '<g class="mv-hills"><ellipse cx="10" cy="26" rx="16" ry="9" fill="#4ade80"/><ellipse cx="40" cy="27" rx="18" ry="8" fill="#22c55e"/><ellipse cx="72" cy="26" rx="16" ry="9" fill="#4ade80"/><ellipse cx="102" cy="27" rx="18" ry="8" fill="#22c55e"/>' +
+    '<path d="M24 22v-6M86 22v-6" stroke="#78350f" stroke-width="1.4"/><circle cx="24" cy="14" r="3.4" fill="#15803d"/><circle cx="86" cy="14" r="3.4" fill="#15803d"/></g>' +
+    '<rect y="27" width="62" height="9" fill="#475569"/><path class="mv-lane" d="M0 31.5H124" stroke="#f8fafc" stroke-width=".9" stroke-dasharray="5 5"/>' +
+    '<g class="mv-car"><path d="M18 27.5v-3.4l3-3h8l3.4 3h3.4v3.4z" fill="#ef4444"/><path d="M22.4 22h3v2.4h-5zM26.6 22h2.4l2 2.4h-4.4z" fill="#bae6fd"/><g class="mv-wheel"><circle cx="22" cy="28" r="2" fill="#111827"/><path d="M21 28h2" stroke="#9ca3af" stroke-width=".6"/></g><g class="mv-wheel w2"><circle cx="32.4" cy="28" r="2" fill="#111827"/><path d="M31.4 28h2" stroke="#9ca3af" stroke-width=".6"/></g></g></g>' +
+    '<g class="hs-mv hs-mv4"><rect width="62" height="36" fill="#bae6fd"/><g class="mv-cloud"><ellipse cx="14" cy="8" rx="6" ry="2.4" fill="#fff"/><ellipse cx="18" cy="6.6" rx="4" ry="2.4" fill="#fff"/></g><path d="M0 26q16-6 31-1t31-2V36H0z" fill="#86efac"/>' +
+    '<circle cx="9" cy="29" r="1.1" fill="#f472b6"/><circle cx="27" cy="31" r="1.1" fill="#facc15"/><circle cx="46" cy="29" r="1.1" fill="#f472b6"/><circle cx="56" cy="32" r="1.1" fill="#fff"/>' +
+    '<g class="mv-hop"><g class="mv-blob"><ellipse cx="0" cy="-4" rx="4.4" ry="4" fill="#a78bfa"/><circle cx="1.6" cy="-5" r="1" fill="#fff"/><circle cx="1.9" cy="-5" r=".5" fill="#111827"/><circle cx="-1" cy="-5" r="1" fill="#fff"/><circle cx="-.7" cy="-5" r=".5" fill="#111827"/><path d="M-.8 -2.6q.8 .8 1.8 0" fill="none" stroke="#4c1d95" stroke-width=".5"/></g></g></g>' +
+    '</svg>' +
+    '<rect class="hs-tv" x="213" y="86" width="7" height="2.2"/><rect class="hs-tv" x="209" y="88" width="15" height="12" fill-opacity="0"/>' +
     '<g class="hs-spk"><rect x="226" y="88" width="7" height="12" rx="1" fill="#1f2937"/><circle cx="229.5" cy="96" r="2" fill="#475569"/></g><g class="hs-notes"><text class="hs-note n1" x="226" y="84">♪</text><text class="hs-note n2" x="230" y="80">♫</text><text class="hs-note n3" x="224" y="78">♪</text></g>';
 var KITCHEN = '<rect x="0" y="0" width="240" height="106" fill="url(#hsKitG)"/><rect x="0" y="104" width="240" height="36" fill="url(#hsFloorG)"/><rect class="hs-skirt" x="0" y="103" width="240" height="2.4"/>' +
     '<rect class="hs-tiles" x="6" y="62" width="148" height="32"/><path class="hs-tileln" d="M6 70h148M6 78h148M6 86h148M24 62v32M42 62v32M60 62v32M78 62v32M96 62v32M114 62v32M132 62v32M150 62v32"/>' +
@@ -30165,10 +30284,12 @@ function drawRig(r, o) {
         else p.setAttribute('transform', 'translate(' + f1(px) + ' ' + f1(py) + ') rotate(' + f1(rot) + ')');
     }
 }
+var MOVIES = ['Rocket Ride', 'Deep Blue', 'Speedy Red', 'Hoppy Hills'];   // the cartoons on his TV
 var PROPS = {
     mug: '<g><rect x="-2.6" y="-6" width="5.2" height="6.4" rx="1.3" fill="#ef4444"/><path d="M2.6 -4.6c1.8 0 1.8 3 0 3" fill="none" stroke="#ef4444" stroke-width="1"/></g>',
     cup: '<g><rect x="-2" y="-5" width="4" height="5" rx=".8" fill="#f8fafc" stroke="#94a3b8" stroke-width=".4"/></g>',
-    book2: '<g><path d="M-8 -6l8 2 8-2v11l-8 2-8-2z" fill="#f8fafc" stroke="#cbd5e1" stroke-width=".4"/><path d="M0 -4v11" stroke="#94a3b8" stroke-width=".6"/><path d="M-8 -6l8 2 8-2" fill="none" stroke="#b91c1c" stroke-width="1.2"/></g>',
+    book2: '<g><g transform="rotate(-24)"><rect x="-2" y="-7.2" width="3.6" height="13.4" rx=".5" fill="#f8fafc" stroke="#cbd5e1" stroke-width=".35"/><path d="M-1.4 -6v11M-.6 -6v11M.2 -6v11" stroke="#e2e8f0" stroke-width=".3"/><rect x="1.3" y="-7.7" width="1.4" height="14.4" rx=".5" fill="#b91c1c"/><rect x="1.3" y="-7.7" width="1.4" height="2" rx=".4" fill="#7f1d1d"/></g></g>',   // seen from beside him: the open pages face him
+    phoneup: '<g><rect x="-3.4" y="-.6" width="6.8" height="1.2" rx=".5" fill="#111827"/><rect x="-3" y=".5" width="6" height=".45" fill="#7dd3fc"/><path d="M-3 1L-6 10H6L3 1z" fill="#7dd3fc" opacity=".14"/></g>',   // a phone held over his face, screen down towards him
     spoon: '<g><path d="M0 0l3 9" stroke="#78350f" stroke-width="1.2" stroke-linecap="round"/></g>',
     can: '<g><path d="M-4 -3h7v6h-7z" fill="#22c55e"/><path d="M3 -2l6 -4" stroke="#16a34a" stroke-width="1.4" stroke-linecap="round"/><path d="M-4 -3c-3 0-3 5 0 5" fill="none" stroke="#16a34a" stroke-width="1"/></g>',
     fork: '<g><path d="M0 0l2 -6" stroke="#94a3b8" stroke-width=".9" stroke-linecap="round"/></g>',
@@ -30218,6 +30339,7 @@ function atHome() { return home() || !!bedding; }                       // ...an
 var ACT = {
     read:   { room: 'living', label: 'Reading a book on the sofa' },
     tv:     { room: 'living', label: 'Watching TV' },
+    reels:  { room: 'living', label: 'Watching reels on his phone' },
     vacuum: { room: 'living', label: 'Vacuuming the living room' },
     plants: { room: 'living', label: 'Watering the plants' },
     coffee: { room: 'kitchen', label: 'Making a coffee' },
@@ -30237,7 +30359,7 @@ function nextActivity(now) {
     var meal = (h >= 6.5 && h < 10) ? 'breakfast' : (h >= 11.75 && h < 14) ? 'lunch' : (h >= 17.25 && h < 20) ? 'dinner' : '';
     if (meal && lastMeal !== key + meal) { lastMeal = key + meal; plan = meal === 'breakfast' ? ['cook', 'eat', 'dishes'] : ['cook', 'eat', 'dishes']; if (meal === 'breakfast') plan.unshift('coffee'); return plan.shift(); }
     if (!working() && (day === 5 || day === 6) && h >= 19 && h < 23 && Date.now() - lastParty > 3 * 3600000 && Math.random() < .5) { lastParty = Date.now(); return 'party'; }
-    var w = { read: 4, tv: h >= 17 ? 4 : 1.5, vacuum: h < 17 ? 1.4 : .4, plants: h < 12 ? 1.2 : .5, coffee: h < 15 ? 1.2 : .3, snack: 1 };
+    var w = { read: 4, reels: h >= 12 ? 2 : 1, tv: h >= 17 ? 4 : 1.5, vacuum: h < 17 ? 1.4 : .4, plants: h < 12 ? 1.2 : .5, coffee: h < 15 ? 1.2 : .3, snack: 1 };
     var wk = window.IncDay && IncDay.wx && IncDay.wx() ? IncDay.wx().kind : '';
     if (/rain|drizzle|storm|snow/.test(wk)) { w.rainwatch = 1.6; w.plants = .25; w.vacuum = (w.vacuum || 1) * 1.3; }   // a wet day: more indoor time
     delete w[lastAct];
@@ -30291,11 +30413,23 @@ function plans(a) {
     switch (a) {
     case 'read':
         walkTo(SPOTS.sofa - 2, 1); title(ACT.read.label); sitDownAt(SPOTS.sofa - 1, 1);
-        hold(pose(SPOTS.sofa, 1, SEATP), 40, function (o, u, tau) { o.prop = 'book2'; o.afs = 62; o.afe = 66; o.abs = 58; o.abe = 70; o.h = 12 + 1.5 * Math.sin(tau * .7); o.propRot = -4; if ((tau % 9) > 8.4) { o.afs = 70; o.afe = 50; } });
+        hold(pose(SPOTS.sofa, 1, SEATP), 40, function (o, u, tau) { o.prop = 'book2'; o.afs = 44; o.afe = 74; o.abs = 40; o.abe = 78; o.h = 16 + 1.5 * Math.sin(tau * .7); o.propRot = -6; if ((tau % 9) > 8.4) { o.afs = 52; o.afe = 62; } });   // book at his chest, head down reading
+        break;
+    case 'reels':
+        walkTo(SPOTS.sofa - 2, 1); title(ACT.reels.label); sitDownAt(SPOTS.sofa - 1, 1);
+        var LS = { x: 588, y: 98.4, dir: 1, t: -90, h: -6, lfa: 128, lfk: 98, lff: 0, lba: 122, lbk: 92, lbf: 0, afs: 178, afe: 24, abs: 172, abe: 28 };   // lying back on the sofa, knees up, head on the armrest
+        T(pose(SPOTS.sofa, 1, SEATP), LS, 1.5);
+        hold(LS, 32, function (o, u, tau) {
+            o.prop = 'phoneup'; o.propRot = 0;
+            var c = tau % 7.5, laugh = c > 5.6;                            // every few seconds something funny comes up
+            o.afe = 24 + 2 * Math.sin(tau * 3.1); if ((tau % 2.4) < .25) o.afs = 175;   // flicks to the next reel
+            if (laugh) { var sh = Math.sin(tau * 26); o.talk = true; o.say = c > 6.4 ? 'Ha ha ha!' : 'Ha ha!'; o.sayX = o.x - 22; o.sayY = o.y - 34; o.t = -90 + 2.4 * sh; o.lfa = 128 + 4 * sh; o.lba = 122 - 4 * sh; o.h = -8; }
+        });
+        T(LS, pose(SPOTS.sofa, 1, SEATP), 1.4);
         break;
     case 'tv':
         walkTo(SPOTS.tv - 2, 1); title(ACT.tv.label); sitDownAt(SPOTS.tv - 1, 1);
-        run(function () { scene('tv', true); });
+        run(function () { var mv = 1 + Math.floor(Math.random() * 4); if (el) el.setAttribute('data-movie', String(mv)); say(who() + ' is at home', 'Watching \u201c' + MOVIES[mv - 1] + '\u201d · ' + offLine()); act = ACT.tv.label; scene('tv', true); });
         hold(pose(SPOTS.tv, 1, SEATP), 40, function (o, u, tau) { o.prop = (tau % 14) < 3 ? 'remote' : ''; o.afs = (tau % 14) < 3 ? 70 : 35; o.afe = (tau % 14) < 3 ? 15 : 45; o.h = -3; o.t = 0; o.talk = (tau % 17) > 15.8; });
         run(function () { scene('tv', false); });
         break;
@@ -30612,7 +30746,7 @@ window.addEventListener('incjobsaved', function (e) {
     if (el && !el.hidden && running) cheer(msg, true); else pendingCheer = { msg: msg, at: Date.now() };   // he cheers when you next see him
 });
 function overlay(o, now) {                                             // waving / cheering on top of whatever he is doing
-    if (o.t < -45) { if (now < tapUntil) { o.say = 'Zzz…'; } return o; }       // in bed
+    if (o.t < -45) { if (now < tapUntil) { var sofaLie = o.x > LIVING_X; o.say = sofaLie ? tapMsg : 'Zzz…'; if (sofaLie) { o.sayX = o.x - 22; o.sayY = o.y - 34; } } return o; }       // in bed (lying on the sofa: still chatty)
     var busyArm = !!o.prop;
     if (now < cheerUntil) {
         var c = (now - cheerAt) / 1000, pump = Math.abs(Math.sin(c * 7.5));
@@ -30645,6 +30779,7 @@ function petHtml() {
 var pet = { x: SPOTS.sofa + 26, y: FLOOR, dir: -1, mode: 'sit', ph: 0, still: 0, jump: null }, petG = null, petLast = 0, petLegs = [], petBody = null;
 var PET_SPEED = 50;
 function petTarget(o) {                                                // where it wants to be, given what he is doing
+    if (o.t < -45 && o.x > LIVING_X) return { x: SPOTS.sofa + 39, y: 101.4, mode: 'curl', dir: -1 };                              // at his feet on the sofa
     if (o.t < -45) return { x: 205, y: 91.4, mode: 'curl', dir: -1 };                                                           // at the foot of his bed
     if (o.y > 100 && Math.abs(o.x - SPOTS.sofa) < 8) return { x: SPOTS.sofa + 26, y: 101.4, mode: 'curl', dir: -1 };            // napping next to him on the sofa
     if (o.y > 100) return { x: o.x - 22 * o.dir, y: FLOOR, mode: 'sit', dir: o.dir };                                            // sitting by his chair
@@ -30708,7 +30843,7 @@ function frame(now) {
     drawRig(me, o); petStep(o, now);
     if (o.chair && chairG) chairG.setAttribute('transform', 'translate(' + f1(o.x + 5 * o.dir) + ' 126) scale(' + o.dir + ' 1)');
     if (st.both) { drawRig(f1r, fx[0]); drawRig(f2r, fx[1]); }
-    var want = Math.max(0, Math.min(WORLD_W - 240, o.x - 120)); if (o.t < -45) want = 0;   // lying in bed: the same view as the sleeping picture
+    var want = Math.max(0, Math.min(WORLD_W - 240, o.x - 120)); if (o.t < -45 && o.x < OFFICE_X) want = 0;   // lying in bed: the same view as the sleeping picture
     if (camTarget == null) camX = want; else camX += (want - camX) * .1;
     camTarget = want;
     world.setAttribute('transform', 'translate(' + f1(-camX) + ' 0)');
@@ -30781,6 +30916,16 @@ function plans_after_current(f) { interrupt(f); }
 function guessState() { var p = me && me.pose; if (!p) return state; return { x: p.x, dir: p.dir, sit: p.y > 100, where: '' }; }
 
 var css = [
+'.hs-mv { display: none; } .wm-home.hsx-tv[data-movie="1"] .hs-mv1, .wm-home.hsx-tv[data-movie="2"] .hs-mv2, .wm-home.hsx-tv[data-movie="3"] .hs-mv3, .wm-home.hsx-tv[data-movie="4"] .hs-mv4 { display: inline; } .wm-home.hsx-tv .hs-tvglow { opacity: .08 !important; animation: none !important; }',
+'.mv-tw { animation: hsTw 1.4s ease-in-out infinite; } .mv-tw.t2 { animation-delay: .7s; } .mv-planet { animation: mvDrift 7s linear infinite; } .mv-rocket { animation: mvFly 4.6s linear infinite; } .mv-fire { transform-box: fill-box; transform-origin: 100% 50%; animation: mvFire .18s ease-in-out infinite alternate; }',
+'@keyframes mvDrift { from { transform: translateX(10px); } to { transform: translateX(-10px); } } @keyframes mvFly { 0% { transform: translate(-22px, 2px); } 50% { transform: translate(28px, -3px); } 100% { transform: translate(78px, 2px); } } @keyframes mvFire { from { transform: scaleX(.6); } to { transform: scaleX(1.25); } }',
+'.mv-weed { transform-box: fill-box; transform-origin: 50% 100%; animation: mvSway 2.6s ease-in-out infinite alternate; } .mv-weed.w2 { animation-delay: -1.3s; } @keyframes mvSway { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }',
+'.mv-fish { animation: mvSwim 6s linear infinite; } .mv-fish2 { animation: mvSwim2 7.5s linear infinite; } @keyframes mvSwim { 0% { transform: translate(-14px, 14px); } 25% { transform: translate(10px, 11px); } 50% { transform: translate(34px, 15px); } 75% { transform: translate(56px, 12px); } 100% { transform: translate(76px, 14px); } }',
+'@keyframes mvSwim2 { 0% { transform: translate(70px, 24px); } 50% { transform: translate(30px, 21px); } 100% { transform: translate(-10px, 25px); } } .mv-bub { animation: mvBub 3s ease-in infinite; } .mv-bub.b2 { animation-delay: -1.5s; } @keyframes mvBub { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-32px); opacity: 0; } }',
+'.mv-hills { animation: mvHills 5s linear infinite; } @keyframes mvHills { from { transform: translateX(0); } to { transform: translateX(-62px); } } .mv-lane { animation: mvLane .5s linear infinite; } @keyframes mvLane { to { stroke-dashoffset: -10; } }',
+'.mv-car { animation: mvCar .3s ease-in-out infinite alternate; } @keyframes mvCar { from { transform: translateY(0); } to { transform: translateY(-.6px); } } .mv-wheel { transform-box: fill-box; transform-origin: 50% 50%; animation: mvSpin .35s linear infinite; } @keyframes mvSpin { to { transform: rotate(360deg); } }',
+'.mv-cloud { animation: mvCloud 9s linear infinite; } @keyframes mvCloud { from { transform: translateX(-20px); } to { transform: translateX(60px); } } .mv-hop { animation: mvHopX 6s linear infinite; } .mv-blob { animation: mvHop .75s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }',
+'@keyframes mvHopX { from { transform: translate(-6px, 29px); } to { transform: translate(68px, 29px); } } @keyframes mvHop { 0%, 100% { transform: translateY(0) scale(1.15, .85); } 20% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-8px) scale(.92, 1.1); } 80% { transform: translateY(0) scale(1, 1); } }',
 '.hs-hol { display: none; } html[data-hol~="xmas"] .hs-xmas, html[data-hol~="newyear"] .hs-ny, html[data-hol~="diwali"] .hs-diwali, html[data-hol~="halloween"] .hs-halloween, html[data-hol~="canada"] .hs-canada { display: inline; }',
 '.hs-tree { fill: #15803d; } .hs-star { fill: #fde047; } .hs-orn { animation: hsTw 1.8s ease-in-out infinite; } .hs-orn.o0 { fill: #ef4444; } .hs-orn.o1 { fill: #fde047; animation-delay: .45s; } .hs-orn.o2 { fill: #60a5fa; animation-delay: .9s; } .hs-orn.o3 { fill: #f472b6; animation-delay: 1.35s; }',
 '.hs-nyt { fill: #fde68a; font: 800 6.4px/1 sans-serif; letter-spacing: .6px; } .hs-wire { fill: none; stroke: #334155; stroke-width: .5; }',
@@ -32007,7 +32152,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v54)';
+var VERSION = '2026.11.15 (v55)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
