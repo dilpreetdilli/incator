@@ -29842,6 +29842,13 @@ var STANDP = { y: STAND_Y, t: 3, h: 0, lfa: 2, lfk: 2, lff: 0, lba: -2, lbk: 2, 
 var LOWERP = { y: 99, t: 24, h: -6, lfa: 48, lfk: 62, lff: 0, lba: 45, lbk: 60, lbf: 0, afs: 30, afe: 25, abs: 26, abe: 25 };
 var SEATP = { y: SEAT_Y, t: 4, h: 0, lfa: 82, lfk: 82, lff: 0, lba: 78, lbk: 80, lbf: 0, afs: 40, afe: 40, abs: 36, abe: 40 };
 var CROUCH = { y: 103, t: 48, h: -10, lfa: 62, lfk: 100, lff: 0, lba: 55, lbk: 95, lbf: 0, afs: 22, afe: 6, abs: 18, abe: 8 };
+var BED = {                                                            // getting into bed (the same bed and moves as the wake-up trip)
+    LIE:     { x: 138, y: 94,   dir: 1, t: -90, h: 0,  lfa: 90, lfk: 0,  lff: 35, lba: 90, lbk: 0,  lbf: 35, afs: 95,  afe: 5,  abs: 92, abe: 4 },
+    STRETCH: { x: 138, y: 94,   dir: 1, t: -90, h: 0,  lfa: 90, lfk: 0,  lff: 35, lba: 90, lbk: 0,  lbf: 35, afs: 250, afe: 12, abs: 92, abe: 4 },
+    SITBED:  { x: 138, y: 96,   dir: 1, t: -4,  h: 4,  lfa: 90, lfk: 0,  lff: 35, lba: 90, lbk: 0,  lbf: 35, afs: 28,  afe: 40, abs: 24, abe: 40 },
+    EDGE:    { x: 141, y: 95.5, dir: 1, t: 3,   h: 2,  lfa: 88, lfk: 88, lff: 0,  lba: 85, lbk: 85, lbf: 0,  afs: 18,  afe: 30, abs: 14, abe: 30 },
+    RISE:    { x: 147, y: 95,   dir: 1, t: 28,  h: -8, lfa: 42, lfk: 58, lff: 0,  lba: 40, lbk: 56, lbf: 0,  afs: 40,  afe: 22, abs: 34, abe: 22 }
+};
 function pose(x, dir, base, over) { return at(at(base, { x: x, dir: dir }), over || {}); }
 
 var SPEED = 36, CYCLE = 1;
@@ -29917,17 +29924,20 @@ var DOOR = function (x) { return '<rect class="tr-wall" x="' + (x - 8) + '" y="0
 var CHAIR = '<g class="hs-chairg" transform="translate(358 126)"><ellipse class="ob-shad" cx="0" cy=".6" rx="16" ry="2"/><rect class="ob-ch1" x="-17" y="-50" width="6" height="30" rx="3"/><rect class="ob-ch2" x="-14.5" y="-22" width="3" height="5"/>' +
     '<rect class="ob-ch2" x="-14" y="-20.5" width="28" height="5" rx="2.5"/><rect class="ob-ch2" x="-1.4" y="-15.5" width="2.8" height="10"/><path class="ob-base" d="M-13 -4.2H13"/>' +
     '<circle class="ob-wheel" cx="-11" cy="-2" r="1.9"/><circle class="ob-wheel" cx="0" cy="-2" r="1.9"/><circle class="ob-wheel" cx="11" cy="-2" r="1.9"/></g>';
-var QFLAT = '<g><path class="zb-quilt" d="M150 98c2-4 6-6 12-6 20 0 42-.6 64 0v16H150z"/><path class="zb-sheet" d="M150 98c2-4 6-6 12-6l3 .4c-5 1.2-8 3.4-9 5.6z"/><path class="zb-fold" d="M170 97c14 1 32 1 50-1"/></g>';
+var QFLAT = '<g class="hs-qflat"><path class="zb-quilt" d="M150 98c2-4 6-6 12-6 20 0 42-.6 64 0v16H150z"/><path class="zb-sheet" d="M150 98c2-4 6-6 12-6l3 .4c-5 1.2-8 3.4-9 5.6z"/><path class="zb-fold" d="M170 97c14 1 32 1 50-1"/></g>';
 
 /* a person: hip at 0,0, facing right. Colours come from --sh (shirt), --pa (trousers), --sk (skin), --ha (hair). */
+var QOVER = '<g class="hs-qover"><path class="hs-qlie zb-quilt" d="M116 99C117 92 121 88.5 128 88c14-.6 26 2 42 2 20-.4 38-2.4 56 2.6V108H116z"/>' +
+    '<path class="hs-qlie zb-sheet" d="M116 99c1-6.4 4.6-10 10-10.8l4 .4c-5 1.8-8.4 5.4-9.6 10.4z"/>' +
+    '<path class="hs-qsit zb-quilt" d="M131 100c2-7 7-11 15-11 24 0 50-.4 80 1.6v17.4H131z"/><path class="hs-qsit zb-fold" d="M150 98c14 2 34 2 52-1"/></g>';
 function rigHtml(id) {
-    return '<g class="hs-rig" id="' + id + '">' +
+    return '<g class="hs-rig" id="' + id + '">' + (id === 'hs-me' ? QOVER : '') +
         '<g class="hs-legs"><path class="hs-lb"/><path class="hs-sb"/><path class="hs-lf"/><path class="hs-sf"/></g>' +
         '<g class="hs-armb"><path class="hs-ab"/><circle class="hs-hb" r="2.1"/></g>' +
         '<g class="hs-torsoP"><g class="hs-torso"><path class="hs-shirt" d="M-9 2C-11 -10-9 -22-2 -26L5 -26C9 -21 10 -10 9 2Z"/><path class="ob-shade" d="M-9 2C-11 -10-9 -22-2 -26L0 -26C-5 -20-6 -8-4 2Z"/><rect class="ob-belt" x="-9" y="-.4" width="18" height="2.2" rx=".6"/><path class="ob-collar" d="M0 -26l2.6 3.6 2.6-3.6z"/></g></g>' +
         '<g class="hs-headP"><g class="hs-head"><g transform="translate(-1 42)"><rect class="hs-neck" x="-.4" y="-50.5" width="4" height="5.4" rx="1"/><circle class="hs-skin" cx="1.5" cy="-57" r="8.6"/><ellipse class="hs-ear" cx="-2.6" cy="-56.4" rx="1.8" ry="2.4"/>' +
             '<path class="hs-hair" d="M-7.3 -57.5C-8 -64-3 -67.5 2.5 -67C8 -66.5 11 -62.5 10 -59C8 -61 5 -61.8 2 -61.2C1 -59 0 -58.2-1.5 -58.5C-2.5 -57-3.6 -55.5-5.4 -54C-6.6 -55-7.2 -56.2-7.3 -57.5Z"/>' +
-            '<ellipse class="tr-eyeo" cx="6.4" cy="-57.4" rx=".95" ry="1.25"/><path class="ob-brow" d="M5 -60.6q1.6 -.8 3.2 -.2"/><path class="ob-nose" d="M9.6 -57q1.4 1.4 -.2 2.2"/>' +
+            '<ellipse class="tr-eyeo" cx="6.4" cy="-57.4" rx=".95" ry="1.25"/><path class="hs-eyec" d="M5.2 -57.2q1.3 .9 2.6 0"/><path class="ob-brow" d="M5 -60.6q1.6 -.8 3.2 -.2"/><path class="ob-nose" d="M9.6 -57q1.4 1.4 -.2 2.2"/>' +
             '<path class="hs-mouth" d="M6.8 -52.6q1.4 .8 2.6 -.2"/><ellipse class="hs-mopen" cx="8" cy="-52.4" rx="1.2" ry="1.5"/><ellipse class="ob-cheek" cx="5.4" cy="-54.4" rx="1.5" ry=".9"/></g></g></g>' +
         '<g class="hs-armf"><path class="hs-af"/><circle class="hs-hf" r="2.2"/></g>' +
         '<g class="hs-prop"></g>' +
@@ -29937,7 +29947,7 @@ function makeRig(svg, id, colors) {
     var g = svg.querySelector('#' + id); if (!g) return null;
     var q = function (s) { return g.querySelector(s); };
     Object.keys(colors || {}).forEach(function (k) { g.style.setProperty('--' + k, colors[k]); });
-    var r = { g: g, legs: q('.hs-legs'), armb: q('.hs-armb'), torsoP: q('.hs-torsoP'), torso: q('.hs-torso'), headP: q('.hs-headP'), head: q('.hs-head'), armf: q('.hs-armf'), prop: q('.hs-prop'),
+    var r = { g: g, qover: q('.hs-qover'), legs: q('.hs-legs'), armb: q('.hs-armb'), torsoP: q('.hs-torsoP'), torso: q('.hs-torso'), headP: q('.hs-headP'), head: q('.hs-head'), armf: q('.hs-armf'), prop: q('.hs-prop'),
         lb: q('.hs-lb'), sb: q('.hs-sb'), lf: q('.hs-lf'), sf: q('.hs-sf'), ab: q('.hs-ab'), hb: q('.hs-hb'), af: q('.hs-af'), hf: q('.hs-hf'), propKind: '', pose: null };
     return r;
 }
@@ -29961,7 +29971,7 @@ function drawRig(r, o) {
     function arm(sh, s, e, pa, ph) { var E = seg(sh[0], sh[1], s, UA), H = seg(E[0], E[1], s + e, FA); pa.setAttribute('d', 'M' + f1(sh[0]) + ' ' + f1(sh[1]) + 'L' + f1(E[0]) + ' ' + f1(E[1]) + 'L' + f1(H[0]) + ' ' + f1(H[1])); ph.setAttribute('cx', f1(H[0])); ph.setAttribute('cy', f1(H[1])); return H; }
     var HB = arm([S[0] - 2.4, S[1] + 1], o.abs, o.abe, r.ab, r.hb);
     var HF = arm(S, o.afs, o.afe, r.af, r.hf);
-    r.g.classList.toggle('hs-talk', !!o.talk);
+    r.g.classList.toggle('hs-talk', !!(o.talk || o.yawn)); r.g.classList.toggle('hs-sleepy', !!o.sleepy);
     /* what he is holding */
     var kind = o.prop || '';
     if (kind !== r.propKind) { r.prop.innerHTML = PROPS[kind] || ''; r.propKind = kind; }
@@ -30019,7 +30029,8 @@ function autoOn() { var s = M() && M().status ? M().status() : null; return !!(s
 function offWork() { var m = M(); return !!(m && m.sleeping && m.sleeping()); }
 function calm() { try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
 function working() { return autoOn() && !offWork(); }                 // inside your Auto Import schedule
-function atHome() { return autoOn() && (offWork() ? !inBedtime() : !calm()); }   // working: at home between checks; off work: until bedtime
+function home() { return autoOn() && (offWork() ? !inBedtime() : !calm()); }     // working: at home between checks; off work: until bedtime
+function atHome() { return home() || !!bedding; }                       // ...and while he walks to bed
 
 var ACT = {
     read:   { room: 'living', label: 'Reading a book on the sofa' },
@@ -30217,7 +30228,7 @@ function officeTrip() {
    and is sitting at the computer in the office 10 seconds before each check, and stays in his chair while it runs.
    When the check finds a new email he rolls his chair over to the workbench and reads it to see if it is a work order
    (a work order gets stamped). Then he goes back home to what he was doing. */
-var LEAD = 10, GIVEUP = 90000, duty = null, lastDuty = 0;
+var LEAD = 10, GIVEUP = 90000, duty = null, lastDuty = 0, bedding = null, slept = false;
 var TYPEP = { chair: 1, afs: 60, afe: 25, abs: 57, abe: 28, h: -4, t: 4 };
 function resultFor(mark) { var m = M(), s0 = m && m.status ? m.status() : null, l = s0 && s0.checks && s0.checks[0]; return l && Date.parse(l.at) >= mark - 20000 ? l : null; }
 function travelSec() {                                                 // how long until he is ready at the computer
@@ -30306,16 +30317,52 @@ function dutyAfter(back) {
     run(function () { el.setAttribute('data-mode', 'idle'); duty = null; plans(back); });
 }
 
+/* Bedtime (Settings > Work Orders > His bedtime): if you are watching when it comes, he stops what he is doing, walks to
+   his bedroom, sits on the edge of the bed, lifts his legs in, lies down under the quilt, yawns and falls asleep - then
+   the sleeping picture takes over. */
+function layerMe(mode) {
+    if (!me) return; var r = me.g, Q = me.qover, L = me.legs, AB = me.armb, T0 = me.torsoP, H = me.headP, AF = me.armf, P0 = me.prop;
+    var order = mode === 'lie' ? [L, T0, AB, Q, H, AF, P0] : mode === 'sit' ? [L, Q, AB, T0, H, AF, P0] : [Q, L, AB, T0, H, AF, P0];
+    order.forEach(function (n) { if (n) r.appendChild(n); });
+    if (el) el.setAttribute('data-q', mode === 'up' ? 'off' : mode);
+}
+function wakeText() { var t = String(S('woBedTo', '06:30')), m = /^(\d{1,2}):(\d{2})$/.exec(t); if (!m) return ''; var d = new Date(); d.setHours(+m[1], +m[2], 0, 0); return clockT(d.getTime()); }
+function goToBed() {
+    var n = who(), STAND = pose(152, 1, STANDP);
+    run(function () { act = ''; say(n + ' is going to bed', 'Bedtime · good night'); });
+    walkTo(152, 1);
+    T(STAND, BED.RISE, .7); T(BED.RISE, BED.EDGE, .8);                  // sits down on the edge of the bed
+    run(function () { layerMe('sit'); say(n + ' is getting into bed', 'Good night'); });
+    T(BED.EDGE, BED.SITBED, 1.0);                                       // lifts his legs in
+    run(function () { layerMe('lie'); });
+    T(BED.SITBED, BED.LIE, 1.2, { sleepy: true });                      // lies down, pulls the quilt up
+    T(BED.LIE, BED.STRETCH, .9, { yawn: true, sleepy: true }); T(BED.STRETCH, BED.LIE, .9, { yawn: true, sleepy: true });
+    hold(BED.LIE, 1.2, function (o) { o.sleepy = true; });
+    run(function () { say(n + ' is sleeping', 'Wakes up at ' + wakeText()); state = { x: BED.LIE.x, dir: 1, sit: true, where: 'bed' }; });
+    hold(BED.LIE, 1.2, function (o) { o.sleepy = true; });
+    run(function () {                                                   // asleep: the bedroom card takes over
+        bedding = null; slept = true; steps = []; si = 0;
+        if (el) el.hidden = true; if (running) { running = false; cancelAnimationFrame(raf); }
+        try { if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
+        var z = document.getElementById('wm-sleep'); if (z && !home()) z.hidden = false;
+    });
+}
+function bedDue() {                                                    // bedtime has come while you are watching him
+    if (bedding || checking || duty || home() || !el || el.hidden || !running || !onAdd()) return;
+    if (!(autoOn() && offWork() && inBedtime())) return;
+    bedding = { at: Date.now() }; interrupt(goToBed);
+}
+
 /* ------------------------------------------------------------------ running it */
 function frame(now) {
     if (!running) return;
     raf = requestAnimationFrame(frame);
     if (now - lastFrame < 30) return;                                   // ~30 frames a second is plenty
     lastFrame = now;
-    dutyDue(Date.now());
+    dutyDue(Date.now()); bedDue();
     var st = steps[si];
     while (st && st.dur === 0) { si++; stepAt = now; st.run(); st = steps[si]; }
-    if (!st) { steps = []; si = 0; stepAt = now; if (!checking && !duty) { var a = nextActivity(); plans(a); } return; }
+    if (!st) { steps = []; si = 0; stepAt = now; if (!checking && !duty && !bedding && home()) { var a = nextActivity(); plans(a); } return; }
     var tau = (now - stepAt) / 1000;
     if (st.typing) { if (checking && checking.done && tau > 2.5) { si++; stepAt = now; return; } }
     if (st.wait) { if (duty && duty.phase === 'check') pollDuty(); if (st.wait()) { si++; stepAt = now; return; } }
@@ -30324,11 +30371,12 @@ function frame(now) {
     drawRig(me, o);
     if (o.chair && chairG) chairG.setAttribute('transform', 'translate(' + f1(o.x + 5 * o.dir) + ' 126) scale(' + o.dir + ' 1)');
     if (st.both) { drawRig(f1r, fx[0]); drawRig(f2r, fx[1]); }
-    var want = Math.max(0, Math.min(WORLD_W - 240, o.x - 120));
+    var want = Math.max(0, Math.min(WORLD_W - 240, o.x - 120)); if (o.t < -45) want = 0;   // lying in bed: the same view as the sleeping picture
     if (camTarget == null) camX = want; else camX += (want - camX) * .1;
     camTarget = want;
     world.setAttribute('transform', 'translate(' + f1(-camX) + ' 0)');
-    if (o.talk) bubble(act === ACT.party.label ? 'Ha ha!' : 'Ha!', o.x, o.y - 66); else bubble('');
+    if (o.yawn) bubble('Yaaawn…', o.t < -45 ? o.x - 40 : o.x, o.t < -45 ? o.y - 46 : o.y - 66);
+    else if (o.talk) bubble(act === ACT.party.label ? 'Ha ha!' : 'Ha!', o.x, o.y - 66); else bubble('');
     if (u >= 1 && st.dur !== Infinity) { si++; stepAt = now; }
 }
 function card() {
@@ -30358,6 +30406,7 @@ function build() {
 function onAdd() { return !document.hidden && document.body && document.body.getAttribute('data-pg') === 'add'; }
 function sync() {
     var want = atHome() || !!checking || !!duty;
+    if (want && slept && el) { slept = false; steps = []; si = 0; state = { x: SPOTS.sofa, dir: 1, sit: true, where: 'sofa' }; layerMe('up'); camTarget = null; }   // a new day
     var c = document.getElementById('wm-home');
     if (!want) { if (c) c.hidden = true; if (running) { running = false; cancelAnimationFrame(raf); } return; }
     if (!el || !el.querySelector('svg')) { if (!build()) return; steps = []; si = 0; state = { x: SPOTS.sofa, dir: 1, sit: true, where: 'sofa' }; camTarget = null; }
@@ -30371,6 +30420,7 @@ document.addEventListener('visibilitychange', function () { setTimeout(sync, 50)
 
 function check(end) {                                                  // Check Gmail by hand while he is at home
     if (!atHome() || !el) return false;
+    if (bedding) { bedding = null; layerMe('up'); }
     checking = { done: false, result: '', end: end, at: 0 }; duty = null;
     interrupt(officeTrip);
     sync();
@@ -30379,14 +30429,18 @@ function check(end) {                                                  // Check 
 function interrupt(f) {                                                // he stops what he is doing (puts things down) and goes
     var cur = me && me.pose; steps = []; si = 0; stepAt = performance.now(); state = guessState();
     friends(false); ['party', 'tv', 'cook', 'wash', 'water', 'vac', 'fridge', 'dooropen'].forEach(function (k) { scene(k, false); });
-    if (cur) { var c = at(cur, { prop: '', talk: false }); T(c, pose(state.x, state.dir, state.sit ? SEATP : STANDP), .4); }
+    if (cur && cur.t < -45) { layerMe('sit'); T(cur, BED.SITBED, 1.0); T(BED.SITBED, BED.EDGE, 1.0); run(function () { layerMe('up'); }); T(BED.EDGE, BED.RISE, .8); T(BED.RISE, pose(152, 1, STANDP), .7); state = { x: 152, dir: 1, sit: false }; }   // out of bed first
+    else if (cur) { var c = at(cur, { prop: '', talk: false, yawn: false, sleepy: false }); T(c, pose(state.x, state.dir, state.sit && cur.y > 100 ? SEATP : STANDP), .4); }
     f();
 }
 function plans_after_current(f) { interrupt(f); }
 function guessState() { var p = me && me.pose; if (!p) return state; return { x: p.x, dir: p.dir, sit: p.y > 100, where: '' }; }
 
 var css = [
-'.wm-home .hs-svg { display: block; }',
+'.wm-home .hs-svg { display: block; } .wm-home .zb-quilt { fill: url(#hs-zbQuiltG); }',
+'.hs-eyec { fill: none; stroke: #1f2937; stroke-width: .9; stroke-linecap: round; display: none; } .hs-sleepy .tr-eyeo { display: none; } .hs-sleepy .hs-eyec { display: inline; }',
+'.hs-qover { opacity: 0; } .hs-qlie, .hs-qsit { transition: opacity .5s ease; } .wm-home[data-q="lie"] .hs-qover, .wm-home[data-q="sit"] .hs-qover { opacity: 1; } .wm-home[data-q="lie"] .hs-qsit, .wm-home[data-q="sit"] .hs-qlie { opacity: 0; }',
+'.hs-qflat { transition: opacity .5s ease; } .wm-home[data-q="lie"] .hs-qflat, .wm-home[data-q="sit"] .hs-qflat { opacity: 0; }',
 '.hs-skirt { fill: #4a3424; } .hs-wfr { fill: #37415f; } .hs-mull { stroke: #37415f; stroke-width: 2; fill: none; } .hs-sill { fill: #475175; }',
 '.hs-pot { fill: #c2410c; } .hs-leaf { fill: #22c55e; } .hs-drops circle { fill: #7dd3fc; opacity: 0; } .wm-home.hsx-water .hs-drops circle { animation: hsDrop 1s linear infinite; } .wm-home.hsx-water .hs-drops circle:nth-child(2) { animation-delay: .3s; } .wm-home.hsx-water .hs-drops circle:nth-child(3) { animation-delay: .6s; }',
 '.hs-shelf, .hs-wood { fill: #b07a45; } .hs-wood2 { fill: #8a5d34; } .hs-drw { stroke: #6b4a2a; stroke-width: .8; } .hs-leg { stroke: #6b4a2a; stroke-width: 2.2; stroke-linecap: round; }',
@@ -30424,7 +30478,7 @@ inject();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
 
 window.IncHouse = {
-    atHome: atHome, inBedtime: inBedtime, sync: sync, check: check,
+    atHome: atHome, inBedtime: inBedtime, bedding: function () { return !!bedding; }, sync: sync, check: check,
     done: function (text) { if (checking) { checking.done = true; checking.result = text || 'Done'; } },
     checking: function () { return !!checking; }, working: working,
     duty: function () { return duty ? { mark: duty.mark, phase: duty.phase, result: duty.c } : null; },
@@ -31593,7 +31647,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v52)';
+var VERSION = '2026.11.14 (v53)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
