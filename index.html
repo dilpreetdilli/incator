@@ -24168,7 +24168,7 @@ function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, 
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /#inv-sheet|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
+var SKIP = /#inv-sheet|#wm-trip|\.tr-|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
 function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
@@ -28409,7 +28409,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     try { new MutationObserver(function () { if (onAdd()) tick(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
     setInterval(function () { if (onAdd()) { if (Date.now() - statusAt > 60000) tick(); else paintButton(); } }, 30000);
 })();
-window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, repaint: function () { paintButton(); }, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
+window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, repaint: function () { paintButton(); }, sleeperHtml: function () { return SLEEPER; }, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
 })();
 
 </script>
@@ -29235,7 +29235,7 @@ async function poll() {
 }
 function tick() {
     var h = host(); if (!h) return;
-    if (seq) return;                                                   // on his trip to the office: the trip runs itself
+    if (seq || (window.IncTrip && IncTrip.active())) return;            // on his trip to the office: the trip runs itself
     var show = manual || (autoOn() && !asleep());
     if (!show) { h.hidden = true; if (!manual) set(''); return; }
     ensure(h); h.hidden = false;
@@ -29302,10 +29302,20 @@ function leaveSoon() {                                                // show th
 }
 function setManual(on, text) {
     if (on) {
-        if (seq) return;
-        if (autoOn() && asleep() && onAdd()) { manual = true; until = 0; result = ''; seq = { phase: '', done: false, result: '' }; phase('wake'); return; }
+        if (seq || (window.IncTrip && IncTrip.active())) return;
+        if (autoOn() && asleep() && onAdd()) {
+            manual = true; until = 0; result = '';
+            var calm = false; try { calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* ignore */ }
+            if (!calm && window.IncTrip && IncTrip.start(function () {          // the whole trip in one picture: bed -> office -> bed
+                manual = false; until = 0; set('');
+                try { if (window.IncMail && IncMail.repaint) IncMail.repaint(); } catch (e) { /* ignore */ }
+                tick();
+            })) return;
+            seq = { phase: '', done: false, result: '' }; phase('wake'); return;   // reduced motion: the cards simply change
+        }
         manual = true; until = 0; result = ''; var h = host(); if (h) { ensure(h); h.hidden = false; } set('pc'); paintText(); return;
     }
+    if (window.IncTrip && IncTrip.active()) { result = text || 'Done'; IncTrip.done(result); return; }
     if (seq) { seq.done = true; seq.result = text || 'Done'; result = seq.result; if (seq.phase === 'pc') leaveSoon(); return; }
     if (!manual) return;
     manual = false; result = text || 'Done'; until = Date.now() + HOLD; mark = nextMark(Date.now()) - FIVE;
@@ -29416,11 +29426,293 @@ setInterval(tick, 1000);
 document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(tick, 50); });
 
 window.IncBoy = {
-    tick: tick, manual: setManual, seq: function () { return seq ? seq.phase : ''; },
+    sceneHtml: function () { return SCENE; },
+    tick: tick, manual: setManual, seq: function () { return (window.IncTrip && IncTrip.active() && IncTrip.phase()) || (seq ? seq.phase : ''); },
     mode: function () { return mode; },
     act: function () { return ACTS[actI]; },
     state: function () { return { act: ACTS[actI], mode: mode, mark: mark, until: until, manual: manual, result: result, polling: polling }; },
     _t: { nextMark: nextMark, set: set, ms: SEQ_MS, reset: function () { clearTimeout(seqT); seq = null; mode = ''; mark = 0; until = 0; manual = false; result = ''; } }
+};
+})();
+
+</script>
+<script id="incator-trip">
+/* The helper's trip (Create New Job > Import Work Orders), when you press "Check Gmail" while he is asleep.
+   One picture of his house - bedroom on the left, office on the right - and a view that follows him:
+   he wakes up, yawns and stretches, sits up, swings his legs off the bed, stands up, walks to the office
+   (the office slides into view as he walks), sits down at his desk, presses a key to turn the computer on and
+   checks your emails. When it is done he gets up, turns round, walks back, sits on the bed, lifts his legs in,
+   lies down, yawns and goes back to sleep.
+   He is drawn as a little skeleton (hips, knees, ankles, shoulders, elbows) and moved every frame, so he walks
+   with bent knees, lifting heels, swinging arms and a gentle up-and-down, like a person. */
+(function () {
+'use strict';
+if (window.IncTrip) return;
+
+/* ------------------------------------------------------------------ body measurements (same scale as the rooms) */
+var L1 = 15, L2 = 15.5, UA = 11, FA = 11, FLOOR = 126, FOOT = 2.9;
+var STAND_Y = FLOOR - FOOT - L1 - L2;                                  // hip height when standing straight (92.6)
+var D2R = Math.PI / 180;
+function sinD(a) { return Math.sin(a * D2R); } function cosD(a) { return Math.cos(a * D2R); }
+function lerp(a, b, u) { return a + (b - a) * u; }
+function ease(u) { return u < 0 ? 0 : u > 1 ? 1 : u * u * (3 - 2 * u); }
+function easeIO(u) { u = Math.max(0, Math.min(1, u)); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; }
+
+/* key poses. a = thigh angle from straight down (+ forward), k = knee bend, f = foot angle (+ toes up);
+   s = upper arm angle from down (+ forward), e = elbow bend; t = body lean (+ forward), h = head tilt */
+var P = {
+    LIE:      { x: 138, y: 94,   dir: 1, t: -90, h: 0,  lfa: 90, lfk: 0,  lff: 35, lba: 90, lbk: 0,  lbf: 35, afs: 95,  afe: 5,  abs: 92, abe: 4 },
+    STRETCH:  { x: 138, y: 94,   dir: 1, t: -90, h: 0,  lfa: 90, lfk: 0,  lff: 35, lba: 90, lbk: 0,  lbf: 35, afs: 250, afe: 12, abs: 92, abe: 4 },
+    SITBED:   { x: 138, y: 96,   dir: 1, t: -4,  h: 4,  lfa: 90, lfk: 0,  lff: 35, lba: 90, lbk: 0,  lbf: 35, afs: 28,  afe: 40, abs: 24, abe: 40 },
+    EDGE:     { x: 141, y: 95.5, dir: 1, t: 3,   h: 2,  lfa: 88, lfk: 88, lff: 0,  lba: 85, lbk: 85, lbf: 0,  afs: 18,  afe: 30, abs: 14, abe: 30 },
+    RISE:     { x: 147, y: 95,   dir: 1, t: 28,  h: -8, lfa: 42, lfk: 58, lff: 0,  lba: 40, lbk: 56, lbf: 0,  afs: 40,  afe: 22, abs: 34, abe: 22 },
+    STAND:    { x: 152, y: STAND_Y, dir: 1, t: 3, h: 0, lfa: 2, lfk: 2,  lff: 0,  lba: -2, lbk: 2,  lbf: 0,  afs: 4,   afe: 10, abs: -4, abe: 10 },
+    AT_CHAIR: { x: 351, y: STAND_Y, dir: 1, t: 3, h: 0, lfa: 2, lfk: 2,  lff: 0,  lba: -2, lbk: 2,  lbf: 0,  afs: 4,   afe: 10, abs: -4, abe: 10 },
+    LOWER:    { x: 352, y: 99,   dir: 1, t: 24,  h: -6, lfa: 48, lfk: 62, lff: 0,  lba: 45, lbk: 60, lbf: 0,  afs: 30,  afe: 25, abs: 26, abe: 25 },
+    CHAIR:    { x: 353, y: 105,  dir: 1, t: 4,   h: -4, lfa: 82, lfk: 82, lff: 0,  lba: 78, lbk: 80, lbf: 0,  afs: 60,  afe: 25, abs: 57, abe: 28 },
+    PRESS:    { x: 353, y: 105,  dir: 1, t: 8,   h: -6, lfa: 82, lfk: 82, lff: 0,  lba: 78, lbk: 80, lbf: 0,  afs: 66,  afe: 18, abs: 20, abe: 40 }
+};
+function at(base, over) { var o = {}, k; for (k in base) o[k] = base[k]; for (k in over) o[k] = over[k]; return o; }
+function mix(A, B, u) { var o = {}, k; for (k in A) o[k] = k === 'dir' ? (u < .5 ? A[k] : B[k]) : typeof A[k] === 'number' ? lerp(A[k], B[k], u) : A[k]; return o; }   // turning round is one quick step, not a squeeze
+
+/* walking: one stride every second, feet on the floor, heel lifts before the toe leaves the ground */
+var SPEED = 36, CYCLE = 1;
+function legAt(p) {
+    if (p < .55) { var u = p / .55; return { a: 20 - 38 * u, k: 7 * Math.sin(Math.PI * u), f: p > .42 ? 22 * (p - .42) / .13 : 0, stance: true }; }
+    var q = (p - .55) / .45; return { a: -18 + 40 * easeIO(q), k: 60 * Math.sin(Math.PI * Math.min(1, q * 1.12)), f: 22 * (1 - q) - 12 * Math.sin(Math.PI * q) + (q > .8 ? 10 * (q - .8) / .2 : 0), stance: false };
+}
+function hipFor(l) { return FLOOR - FOOT - (L1 * cosD(l.a) + L2 * cosD(l.a - l.k)); }
+function walkPose(x0, dir, tau, yawn) {
+    var p = (tau / CYCLE) % 1, F = legAt(p), B = legAt((p + .5) % 1);
+    var y = Math.min(F.stance ? hipFor(F) : 999, B.stance ? hipFor(B) : 999); if (y > 900) y = STAND_Y;
+    var o = { x: x0 + dir * SPEED * tau, y: y, dir: dir, t: 5 + 1.6 * Math.sin(4 * Math.PI * p), h: -2 - .8 * Math.sin(4 * Math.PI * p),
+        lfa: F.a, lfk: F.k, lff: F.f, lba: B.a, lbk: B.k, lbf: B.f };
+    o.afs = -.85 * F.a + 3; o.afe = 12 + .45 * Math.max(0, o.afs);
+    o.abs = -.85 * B.a + 3; o.abe = 12 + .45 * Math.max(0, o.abs);
+    o.yawn = !!yawn; return o;
+}
+
+/* ------------------------------------------------------------------ the house: his bedroom + his office, side by side */
+function prefixIds(html) { return html.replace(/id="(zb|ob)/g, 'id="tr-$1').replace(/url\(#(zb|ob)/g, 'url(#tr-$1'); }
+function innerOf(html, drop) {
+    var d = document.createElement('div'); d.innerHTML = html;
+    var svg = d.querySelector('svg'); if (!svg) return { defs: '', body: '' };
+    var defs = svg.querySelector('defs'), main = svg.querySelector('g[clip-path]');
+    (drop || []).forEach(function (sel) { Array.prototype.forEach.call(svg.querySelectorAll(sel), function (n) { n.parentNode.removeChild(n); }); });
+    return { defs: defs ? defs.innerHTML : '', body: main ? main.innerHTML : '' };
+}
+var CHAIR = '<g transform="translate(358 126)"><ellipse class="ob-shad" cx="0" cy=".6" rx="16" ry="2"/><rect class="ob-ch1" x="-17" y="-50" width="6" height="30" rx="3"/><rect class="ob-ch2" x="-14.5" y="-22" width="3" height="5"/>' +
+    '<rect class="ob-ch2" x="-14" y="-20.5" width="28" height="5" rx="2.5"/><rect class="ob-ch2" x="-1.4" y="-15.5" width="2.8" height="10"/><path class="ob-base" d="M-13 -4.2H13"/>' +
+    '<circle class="ob-wheel" cx="-11" cy="-2" r="1.9"/><circle class="ob-wheel" cx="0" cy="-2" r="1.9"/><circle class="ob-wheel" cx="11" cy="-2" r="1.9"/></g>';
+/* the doorway between the rooms */
+var DOOR = '<rect class="tr-wall" x="232" y="0" width="16" height="106"/><rect class="tr-hall" x="234" y="34" width="12" height="70"/><path class="tr-frame" d="M233 104V33h14v71"/>';
+/* quilt while the bed is empty (folded back) */
+var QFLAT = '<g class="tr-qflat"><path class="zb-quilt" d="M150 98c2-4 6-6 12-6 20 0 42-.6 64 0v16H150z"/><path class="zb-sheet" d="M150 98c2-4 6-6 12-6l3 .4c-5 1.2-8 3.4-9 5.6z"/><path class="zb-fold" d="M170 97c14 1 32 1 50-1"/></g>';
+/* the quilt over him: lying down (covers him to the chest) and sitting up (over his legs) */
+var QOVER = '<g class="tr-qover"><path class="tr-qlie zb-quilt" d="M116 99C117 92 121 88.5 128 88c14-.6 26 2 42 2 20-.4 38-2.4 56 2.6V108H116z"/>' +
+    '<path class="tr-qlie zb-sheet" d="M116 99c1-6.4 4.6-10 10-10.8l4 .4c-5 1.8-8.4 5.4-9.6 10.4z"/>' +
+    '<path class="tr-qsit zb-quilt" d="M131 100c2-7 7-11 15-11 24 0 50-.4 80 1.6v17.4H131z"/><path class="tr-qsit zb-fold" d="M150 98c14 2 34 2 52-1"/></g>';
+
+/* the person (drawn facing right, hip at 0,0) */
+var RIG = '<g class="tr-rig">' +
+    '<g class="tr-p tr-legs"><path class="tr-lb"/><path class="tr-sb"/><path class="tr-lf"/><path class="tr-sf"/></g>' +
+    '<g class="tr-p tr-armb"><path class="tr-ab"/><circle class="tr-hb" r="2.1"/></g>' +
+    '<g class="tr-p tr-torsoP"><g class="tr-torso"><path class="ob-shirt" d="M-9 2C-11 -10-9 -22-2 -26L5 -26C9 -21 10 -10 9 2Z"/><path class="ob-shade" d="M-9 2C-11 -10-9 -22-2 -26L0 -26C-5 -20-6 -8-4 2Z"/><rect class="ob-belt" x="-9" y="-.4" width="18" height="2.2" rx=".6"/><path class="ob-collar" d="M0 -26l2.6 3.6 2.6-3.6z"/></g></g>' +
+    QOVER +
+    '<g class="tr-p tr-headP"><g class="tr-head"><g transform="translate(-1 42)"><rect class="ob-neck" x="-.4" y="-50.5" width="4" height="5.4" rx="1"/><circle class="ob-skin" cx="1.5" cy="-57" r="8.6"/><ellipse class="ob-ear" cx="-2.6" cy="-56.4" rx="1.8" ry="2.4"/>' +
+        '<path class="ob-hair" d="M-7.3 -57.5C-8 -64-3 -67.5 2.5 -67C8 -66.5 11 -62.5 10 -59C8 -61 5 -61.8 2 -61.2C1 -59 0 -58.2-1.5 -58.5C-2.5 -57-3.6 -55.5-5.4 -54C-6.6 -55-7.2 -56.2-7.3 -57.5Z"/>' +
+        '<ellipse class="tr-eyeo" cx="6.4" cy="-57.4" rx=".95" ry="1.25"/><path class="tr-eyec" d="M5.2 -57.2q1.3 .9 2.6 0"/><path class="ob-brow" d="M5 -60.6q1.6 -.8 3.2 -.2"/><path class="ob-nose" d="M9.6 -57q1.4 1.4 -.2 2.2"/>' +
+        '<path class="tr-mouth" d="M6.8 -52.6q1.4 .8 2.6 -.2"/><ellipse class="tr-yawn" cx="8" cy="-52.4" rx="1.3" ry="1.9"/><ellipse class="ob-cheek" cx="5.4" cy="-54.4" rx="1.5" ry=".9"/></g></g></g>' +
+    '<g class="tr-p tr-armf"><path class="tr-af"/><circle class="tr-hf" r="2.2"/></g>' +
+    '</g>';
+var BUBBLE = '<g class="tr-bub"><path class="ob-bub" d="M2 0h30a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4H14l-5 4.6V13H2a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4z"/><text class="ob-ytx" x="15" y="9.6" text-anchor="middle">Yaaawn…</text></g>';
+
+function house() {
+    var B = innerOf((window.IncMail && IncMail.sleeperHtml && IncMail.sleeperHtml()) || '', ['.zb-head', '.zb-pj', '.zb-neck', '.zb-arm', '.zb-ybub', '.zb-blank']);
+    var O = innerOf((window.IncBoy && IncBoy.sceneHtml && IncBoy.sceneHtml()) || '', ['.ob-boy', '.ob-walker', '.ob-ybub', '.ob-talk']);
+    var html = '<svg class="ob-svg tr-svg" viewBox="0 0 240 140" aria-hidden="true"><defs>' + B.defs + O.defs + '<clipPath id="tr-view"><rect x="0" y="0" width="240" height="140" rx="14"/></clipPath></defs>' +
+        '<g clip-path="url(#tr-view)"><g class="tr-world">' + B.body + QFLAT + DOOR + '<g transform="translate(240 0)">' + O.body + '</g>' + CHAIR + RIG + BUBBLE + '</g></g></svg>';
+    return prefixIds(html).replace('id="tr-view"', 'id="tr-view"');
+}
+
+/* ------------------------------------------------------------------ drawing a pose */
+var el = null, parts = {}, camX = 0, lastPose = null;
+function q(sel) { return el.querySelector(sel); }
+function seg(x, y, a, len) { return [x + len * sinD(a), y + len * cosD(a)]; }
+function f1(n) { return Math.round(n * 100) / 100; }
+function draw(o) {
+    lastPose = o;
+    var place = 'translate(' + f1(o.x) + ' ' + f1(o.y) + ') scale(' + f1(o.dir) + ' 1)';
+    [parts.legsG, parts.armbG, parts.torsoG, parts.headG, parts.armfG].forEach(function (g) { g.setAttribute('transform', place); });
+    function leg(hx, a, k, f, pl, ps) {
+        var K = seg(hx, 0, a, L1), A = seg(K[0], K[1], a - k, L2), fx = cosD(f), fy = -sinD(f);
+        pl.setAttribute('d', 'M' + f1(hx) + ' 0L' + f1(K[0]) + ' ' + f1(K[1]) + 'L' + f1(A[0]) + ' ' + f1(A[1]));
+        var bx = A[0], by = A[1] + 1.2;
+        ps.setAttribute('d', 'M' + f1(bx - 1.6 * fx) + ' ' + f1(by - 1.6 * fy) + 'L' + f1(bx + 5.8 * fx) + ' ' + f1(by + 5.8 * fy));
+    }
+    leg(-1, o.lba, o.lbk, o.lbf, parts.lb, parts.sb);
+    leg(1, o.lfa, o.lfk, o.lff, parts.lf, parts.sf);
+    var S = [1 * cosD(o.t) + 22 * sinD(o.t), 1 * sinD(o.t) - 22 * cosD(o.t)];                // shoulder (turns with the body)
+    parts.torso.setAttribute('transform', 'rotate(' + f1(o.t) + ')');
+    parts.head.setAttribute('transform', 'translate(' + f1(S[0]) + ' ' + f1(S[1]) + ') rotate(' + f1(o.t + o.h) + ')');
+    function arm(sh, s, e, pa, ph) { var E = seg(sh[0], sh[1], s, UA), H = seg(E[0], E[1], s + e, FA); pa.setAttribute('d', 'M' + f1(sh[0]) + ' ' + f1(sh[1]) + 'L' + f1(E[0]) + ' ' + f1(E[1]) + 'L' + f1(H[0]) + ' ' + f1(H[1])); ph.setAttribute('cx', f1(H[0])); ph.setAttribute('cy', f1(H[1])); }
+    arm([S[0] - 2.4, S[1] + 1], o.abs, o.abe, parts.ab, parts.hb);
+    arm(S, o.afs, o.afe, parts.af, parts.hf);
+    el.classList.toggle('tr-yawning', !!o.yawn);
+    el.classList.toggle('tr-sleepy', !!o.sleepy);
+    /* the view follows him: bedroom while he is near the bed, office once he reaches the desk */
+    var want = Math.max(0, Math.min(240, (o.x - 150) / (352 - 150) * 240));
+    camX = o.snap ? want : camX + (want - camX) * .12;
+    parts.world.setAttribute('transform', 'translate(' + f1(-camX) + ' 0)');
+    /* "Yaaawn" above his head */
+    var hx = o.x + (o.t < -45 ? -40 : 2 * o.dir), hy = o.y + (o.t < -45 ? -26 : -58);
+    parts.bub.setAttribute('transform', 'translate(' + f1(hx - 15) + ' ' + f1(hy - 20) + ')');
+}
+/* who is in front of whom: under the quilt in bed, in front of the bed when he is up */
+function layer(mode) {
+    var r = parts.rig, L = parts.legsG, AB = parts.armbG, T = parts.torsoG, Q = parts.qover, H = parts.headG, AF = parts.armfG;
+    var order = mode === 'lie' ? [L, T, AB, Q, H, AF] : mode === 'sit' ? [L, Q, AB, T, H, AF] : [AB, L, T, Q, H, AF];
+    order.forEach(function (n) { r.appendChild(n); });
+    el.setAttribute('data-bed', mode);
+}
+
+/* ------------------------------------------------------------------ the trip */
+var steps = [], si = 0, stepAt = 0, raf = 0, active = false, done = false, result = '', checkAt = 0, onEnd = null, lastText = '';
+function who() { try { return String(appSettings.woBoyName || '').replace(/\s+/g, ' ').trim().slice(0, 20) || 'Auto Import'; } catch (e) { return 'Auto Import'; } }
+function say(a, b) { var t = el.querySelector('#wm-trip-t'), s = el.querySelector('#wm-trip-s'); if (t.textContent !== a) t.textContent = a; if (s.textContent !== b) s.textContent = b; }
+function tween(A, B, dur, extra) { return { dur: dur, fn: function (u) { return at(mix(A, B, easeIO(u)), extra || {}); } }; }
+function build() {
+    var n = who(), S = [];
+    function phase(name, text) { S.push({ dur: 0, phase: name, text: text }); }
+    function T(A, B, d, ex) { S.push(tween(A, B, d, ex)); }
+    function hold(A, d, ex) { S.push(tween(A, A, d, ex)); }
+    function fx(f) { S.push({ dur: 0, run: f }); }
+    var walkDist = P.AT_CHAIR.x - P.STAND.x, walkDur = walkDist / SPEED;
+    phase('wake', [n + ' is waking up', 'Yaaawn… time to check your emails.']);
+    fx(function () { layer('lie'); });
+    hold(P.LIE, .7, { sleepy: true });
+    T(P.LIE, P.STRETCH, 1.1, { yawn: true, sleepy: true }); hold(P.STRETCH, .5, { yawn: true, sleepy: true }); T(P.STRETCH, P.LIE, .9, { yawn: true });
+    phase('getup', [n + ' is getting up', 'Out of bed…']);
+    fx(function () { layer('sit'); el.setAttribute('data-q', 'sit'); });
+    T(P.LIE, P.SITBED, 1.2);
+    fx(function () { el.setAttribute('data-q', 'off'); });
+    T(P.SITBED, P.EDGE, 1.0);
+    fx(function () { layer('up'); });
+    T(P.EDGE, P.RISE, .8); T(P.RISE, P.STAND, .7);
+    phase('walkin', [n + ' is walking to the computer', 'Still a bit sleepy…']);
+    S.push({ dur: walkDur, fn: function (u, tau) { return walkPose(P.STAND.x, 1, tau, tau < 1.6); } });
+    T(walkPose(P.STAND.x, 1, walkDur), P.AT_CHAIR, .35);
+    phase('sit', [n + ' is sitting down', 'At the desk…']);
+    T(P.AT_CHAIR, P.LOWER, .55); T(P.LOWER, P.CHAIR, .55);
+    phase('boot', [n + ' is turning on the computer', 'Starting up…']);
+    T(P.CHAIR, P.PRESS, .45); hold(P.PRESS, .25); T(P.PRESS, P.CHAIR, .5); hold(P.CHAIR, .4);
+    phase('pc', [n + ' is checking your emails…', 'Checking Gmail by hand for new work orders']);
+    S.push({ dur: Infinity, typing: true, fn: function (u, tau) { var o = at(P.CHAIR, {}); o.afe = 25 + 5 * Math.sin(tau * 18); o.abe = 28 + 5 * Math.sin(tau * 18 + 1.7); o.h = -4 + .8 * Math.sin(tau * 1.3); return o; } });
+    phase('result', null);
+    S.push({ dur: 3.2, fn: function (u, tau) { var o = at(P.CHAIR, { h: -2 }); o.afs = lerp(60, 30, ease(u * 3)); o.afe = lerp(25, 45, ease(u * 3)); o.abs = o.afs - 3; o.abe = o.afe; return o; } });
+    phase('standup', [n + ' is getting up', 'Done for now.']);
+    T(at(P.CHAIR, { afs: 30, afe: 45, abs: 27, abe: 45 }), P.LOWER, .6); T(P.LOWER, P.AT_CHAIR, .6);
+    T(P.AT_CHAIR, at(P.AT_CHAIR, { dir: -1 }), .4);
+    phase('walkout', [n + ' is going back to bed', null]);
+    S.push({ dur: walkDur, fn: function (u, tau) { return walkPose(P.AT_CHAIR.x, -1, tau, tau > 1.2 && tau < 3.4); } });
+    T(walkPose(P.AT_CHAIR.x, -1, walkDur), at(P.STAND, { dir: -1 }), .35);
+    T(at(P.STAND, { dir: -1 }), P.STAND, .4);
+    phase('tobed', [n + ' is going back to sleep', null]);
+    T(P.STAND, P.RISE, .7); T(P.RISE, P.EDGE, .8);
+    fx(function () { layer('sit'); el.setAttribute('data-q', 'sit'); });
+    T(P.EDGE, P.SITBED, 1.0);
+    fx(function () { layer('lie'); el.setAttribute('data-q', 'lie'); });
+    T(P.SITBED, P.LIE, 1.2, { sleepy: true });
+    T(P.LIE, P.STRETCH, .9, { yawn: true, sleepy: true }); T(P.STRETCH, P.LIE, .9, { yawn: true, sleepy: true });
+    hold(P.LIE, .8, { sleepy: true });
+    phase('end', null);
+    return S;
+}
+function frame(now) {
+    if (!active) return;
+    var st = steps[si];
+    while (st && st.dur === 0) {                                      // instant steps: phase changes, layering
+        if (st.run) st.run();
+        if (st.phase) {
+            el.setAttribute('data-phase', st.phase);
+            el.setAttribute('data-mode', st.phase === 'pc' || st.phase === 'boot' || st.phase === 'result' ? 'pc' : 'idle');
+            if (st.phase === 'boot') el.setAttribute('data-boot', ''); else el.removeAttribute('data-boot');
+            if (st.phase === 'pc') checkAt = now;
+            if (st.phase === 'result') say(who() + ' finished checking', result || 'Done');
+            else if (st.phase === 'walkout') say(st.text[0], result || 'Done');
+            else if (st.phase === 'tobed') say(st.text[0], (result || 'Done') + '. Wakes up again at your scheduled time.');
+            else if (st.text) say(st.text[0], st.text[1]);
+            if (st.phase === 'end') { finish(); return; }
+        }
+        si++; st = steps[si]; stepAt = now;
+    }
+    if (!st) { finish(); return; }
+    var tau = (now - stepAt) / 1000, u = st.dur === Infinity ? 0 : Math.min(1, tau / st.dur);
+    if (st.typing && done && tau > 2.5) { si++; stepAt = now; raf = requestAnimationFrame(frame); return; }   // at least 2.5 s at the computer
+    draw(st.fn(u, Math.min(tau, st.dur)));
+    if (u >= 1 && st.dur !== Infinity) { si++; stepAt = now; }
+    raf = requestAnimationFrame(frame);
+}
+function card() {
+    var box = document.getElementById('wm-checkbox'); if (!box) return null;
+    var c = document.getElementById('wm-trip');
+    if (!c) {
+        c = document.createElement('div'); c.className = 'wm-office wm-trip'; c.id = 'wm-trip'; c.hidden = true; c.setAttribute('role', 'status');
+        c.innerHTML = '<div class="ob-scene"></div><div class="wm-sltx ob-tx"><b id="wm-trip-t"></b><small id="wm-trip-s"></small></div>';
+        var before = document.getElementById('wm-sleep') || box.firstChild; box.insertBefore(c, before);
+    }
+    return c;
+}
+function start(end) {
+    if (active) return true;
+    el = card(); if (!el) return false;
+    el.querySelector('.ob-scene').innerHTML = house();
+    var ph = ''; try { ph = String(appSettings.woBoyPhoto || ''); } catch (e) { /* ignore */ }
+    var img = el.querySelector('.zb-pimg'); if (img) img.setAttribute('href', ph);
+    el.querySelector('svg').classList.toggle('zb-photo-on', !!ph);
+    parts = { world: q('.tr-world'), rig: q('.tr-rig'), lb: q('.tr-lb'), sb: q('.tr-sb'), lf: q('.tr-lf'), sf: q('.tr-sf'), ab: q('.tr-ab'), hb: q('.tr-hb'), af: q('.tr-af'), hf: q('.tr-hf'),
+        torso: q('.tr-torso'), head: q('.tr-head'), bub: q('.tr-bub'), legsG: q('.tr-legs'), armbG: q('.tr-armb'), torsoG: q('.tr-torsoP'), headG: q('.tr-headP'), armfG: q('.tr-armf'), qover: q('.tr-qover') };
+    steps = build(); si = 0; done = false; result = ''; onEnd = end || null; active = true;
+    el.setAttribute('data-q', 'lie'); layer('lie');
+    draw(at(P.LIE, { snap: true, sleepy: true }));
+    var z = document.getElementById('wm-sleep'), o = document.getElementById('wm-boy');
+    if (z) z.hidden = true; if (o) o.hidden = true; el.hidden = false;
+    stepAt = performance.now(); raf = requestAnimationFrame(frame);
+    return true;
+}
+function finish() {
+    cancelAnimationFrame(raf); active = false;
+    if (el) { el.hidden = true; el.removeAttribute('data-phase'); el.querySelector('.ob-scene').innerHTML = ''; }
+    var cb = onEnd; onEnd = null; if (cb) try { cb(); } catch (e) { /* ignore */ }
+}
+function checkDone(text) { done = true; result = text || 'Done'; }
+
+var css = [
+'.wm-trip .tr-svg { display: block; } .wm-trip .ob-mark { display: none; }',
+'.wm-trip .zb-quilt { fill: url(#tr-zbQuiltG); }',
+'.tr-wall { fill: #171b3d; } .tr-hall { fill: #0e1130; } .tr-frame { fill: none; stroke: #8b5a2b; stroke-width: 2.2; stroke-linejoin: round; }',
+'.tr-lf { fill: none; stroke: #64748b; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; } .tr-lb { fill: none; stroke: #4b5563; stroke-width: 6.4; stroke-linecap: round; stroke-linejoin: round; }',
+'.tr-sf, .tr-sb { fill: none; stroke: #e2e8f0; stroke-width: 3.6; stroke-linecap: round; } .tr-sb { stroke: #cbd5e1; }',
+'.tr-af { fill: none; stroke: #3b82f6; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; } .tr-ab { fill: none; stroke: #2563eb; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; }',
+'.tr-hf { fill: #f2c29b; } .tr-hb { fill: #dba87f; }',
+'.tr-eyeo { fill: #1f2937; transform-box: fill-box; transform-origin: 50% 50%; animation: trBlink 4.2s ease-in-out infinite; } .tr-eyec { fill: none; stroke: #1f2937; stroke-width: .9; stroke-linecap: round; display: none; }',
+'.tr-sleepy .tr-eyeo { display: none; } .tr-sleepy .tr-eyec { display: inline; }',
+'.tr-mouth { fill: none; stroke: #9a4b3a; stroke-width: .9; stroke-linecap: round; } .tr-yawn { fill: #7c2d12; display: none; transform-box: fill-box; transform-origin: 50% 50%; animation: obYawn 1.8s ease-in-out infinite; }',
+'.tr-yawning .tr-mouth { display: none; } .tr-yawning .tr-yawn { display: inline; }',
+'.tr-bub { opacity: 0; transition: opacity .35s ease; } .tr-yawning .tr-bub { opacity: 1; }',
+'.tr-qlie, .tr-qsit { transition: opacity .5s ease; } .wm-trip[data-q="lie"] .tr-qsit, .wm-trip[data-q="sit"] .tr-qlie, .wm-trip[data-q="off"] .tr-qlie, .wm-trip[data-q="off"] .tr-qsit { opacity: 0; }',
+'.tr-qflat { transition: opacity .5s ease; } .wm-trip[data-q="lie"] .tr-qflat, .wm-trip[data-q="sit"] .tr-qflat { opacity: 0; }',
+'@keyframes trBlink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }'
+].join('\n');
+function inject() { var s0 = document.getElementById('incator-trip-css'); if (!s0) { s0 = document.createElement('style'); s0.id = 'incator-trip-css'; s0.textContent = css; } (document.head || document.documentElement).appendChild(s0); }
+inject();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
+
+window.IncTrip = {
+    start: start, done: checkDone, active: function () { return active; },
+    phase: function () { return active && el ? (el.getAttribute('data-phase') || 'wake') : ''; },
+    pose: function () { return lastPose; }, cam: function () { return camX; },
+    _P: P, _walk: walkPose, _stand: STAND_Y
 };
 })();
 
@@ -30583,7 +30875,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.14 (v48)';
+var VERSION = '2026.11.14 (v49)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
