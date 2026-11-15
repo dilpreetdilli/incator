@@ -31737,7 +31737,7 @@ function logoGeom(hasLogo) {
     var xv = S('invoiceLogoX', null), def = xv === null || xv === '' || xv === undefined || !isFinite(+xv);
     var x = def ? 146 - sz : Math.max(10, Math.min(200 - sz, +xv));     // its usual spot: right of the wave, your name beside it (a bigger logo grows to the left)
     var yv = S('invoiceLogoY', null), ydef = yv === null || yv === '' || yv === undefined || !isFinite(+yv);
-    var y = ydef ? 9 - Math.max(0, sz - 18) * 0.13 : Math.max(3, Math.min(62 - sz, +yv));   // a bigger logo starts a little higher; you can move it down to just above "Invoice To"
+    var y = ydef ? Math.max(3, 18 - sz / 2) : Math.max(3, Math.min(62 - sz, +yv));   // it grows from its middle (up and down evenly); you can move it down to just above "Invoice To"
     var tx, align, tmax;                                                 // your name and address keep out of its way
     if (!hasLogo || x + sz <= 126 || y >= 32) { tx = 196; align = 'right'; tmax = 66; }    // no logo, or it is out on the left (or below your name): name top right
     else if (196 - (x + sz + 3) >= 40) { tx = x + sz + 3; align = 'left'; tmax = 196 - tx; }   // room to its right
@@ -31745,6 +31745,80 @@ function logoGeom(hasLogo) {
     return { size: sz, x: x, y: y, tx: tx, align: align, tmax: tmax, def: def, ydef: ydef, ymax: 62 - sz };
 }
 window.IncLogoGeom = logoGeom;
+/* "INVOICE" and the line under it: they stay put unless the logo is in their way. Then they slide (or shrink a little)
+   to the nearest free spot that is still on the dark navy wave, so the white letters can always be read. */
+var NAVY_EDGE = (function () {                                         // where the navy wave ends, going down, for x = 0..122 mm
+    var segs = [[[122, 0], [110, 22], [88, 38], [56, 43]], [[56, 43], [34, 46], [14, 47], [0, 52]]], pts = [], out = [];
+    segs.forEach(function (c) { for (var i = 0; i <= 80; i++) { var t = i / 80, u = 1 - t; pts.push([u * u * u * c[0][0] + 3 * u * u * t * c[1][0] + 3 * u * t * t * c[2][0] + t * t * t * c[3][0], u * u * u * c[0][1] + 3 * u * u * t * c[1][1] + 3 * u * t * t * c[2][1] + t * t * t * c[3][1]]); } });
+    pts.sort(function (a, b) { return a[0] - b[0]; });
+    for (var x = 0, j = 0; x <= 122; x++) { while (j < pts.length - 2 && pts[j + 1][0] < x) j++; var a = pts[j], b = pts[j + 1], k = b[0] === a[0] ? 0 : (x - a[0]) / (b[0] - a[0]); out.push(a[1] + (b[1] - a[1]) * Math.max(0, Math.min(1, k))); }
+    return out;
+})();
+function navyBottom(x0, x1) { var m = 99; for (var x = Math.floor(x0); x <= Math.ceil(x1); x++) m = Math.min(m, x >= 0 && x <= 122 ? NAVY_EDGE[x] : 0); return m; }
+var TW = 47, TH = 17.4;                                                // its size (mm) at full size: the word and its line
+function titleGeom(LG, hasLogo) {
+    var def = { x: 14, y: 12.6, s: 1, moved: false };
+    if (!hasLogo || !LG) return def;
+    var m = 2.5, L0 = LG.x - m, L1 = LG.x + LG.size + m, T0 = LG.y - m, T1 = LG.y + LG.size + m;
+    var hits = function (x, y, s) { return !(x + TW * s <= L0 || x >= L1 || y + TH * s <= T0 || y >= T1); };
+    if (!hits(14, 12.6, 1)) return def;
+    var best = null, bc = 1e9;
+    [1, .9, .8, .7, .6].forEach(function (s) {
+        for (var x = 6; x + TW * s <= 121; x += 1) {
+            var nb = navyBottom(x, x + TW * s) - 1.5;
+            for (var y = 4; y + TH * s <= nb; y += .5) {
+                if (hits(x, y, s)) continue;
+                var c = (1 - s) * 140 + Math.abs(x - 14) * .6 + Math.abs(y - 12.6) * .8;
+                if (c < bc) { bc = c; best = { x: x, y: y, s: s, moved: true }; }
+            }
+        }
+    });
+    return best || def;                                                // nowhere free on the wave: it stays where it always is
+}
+window.IncTitleGeom = titleGeom;
+/* your logo in one colour (Settings > Invoice Details > Invoice Logo > Logo colour): white, navy, black or any colour */
+function logoColour() { var c = String(S('invoiceLogoColor', '') || ''); return /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : ''; }
+var tint = { key: '', url: '', busy: '', job: null };
+function tintKey(src, col) { return col + '|' + src.length + '|' + src.slice(-48); }
+function makeTint(src, col) {
+    return new Promise(function (done) {
+        var img = new Image(), fin = false, give = function (v) { if (!fin) { fin = true; done(v); } };
+        img.onerror = function () { give(src); };
+        img.onload = function () {
+            try {
+                var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, k = Math.min(1, 1000 / Math.max(iw, ih)), w = Math.max(1, Math.round(iw * k)), h = Math.max(1, Math.round(ih * k));
+                var c = document.createElement('canvas'); c.width = w; c.height = h; var g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+                var im = g.getImageData(0, 0, w, h), d = im.data, n = w * h, see = 0, r = parseInt(col.slice(1, 3), 16), gg = parseInt(col.slice(3, 5), 16), bb = parseInt(col.slice(5, 7), 16);
+                for (var q = 0; q < n; q++) if (d[q * 4 + 3] < 250) see++;
+                var flat = see < n * 0.02;                                 // a picture with no see-through parts: its white background is left out
+                for (var i = 0; i < n; i++) {
+                    var o = i * 4, a = d[o + 3];
+                    if (flat) { var L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; a = Math.round(a * Math.max(0, Math.min(1, (242 - L) / 60))); }
+                    d[o] = r; d[o + 1] = gg; d[o + 2] = bb; d[o + 3] = a;
+                }
+                g.putImageData(im, 0, 0); give(c.toDataURL('image/png'));
+            } catch (e) { give(src); }
+        };
+        try { img.src = src; } catch (e) { give(src); }
+        setTimeout(function () { give(src); }, 4000);
+    });
+}
+function tinted(src, col) {                                           // the one-colour copy (made once, then reused)
+    var key = tintKey(src, col);
+    if (tint.key === key && tint.url) return Promise.resolve(tint.url);
+    if (tint.busy === key && tint.job) return tint.job;
+    tint.busy = key;
+    tint.job = makeTint(src, col).then(function (u) {
+        if (tint.busy === key) { tint.key = key; tint.url = u; tint.busy = ''; tint.job = null; try { document.dispatchEvent(new Event('inc-logo-tinted')); } catch (e) { /* ignore */ } }
+        return u;
+    });
+    return tint.job;
+}
+function shownLogo() {                                                 // the logo as it goes on the invoice (until the coloured copy is ready: the original)
+    var src = logoSrc(), col = logoColour(); if (!src || !col) return src;
+    var key = tintKey(src, col); if (tint.key === key && tint.url) return tint.url;
+    tinted(src, col); return src;
+}
 /* ------------------------------------------------------------------ your logo (Settings > Invoice Details > Invoice logo) */
 function logoSrc() {
     var a = [S('invoiceLogo', ''), S('quoteLogo', ''), S('homeLogo', '')];
@@ -31760,9 +31834,11 @@ function deflate(u8) {                                                 // zlib-c
 }
 function logoJpeg() {                                                 // the colours as a JPEG, plus the see-through parts as a soft mask
     return new Promise(function (done) {
-        var src = logoSrc(), fin = false;
+        var src0 = logoSrc(), fin = false;
         var give = function (v) { if (!fin) { fin = true; done(v); } };
-        if (!src) { give(null); return; }
+        if (!src0) { give(null); return; }
+        var col = logoColour();
+        (col ? tinted(src0, col) : Promise.resolve(src0)).then(function (src) {
         var img = new Image();
         img.onerror = function () { give(null); };
         img.onload = function () {
@@ -31783,7 +31859,8 @@ function logoJpeg() {                                                 // the col
             } catch (e) { give(null); }
         };
         try { img.src = src; } catch (e) { give(null); }
-        setTimeout(function () { give(null); }, 4000);                   // never let a stubborn picture hold up the file
+        });
+        setTimeout(function () { give(null); }, 6000);                   // never let a stubborn picture hold up the file
     });
 }
 
@@ -31793,12 +31870,14 @@ function draw(d, logo) {
     p.rect(0, 0, PW, PH, WHITE);
     A.top.forEach(function (s) { p.path(s[1], s[0]); });
 
-    /* INVOICE, white on the navy wave */
-    p.t('INVOICE', 14, 25, 30, { bold: true, colour: '#ffffff' });
-    p.rrect(14.5, 29, 34, 0.9, 0.4, '#ffffff'); p.rrect(48.5, 29, 13, 0.9, 0.4, A.blueL);
-
     /* you: logo, then your name and address, top right (a clear block the waves never reach) */
     var hasLogo = !!(d.wantLogo && logo), LG = logoGeom(hasLogo), tmax = LG.tmax;
+
+    /* INVOICE, white on the navy wave (moved out of the logo's way when it is in the way) */
+    var TG = titleGeom(LG, hasLogo), ts = TG.s;
+    p.t('INVOICE', TG.x, TG.y + 12.4 * ts, 30 * ts, { bold: true, colour: '#ffffff' });
+    p.rrect(TG.x + 0.5 * ts, TG.y + 16.4 * ts, 34 * ts, 0.9 * ts, 0.4 * ts, '#ffffff'); p.rrect(TG.x + 34.5 * ts, TG.y + 16.4 * ts, 13 * ts, 0.9 * ts, 0.4 * ts, A.blueL);
+
     if (hasLogo) {
         var bh = LG.size, bw = LG.size, k = Math.min(bw / logo.w, bh / logo.h), lw = logo.w * k, lh = logo.h * k;
         p.image(X(LG.x + (bw - lw) / 2), Y(LG.y + (bh - lh) / 2 + lh), X(lw), X(lh));
@@ -31949,7 +32028,7 @@ function file(group, o) {
     });
 }
 
-window.IncInvPdf = { blob: blob, file: file, name: name, text: text, width: width, wrap: wrap, art: ART, logoSrc: logoSrc, logoGeom: logoGeom };
+window.IncInvPdf = { blob: blob, file: file, name: name, text: text, width: width, wrap: wrap, art: ART, logoSrc: logoSrc, logoGeom: logoGeom, titleGeom: titleGeom, shownLogo: shownLogo, logoColour: logoColour };
 })();
 
 </script>
@@ -31974,6 +32053,11 @@ function waves(list, vb, cls) {
     return '<svg class="' + cls + '" viewBox="' + vb + '" preserveAspectRatio="none" aria-hidden="true">' + list.map(function (s) { return '<path fill="' + s[0] + '" d="' + s[1] + '"/>'; }).join('') + '</svg>';
 }
 function logoSrc() { return window.IncInvPdf && IncInvPdf.logoSrc ? IncInvPdf.logoSrc() : ''; }
+function shownLogo() { return window.IncInvPdf && IncInvPdf.shownLogo ? IncInvPdf.shownLogo() : logoSrc(); }   // in the colour you chose for it
+function titleCss(LG, has) {                                          // INVOICE and its line, out of the logo's way (same place as in the PDF)
+    var t = window.IncTitleGeom ? IncTitleGeom(LG, has) : { x: 14, y: 12.6, s: 1 }, f = function (v) { return (Math.round(v * 100) / 100) + 'mm'; };
+    return 'left:' + f(t.x) + ';top:' + f(t.y) + (t.s !== 1 ? ';transform:scale(' + t.s + ');transform-origin:0 0' : '');
+}
 
 /* where the logo and your name go (the same numbers the PDF uses) */
 function geom(has) { return window.IncLogoGeom ? IncLogoGeom(has) : { size: 18, x: 128, y: 9, tx: has ? 149 : 196, align: has ? 'left' : 'right', tmax: has ? 47 : 66 }; }
@@ -32013,7 +32097,7 @@ function sheetHtml(group, o) {
     jobNotes.forEach(function (e) { noteBody += '<p><b>' + esc(e.address) + ':</b> ' + lines(e.notes) + '</p>'; });
     var showNotes = o.showNotes !== false && !!noteBody;
 
-    var logo = logoSrc(), wantLogo = o.showLogo !== false && !!logo, LG = geom(wantLogo), LGs = geomCss(LG);
+    var logo = shownLogo(), wantLogo = o.showLogo !== false && !!logo, LG = geom(wantLogo), LGs = geomCss(LG);
     var co = S('invoiceName', '') || S('userName', ''), addr = S('myAddress', '');
     var bill = String(o.billTo || '').split('\n').filter(function (l) { return l.trim(); });
     var pill = function (lab, val) { return '<div class="iv-pr"><span class="iv-pl">' + lab + '</span><span class="iv-pv">' + esc(val) + '</span></div>'; };
@@ -32024,7 +32108,7 @@ function sheetHtml(group, o) {
     return '' +
     waves(A.top, '0 0 210 60', 'iv-wtop') +
     '<div class="iv-top">' +
-      '<div class="iv-title">INVOICE<i></i></div>' +
+      '<div class="iv-title" style="' + titleCss(LG, wantLogo) + '">INVOICE<i></i></div>' +
       (wantLogo ? '<img class="iv-logo" alt="" src="' + logo + '" style="' + LGs.img + '">' : '') +
       '<div class="iv-me' + (LG.align === 'left' ? ' logo' : '') + '" style="' + LGs.text + '">' +
         '<div class="iv-met"><div class="iv-co">' + (esc(co) || '&nbsp;') + '</div>' + (addr ? '<div class="iv-ad">' + lines(addr) + '</div>' : '') + '</div>' +
@@ -32502,7 +32586,8 @@ function logoBar() {
 function paintLogoUi() {
     var own = ownLogo(), any = logoSrc(), show = S('invoiceShowLogo', true) !== false;
     Array.prototype.forEach.call(document.querySelectorAll('#inv-logobar, #inv-logo-row'), function (b) {
-        var pv = b.querySelector('.ilb-prev'); if (pv) pv.innerHTML = any ? '<img alt="" src="' + any + '">' : '<i class="fas fa-image"></i>';
+        var pv = b.querySelector('.ilb-prev'), shown = shownLogo(), lc = window.IncInvPdf && IncInvPdf.logoColour ? IncInvPdf.logoColour() : '';
+        if (pv) { pv.innerHTML = any ? '<img alt="" src="' + shown + '">' : '<i class="fas fa-image"></i>'; pv.classList.toggle('dark', !!lc && (parseInt(lc.slice(1, 3), 16) * .299 + parseInt(lc.slice(3, 5), 16) * .587 + parseInt(lc.slice(5, 7), 16) * .114) > 200); }
         var sm = b.querySelector('.ilb-tx small'); if (sm) sm.textContent = !show ? 'Turned off (Settings > Invoice Details)' : own ? 'Your invoice logo' : any ? 'Using your ' + (S('quoteLogo', '') ? 'quote' : 'Home screen') + ' logo - add one just for invoices' : 'No logo yet';
         var pk = b.querySelector('[data-ilb=pick]'); if (pk) pk.innerHTML = '<i class="fas fa-upload mr-2"></i>' + (own ? 'Change' : 'Add logo');
         var rm = b.querySelector('[data-ilb=rm]'); if (rm) rm.hidden = !own;
@@ -32519,14 +32604,25 @@ function slidersHtml() {
     return '<div class="ilb-sl"><label><span><i class="fas fa-expand-alt"></i> Logo size</span><input type="range" min="10" max="45" step="1" data-ils="size" aria-label="Logo size"><b data-ilv="size"></b></label>' +
         '<label><span><i class="fas fa-arrows-alt-h"></i> Left / right</span><input type="range" min="10" max="190" step="1" data-ils="x" aria-label="Logo position, left to right"><b data-ilv="x"></b></label>' +
         '<label><span><i class="fas fa-arrows-alt-v"></i> Up / down</span><input type="range" min="3" max="44" step="1" data-ils="y" aria-label="Logo position, up (left) to down (right)"><b data-ilv="y"></b></label>' +
+        '<div class="ilb-col"><span><i class="fas fa-palette"></i> Logo colour</span><span class="ilb-sws">' +
+          '<button type="button" class="ilb-sw ilb-orig" data-ils="col" data-ilc="" aria-label="The logo\'s own colours">Original</button>' +
+          [['#ffffff', 'White'], ['#0b2a6b', 'Navy'], ['#000000', 'Black']].map(function (c) { return '<button type="button" class="ilb-sw" data-ils="col" data-ilc="' + c[0] + '" style="background:' + c[0] + '" aria-label="' + c[1] + '" title="' + c[1] + '"></button>'; }).join('') +
+          '<label class="ilb-sw ilb-pick" title="Any colour"><input type="color" data-ils="col" data-ilc="pick" value="#b8735d" aria-label="Choose any colour for the logo"><i class="fas fa-palette"></i></label></span></div>' +
         '<button type="button" class="ilb-reset" data-ils="reset">Reset</button></div>';
 }
 var slT = 0;
 function onSlide(e) {
     var t = e.target.closest('[data-ils]'); if (!t) return;
     var k = t.getAttribute('data-ils');
+    if (k === 'col' && t.getAttribute('data-ilc') === 'pick' && e.type === 'click') return;   // the colour picker reports when you choose
     if (k === 'reset') { appSettings.invoiceLogoSize = 18; appSettings.invoiceLogoX = null; appSettings.invoiceLogoY = null; }
-    else if (k === 'size') { var sz = +t.value, g0 = geom(true); appSettings.invoiceLogoSize = sz; if (!g0.def) appSettings.invoiceLogoX = Math.min(+appSettings.invoiceLogoX, 200 - sz); if (!g0.ydef) appSettings.invoiceLogoY = Math.max(3, Math.min(+appSettings.invoiceLogoY, 62 - sz)); }
+    else if (k === 'size') {                                             // it grows and shrinks around its middle: it stays where you put it
+        var sz = +t.value, g0 = geom(true), cx = g0.x + g0.size / 2, cy = g0.y + g0.size / 2, r1 = function (v) { return Math.round(v * 10) / 10; };
+        appSettings.invoiceLogoSize = sz;
+        if (!g0.def) appSettings.invoiceLogoX = r1(Math.max(10, Math.min(200 - sz, cx - sz / 2)));
+        if (!g0.ydef) appSettings.invoiceLogoY = r1(Math.max(3, Math.min(62 - sz, cy - sz / 2)));
+    }
+    else if (k === 'col') { var v = t.getAttribute('data-ilc'); if (v === 'pick') v = t.value; appSettings.invoiceLogoColor = /^#[0-9a-f]{6}$/i.test(v || '') ? v.toLowerCase() : ''; paintLogoUi(); }
     else if (k === 'x') appSettings.invoiceLogoX = Math.min(+t.value, 200 - sizeNow());
     else if (k === 'y') appSettings.invoiceLogoY = Math.max(3, Math.min(+t.value, 62 - sizeNow()));
     else return;
@@ -32536,6 +32632,14 @@ function onSlide(e) {
 }
 function paintSliders() {
     var sz = sizeNow(), x = xNow(), maxX = 200 - sz, y = yNow(), maxY = 62 - sz;
+    var col = window.IncInvPdf && IncInvPdf.logoColour ? IncInvPdf.logoColour() : '', std = ['', '#ffffff', '#0b2a6b', '#000000'].indexOf(col) >= 0;
+    Array.prototype.forEach.call(document.querySelectorAll('.ilb-sws'), function (w) {
+        Array.prototype.forEach.call(w.querySelectorAll('[data-ilc]'), function (sw) {
+            var v = sw.getAttribute('data-ilc'), on = v === 'pick' ? !std : v === col;
+            (v === 'pick' ? sw.parentNode : sw).classList.toggle('on', on);
+            if (v === 'pick') { if (!std && document.activeElement !== sw) sw.value = col; sw.parentNode.style.background = !std ? col : ''; }
+        });
+    });
     Array.prototype.forEach.call(document.querySelectorAll('.ilb-sl'), function (b) {
         var si = b.querySelector('[data-ils=size]'), xi = b.querySelector('[data-ils=x]'), yi = b.querySelector('[data-ils=y]');
         if (yi) { yi.max = String(maxY); if (+yi.value !== y && document.activeElement !== yi) yi.value = y; }
@@ -32548,10 +32652,10 @@ function paintSliders() {
 }
 function miniPaint() {                                                  // Settings: the top of your invoice, small, as it will look
     var m = document.getElementById('ilb-mini'); if (!m) return;
-    var any = logoSrc(), show = S('invoiceShowLogo', true) !== false;
+    var any = shownLogo(), show = S('invoiceShowLogo', true) !== false;
     if (!any || !show) { m.hidden = true; return; } m.hidden = false;
     var g = geom(true), c = geomCss(g), co = S('invoiceName', '') || S('userName', '') || 'Your company';
-    m.innerHTML = '<div class="ilm-page"><div class="ilm-wave"></div><div class="ilm-title">INVOICE</div><img alt="" src="' + any + '" style="' + c.img + '">' +
+    m.innerHTML = '<div class="ilm-page">' + waves((art() || {}).top, '0 0 210 60', 'ilm-wv') + '<div class="ilm-title iv-title" style="' + titleCss(g, true) + '">INVOICE<i></i></div><img alt="" src="' + any + '" style="' + c.img + '">' +
         '<div class="ilm-me" style="' + c.text + '"><b>' + String(co).replace(/[<>&]/g, '') + '</b></div><div class="ilm-to">Invoice To:</div></div>';
 }
 function settingsRow() {
@@ -32571,6 +32675,10 @@ function settingsRow() {
     paintLogoUi(); return true;
 }
 (function () { var n = 0, t = setInterval(function () { if (settingsRow() || ++n > 80) clearInterval(t); }, 400); })();
+document.addEventListener('inc-logo-tinted', function () {             // the logo in its new colour is ready: show it everywhere
+    paintLogoUi();
+    if (ctx && el && el.classList.contains('on')) paint();
+});
 CSS += '\n' + [
 '#inv-logobar { max-width: 820px; margin: 0 auto 12px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #fff; }',
 '#inv-logobar .app-btn, .ilb-row .app-btn { flex: 0 0 auto; margin: 0; padding: 8px 12px; min-height: 40px; }',
@@ -32585,12 +32693,22 @@ CSS += '\n' + [
 '.ilb-sl label { display: grid; grid-template-columns: 112px 1fr 64px; align-items: center; gap: 8px; margin: 0; font-size: .8rem; }',
 '.ilb-sl label span { opacity: .85; white-space: nowrap; } .ilb-sl label span i { width: 14px; margin-right: 4px; opacity: .8; }',
 '.ilb-sl input[type=range] { width: 100%; accent-color: #3d8bff; min-height: 30px; } .ilb-sl b { font-size: .76rem; font-weight: 600; text-align: right; opacity: .85; }',
+'.ilb-col { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 8px; font-size: .8rem; } .ilb-col > span:first-child { opacity: .85; white-space: nowrap; } .ilb-col > span:first-child i { width: 14px; margin-right: 4px; opacity: .8; }',
+'.ilb-sws { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }',
+'.ilb-sw { position: relative; width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; }',
+'.ilb-sw.on { border-color: #3d8bff; box-shadow: 0 0 0 2px #3d8bff, inset 0 0 0 1px rgba(0,0,0,.25); }',
+'.ilb-orig { width: auto; padding: 0 10px; border-radius: 16px; font-size: .74rem; font-weight: 600; color: inherit; background: linear-gradient(135deg, rgba(184,115,93,.55), rgba(84,20,112,.55)); }',
+'.ilb-pick { background: conic-gradient(#ef4444, #f59e0b, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444); color: #fff; }',
+'.ilb-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }',
+'.ilb-pick i { pointer-events: none; font-size: .8rem; text-shadow: 0 1px 2px rgba(0,0,0,.6); }',
+'.ilb-prev.dark { background: #0b2a6b; }',
+'@media (max-width: 520px) { .ilb-col { grid-template-columns: 1fr; gap: 6px; } }',
 '.ilb-reset { justify-self: end; background: none; border: 1px solid rgba(128,128,128,.4); color: inherit; border-radius: 10px; padding: 6px 12px; font-size: .78rem; }',
 '#ilb-mini { margin-top: 10px; } #ilb-mini[hidden] { display: none; }',
 '.ilm-page { position: relative; width: 210mm; height: 70mm; background: #fff; border-radius: 6px; overflow: hidden; zoom: .36; }',
 '@supports not (zoom: 1) { .ilm-page { transform: scale(.36); transform-origin: 0 0; margin-bottom: -44.8mm; margin-right: -134.4mm; } }',
-'.ilm-wave { position: absolute; left: 0; top: 0; width: 62%; height: 46mm; background: #0b2a6b; border-bottom-right-radius: 70% 60%; }',
-'.ilm-title { position: absolute; left: 14mm; top: 12mm; color: #fff; font: 700 30pt/1 sans-serif; }',
+'.ilm-wv { position: absolute; left: 0; top: 0; width: 210mm; height: 60mm; display: block; }',
+
 '.ilm-to { position: absolute; left: 14mm; top: 63mm; color: #5d6a82; font: 9pt/1 sans-serif; } .ilm-page img { position: absolute; object-fit: contain; } .ilm-me { position: absolute; top: 9mm; display: flex; color: #0b2a6b; font: 700 10.5pt/1.2 sans-serif; }'
 ].join('\n');
 try { var cs0 = document.getElementById('inv-css'); if (cs0) cs0.textContent = CSS; } catch (e) { /* ignore */ }
@@ -32678,7 +32796,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.15 (v57)';
+var VERSION = '2026.11.15 (v58)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
