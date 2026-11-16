@@ -24191,7 +24191,7 @@ if (window.fetch && !window.fetch.__incBusy) {
 }
 
 var css = [
-'#inc-busy { position: fixed; z-index: 10620; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 12px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .2s ease, transform .2s ease; -webkit-tap-highlight-color: transparent; }',
+'#inc-busy { position: fixed; z-index: 10620; top: calc(env(safe-area-inset-top, 0px) + 36px); right: 12px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .2s ease, transform .2s ease; -webkit-tap-highlight-color: transparent; }',
 '#inc-busy.on { opacity: 1; transform: none; pointer-events: auto; }',
 '#inc-busy .ib-ring { position: relative; width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; background: rgba(12, 8, 26, .72); box-shadow: 0 4px 14px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center; }',
 '#inc-busy .ib-ring::before { content: ""; position: absolute; inset: 2px; border-radius: 50%; padding: 2px; background: conic-gradient(from 0deg, rgba(var(--pr2, 196, 181, 253), 0) 0deg, rgb(var(--pr2, 196, 181, 253)) 250deg, #fff 360deg); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ibSpin .9s linear infinite; }',
@@ -29207,82 +29207,118 @@ window.IncNotes = { open: open, close: close, add: add, all: all, unread: unread
 
 </script>
 <script id="incator-searchicon">
-/* Search bars become a search icon (phone and iPad). The page gets its room back: each search sits as a small
-   magnifier next to that page's buttons (JobNest: with Filter & Sort, New Invoice and Select all; Settings: with
-   Arrange sections; Quotes and Projects: in their tool row; SlipVault: next to Filters). Tap it and the search box
-   opens right there with the keyboard up; tap it again (or empty the box and tap away) and it folds away again.
-   A computer keeps the full search bars. */
+/* Search bars become a search icon (phone and iPad). Each search sits as a small magnifier on its page's button row
+   (JobNest: with Filter & Sort, New Invoice and Select all; Settings: with Arrange sections; Quotes and Projects: in
+   their tool row; SlipVault: next to Filters). Tap it and it turns into the search bar right there, over that row's
+   buttons, with the keyboard up. Tap anywhere else and it turns back into the icon (what you typed still filters the
+   list, and the icon stays lit so you can see a search is on; open it again to change or clear it).
+   A computer keeps the full search bars where they always were. */
 (function () {
 'use strict';
 if (window.IncSearchIcon) return;
 var MQ = window.matchMedia ? window.matchMedia('(max-width: 1024px)') : { matches: false };
 var SPOTS = [
-    { input: '#search-input', box: function (i) { return i.closest('.mb-6') || i.parentNode; }, row: '#view-page .filter-bar', first: true, label: 'Search jobs' },
-    { input: '#sf-input', box: function () { return document.getElementById('set-find'); }, row: '#so-bar', first: true, label: 'Search settings' },
-    { input: '#qz-search', box: function (i) { return i; }, row: function (i) { return i.parentNode; }, first: true, label: 'Search quotes' },
-    { input: '#pj-search', box: function (i) { return i; }, row: function (i) { return i.parentNode; }, first: true, label: 'Search projects' },
-    { input: '#rc-q', box: function (i) { return i; }, also: function (i) { return i.parentNode.querySelector(':scope > i.fa-search'); }, row: function (i) { return i.parentNode; }, before: '#rc-ftog', label: 'Search receipts' }
+    { input: '#search-input', wrap: function (i) { return i.parentNode; }, hide: function (i) { return i.closest('.mb-6'); }, row: '#view-page .filter-bar', first: true, label: 'Search jobs' },
+    { input: '#sf-input', wrap: function (i) { return i.closest('.sf-box'); }, hide: function () { return document.getElementById('set-find'); }, row: '#so-bar', first: true, label: 'Search settings' },
+    { input: '#qz-search', wrap: function (i) { return i; }, row: function (i) { return i.closest('.bz-toolbar'); }, first: true, label: 'Search quotes', x: true },
+    { input: '#pj-search', wrap: function (i) { return i; }, row: function (i) { return i.closest('.bz-toolbar'); }, first: true, label: 'Search projects', x: true },
+    { input: '#rc-q', wrap: function (i) { return i; }, also: function (i) { return i.parentNode.querySelector(':scope > i.fa-search'); }, row: function (i) { return i.closest('.rc-search'); }, before: '#rc-ftog', label: 'Search receipts', x: true }
 ];
 function el(s, ctx) { return typeof s === 'function' ? s(ctx) : document.querySelector(s); }
-function setOpen(sp, on, focus) {
-    var i = sp.inp, b = sp.btn; if (!i || !b) return;
-    [sp.boxEl, sp.alsoEl].forEach(function (x) { if (x) x.classList.toggle('si-open', !!on); });
-    if (sp.rowEl) sp.rowEl.classList.toggle('si-row-open', !!on && sp.boxEl === i);
-    b.classList.toggle('on', !!on); b.setAttribute('aria-expanded', on ? 'true' : 'false');
-    if (on && focus) setTimeout(function () { try { i.focus({ preventScroll: false }); } catch (e) { i.focus(); } }, 30);
+function on() { return !!MQ.matches; }
+function lit(sp) {                                                       // the icon shows when a search is on
+    var has = !!(sp.inp && sp.inp.value.trim());
+    if (sp.btn) sp.btn.classList.toggle('has', has);
+    if (sp.hideEl) sp.hideEl.classList.toggle('si-has', has);
+}
+function setOpen(sp, open) {
+    if (!sp.btn || !sp.float) return;
+    sp.open = !!open;
+    sp.rowEl.classList.toggle('si-row-open', !!open);
+    sp.btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) setTimeout(function () { try { sp.inp.focus({ preventScroll: true }); } catch (e) { sp.inp.focus(); } }, 20);
+    else if (document.activeElement === sp.inp) sp.inp.blur();
+    lit(sp);
 }
 function clearInput(i) {
     if (!i.value) return;
     i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('search', { bubbles: true }));
 }
+function place(sp) {                                                     // phone: the search lives in the row; computer: back where it was
+    if (!sp.wrapEl || !sp.float) return;
+    if (on()) { if (sp.wrapEl.parentNode !== sp.float) sp.float.insertBefore(sp.wrapEl, sp.float.firstChild); }
+    else if (sp.home && sp.wrapEl.parentNode === sp.float) { setOpen(sp, false); sp.home.parent.insertBefore(sp.wrapEl, sp.home.next && sp.home.next.parentNode === sp.home.parent ? sp.home.next : null); }
+}
 function attach(sp) {
     var i = document.querySelector(sp.input); if (!i) return;
-    if (sp.inp === i && sp.btn && document.body.contains(sp.btn)) return;   // already there (pages that rebuild get a new one)
-    var row = el(sp.row, i), box = sp.box(i); if (!row || !box) return;
-    sp.inp = i; sp.rowEl = row; sp.boxEl = box; sp.alsoEl = sp.also ? sp.also(i) : null;
-    box.classList.add('si-hide'); if (sp.alsoEl) sp.alsoEl.classList.add('si-hide');
+    if (sp.inp === i && sp.btn && document.body.contains(sp.btn)) { place(sp); return; }   // already there (pages that rebuild get a new one)
+    var row = el(sp.row, i), wrap = sp.wrap(i); if (!row || !wrap) return;
+    sp.inp = i; sp.rowEl = row; sp.wrapEl = wrap; sp.open = false;
+    sp.hideEl = sp.hide ? sp.hide(i) : null; if (sp.hideEl) sp.hideEl.classList.add('si-hide');
+    sp.alsoEl = sp.also ? sp.also(i) : null; if (sp.alsoEl) sp.alsoEl.classList.add('si-hide');
+    sp.home = { parent: wrap.parentNode, next: wrap.nextSibling };
+    row.classList.add('si-row');
     var b = document.createElement('button'); b.type = 'button'; b.className = 'si-btn'; b.setAttribute('aria-label', sp.label); b.title = sp.label;
     b.setAttribute('aria-expanded', 'false'); b.innerHTML = '<i class="fas fa-search"></i>';
     var ref = sp.before ? row.querySelector(sp.before) : (sp.first ? row.firstChild : null);
     row.insertBefore(b, ref || null);
-    sp.btn = b;
-    b.addEventListener('click', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        var open = box.classList.contains('si-open');
-        if (open) { clearInput(i); setOpen(sp, false); } else setOpen(sp, true, true);
+    var f = document.createElement('div'); f.className = 'si-float' + (wrap === i ? ' si-bare' : '');
+    if (wrap === i) f.innerHTML = '<i class="fas fa-search si-fic" aria-hidden="true"></i>';
+    if (sp.x) { var x = document.createElement('button'); x.type = 'button'; x.className = 'si-x'; x.setAttribute('aria-label', 'Clear the search'); x.innerHTML = '<i class="fas fa-times"></i>'; f.appendChild(x);
+        x.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); clearInput(i); setOpen(sp, false); }); }
+    row.appendChild(f);
+    sp.btn = b; sp.float = f;
+    place(sp);
+    b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); setOpen(sp, !sp.open); });
+    i.addEventListener('input', function () { lit(sp); });
+    i.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { clearInput(i); setOpen(sp, false); }
+        else if (e.key === 'Enter') setOpen(sp, false);                  // Search/Go on the keyboard: done, the results stay
     });
-    i.addEventListener('blur', function () { setTimeout(function () { if (!i.value && document.activeElement !== i && !(sp.btn && sp.btn.matches(':active'))) setOpen(sp, false); }, 180); });
-    i.addEventListener('keydown', function (e) { if (e.key === 'Escape') { clearInput(i); setOpen(sp, false); i.blur(); } });
-    if (i.value) setOpen(sp, true);                                        // a search that is already on stays visible
+    lit(sp);
 }
+document.addEventListener('pointerdown', function (e) {                   // a tap anywhere else turns the bar back into the icon
+    SPOTS.forEach(function (sp) { if (sp.open && sp.float && !sp.float.contains(e.target) && !(sp.btn && sp.btn.contains(e.target))) setOpen(sp, false); });
+}, true);
 function scan() { if (!document.body) return; SPOTS.forEach(attach); }
-function mode() { document.documentElement.classList.toggle('si-on', !!MQ.matches); }
+function mode() { document.documentElement.classList.toggle('si-on', on()); SPOTS.forEach(place); }
 var CSS = [
-'.si-btn { display: none; }',
-'html.si-on .si-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 42px; min-width: 42px; height: 42px; padding: 0; border-radius: 12px; border: 1px solid rgba(148,148,170,.38); background: rgba(148,148,170,.12); color: inherit; font-size: 15px; cursor: pointer; -webkit-tap-highlight-color: transparent; }',
-'html.si-on .si-btn.on { border-color: rgb(var(--pr4, 139, 92, 246)); box-shadow: 0 0 0 2px rgba(var(--pr4, 139, 92, 246), .35); }',
-'html.si-on .si-hide:not(.si-open) { display: none !important; }',
-'html.si-on .si-open { animation: siIn .18s ease-out; } @keyframes siIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }',
-'html.si-on .bz-toolbar.si-row-open > .inv-input.si-open { flex: 1 1 100%; order: 5; }',
-'html.si-on .rc-search .si-btn { width: 38px; min-width: 38px; height: 38px; }',
-'html.si-on .rc-search .inv-input.si-open { flex: 1 1 auto; }',
+'.si-btn, .si-float { display: none; }',
+'html.si-on .si-row { position: relative; }',
+'html.si-on .si-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; position: relative; width: 42px; min-width: 42px; height: 42px; padding: 0; border-radius: 12px; border: 1px solid rgba(148,148,170,.38); background: rgba(148,148,170,.12); color: inherit; font-size: 15px; cursor: pointer; -webkit-tap-highlight-color: transparent; }',
+'html.si-on .si-btn.has { border-color: rgb(var(--pr4, 139, 92, 246)); color: rgb(var(--pr4, 139, 92, 246)); }',
+'html.si-on .si-btn.has::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--pr4, 139, 92, 246)); }',
+'html.si-on .si-hide:not(.si-has) { display: none !important; }',
+'html.si-on .mb-6.si-hide.si-has { margin-bottom: 10px !important; }',
+/* the bar: right over its row, the buttons hidden underneath while it is open */
+'html.si-on .si-row-open > .si-float { display: flex; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); z-index: 8; align-items: center; min-height: 42px; animation: siGrow .2s ease-out; transform-origin: left center; }',
+'@keyframes siGrow { from { opacity: 0; clip-path: inset(0 calc(100% - 44px) 0 0 round 12px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 12px); } }',
+'html.si-on .si-row.si-row-open > :not(.si-float) { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }',
+'html.si-on .si-float > * { flex: 1 1 auto; min-width: 0; }',
+'html.si-on .si-float > .relative { width: 100%; }',
+'html.si-on .si-float input { width: 100% !important; height: 42px; min-height: 42px; margin: 0 !important; font-size: 16px !important; }',
+'html.si-on .si-float.si-bare input { padding-left: 38px !important; padding-right: 40px !important; }',
+'html.si-on .si-float .si-fic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); opacity: .6; pointer-events: none; z-index: 1; flex: none; }',
+'html.si-on .si-float .si-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; flex: none; border: 0; border-radius: 50%; background: transparent; color: inherit; opacity: .7; z-index: 1; }',
+'html.si-on .si-float .sf-box { width: 100%; margin: 0 !important; }',
 'html.si-on #view-page .filter-bar { display: grid !important; grid-template-columns: 42px repeat(3, minmax(0, 1fr)) !important; gap: 8px !important; align-items: center; }',
 'html.si-on #view-page .filter-bar > .app-btn { min-width: 0; width: 100%; justify-content: center; padding: 10px 6px !important; font-size: .8rem !important; white-space: nowrap; }',
-'html.si-on #view-page .filter-bar > .si-btn { width: 42px; height: 100%; min-height: 40px; }',
 'html.si-on #view-page .filter-bar > #view-filter-summary { grid-column: 1 / -1; }',
 'html.si-on #view-page .filter-bar #select-all-btn .lbl-long { display: none; } html.si-on #view-page .filter-bar #select-all-btn .lbl-short { display: inline; }',
 'html.si-on #so-bar { justify-content: space-between; align-items: center; }',
-'html.si-on #set-find.si-open { margin-bottom: 10px; }',
-'html[data-theme="sleek"].si-on .si-btn { border-color: var(--sk-line2) !important; background: transparent !important; color: var(--sk-fg) !important; border-radius: 999px; }'
+'html.si-on .rc-search .si-btn { width: 38px; min-width: 38px; height: 38px; }',
+'html[data-theme="sleek"].si-on .si-btn { border-color: var(--sk-line2) !important; background: transparent !important; color: var(--sk-fg) !important; border-radius: 999px; }',
+'html[data-theme="sleek"].si-on .si-btn.has { border-color: var(--sk-fg) !important; } html[data-theme="sleek"].si-on .si-btn.has::after { background: var(--sk-fg); }'
 ].join('\n');
 function boot() {
     var st = document.createElement('style'); st.id = 'incator-searchicon-css'; st.textContent = CSS; document.head.appendChild(st);
-    mode(); if (MQ.addEventListener) MQ.addEventListener('change', mode); else if (MQ.addListener) MQ.addListener(mode);
+    document.documentElement.classList.toggle('si-on', on());
+    if (MQ.addEventListener) MQ.addEventListener('change', mode); else if (MQ.addListener) MQ.addListener(mode);
     scan();
     try { new MutationObserver(function () { clearTimeout(boot.t); boot.t = setTimeout(scan, 120); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { setInterval(scan, 1500); }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-window.IncSearchIcon = { scan: scan, spots: SPOTS };
+window.IncSearchIcon = { scan: scan, spots: SPOTS, close: function () { SPOTS.forEach(function (sp) { if (sp.open) setOpen(sp, false); }); } };
 })();
 
 </script>
@@ -29308,7 +29344,7 @@ var css = [
 '  html.ph-docked #pg-head:not([hidden]) { display: flex; align-items: center; gap: 12px; margin: 0 16px; padding: 6px 52px 6px 2px; min-height: 48px; text-align: left; }',
 '  #pg-head { color: #fff; }',
 '  html.ph-docked body[data-pg]:not([data-pg="home"]) .page.active .magical-header, html.ph-docked body[data-pg]:not([data-pg="home"]) #receipts-page .rc-top, html.ph-docked .page .magical-header, html.ph-docked #receipts-page .rc-top { display: none !important; }',
-'  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header { padding: 0 !important; margin: 0 0 8px !important; }',   /* the title sits level with the IncAtor ring at the top right */
+'  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header { padding: 34px 0 0 !important; margin: 0 0 8px !important; }',   /* level with the IncAtor ring, and below the strip an installed iPhone app blurs under the status bar */
 '  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header > .max-w-5xl { display: none !important; }',
 '  #pg-head .ph-ic { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; background: linear-gradient(135deg, rgb(var(--pr4, 139, 92, 246)), rgb(var(--acc2, 236, 72, 153))); box-shadow: inset 0 1px 1px rgba(255,255,255,.35), 0 6px 16px rgba(0,0,0,.28); }',
 '  #pg-head .ph-tx { flex: 1 1 auto; min-width: 0; display: block; }',
@@ -32394,7 +32430,7 @@ function build() {
         '<div id="inv-sh" role="dialog" aria-modal="true" aria-label="Share this invoice"><div class="ish-back"></div><div class="ish-card">' +
           '<div class="ish-grip"></div><div class="ish-head">Share this invoice</div>' +
           row('native', 'fa-share', 'Share&hellip;', 'Mail, Messages, AirDrop or Save to Files') +
-          row('mail', 'fa-envelope', 'Email the invoice', 'Opens your mail app, filled in') +
+          row('mail', 'fa-envelope', 'Email the invoice', 'The PDF attached, subject "Invoice for" the address - choose Mail') +
           row('pdf', 'fa-download', 'Save the PDF', 'Keeps a copy on this device') +
           row('print', 'fa-print', 'Print or save as PDF', 'Opens your printer page') +
           '<button type="button" class="ish-cancel">Cancel</button>' +
@@ -32565,15 +32601,45 @@ function body() {
     try { t = IncInvPdf.text(ctx.group || [], ctx.o || {}); } catch (e) { /* ignore */ }
     return t;
 }
-function mailUrl() {
-    return 'mailto:?subject=' + encodeURIComponent(subject()) + '&body=' + encodeURIComponent(body().slice(0, 1800));
+function mailSubject() {                                              // "Invoice for 12 Maple St, Surrey" (the job address)
+    var seen = {}, list = [];
+    (ctx && ctx.group || []).forEach(function (e) { var a = String(e && e.address || '').trim(); if (a && !seen[a.toLowerCase()]) { seen[a.toLowerCase()] = 1; list.push(a); } });
+    if (!list.length) return subject();
+    return 'Invoice for ' + (list.length === 1 ? list[0] : list.length === 2 ? list[0] + ' and ' + list[1] : list[0] + ' + ' + (list.length - 1) + ' more');
 }
-function mailIt() {
-    var url = mailUrl();
-    closeShare();
-    try { window.location.href = url; } catch (e) {
+function mailBody() {
+    var no = (ctx && ctx.o && ctx.o.invoiceNo) ? String(ctx.o.invoiceNo) : '', co = '';
+    try { co = appSettings.invoiceName || appSettings.userName || ''; } catch (e) { /* ignore */ }
+    return 'Hello,\n\nPlease find attached invoice' + (no ? ' ' + no : '') + ' - ' + mailSubject().replace(/^Invoice /, '') + '.\n\nThank you for your business.' + (co ? '\n\n' + co : '');
+}
+function mailUrl() {
+    return 'mailto:?subject=' + encodeURIComponent(mailSubject()) + '&body=' + encodeURIComponent(mailBody());
+}
+function mailTo() {
+    try { window.location.href = mailUrl(); } catch (e) {
         try { showToast('This device has no mail app set up', 'error'); } catch (e2) { /* ignore */ }
     }
+}
+function mailPack(f) {                                                // the PDF itself, with the subject filled in
+    var pack = { title: mailSubject(), text: mailBody() };
+    try { if (f && f.name && navigator.canShare && navigator.canShare({ files: [f] })) pack.files = [f]; } catch (e) { /* ignore */ }
+    return pack;
+}
+function mailIt() {                                                    // Email the invoice: the PDF goes with it
+    closeShare();
+    if (canNative() && pdfReady()) {
+        var go = function (f) {
+            var pk = mailPack(f);
+            if (!pk.files) { mailTo(); return Promise.resolve(); }        // this device cannot hand over files: a filled-in email instead
+            return navigator.share(pk).catch(function (e) { if (!(e && e.name === 'AbortError')) { savePdf().then(mailTo, mailTo); } });
+        };
+        try { if (pdfCache) return go(pdfCache); } catch (e) { /* below */ }   // straight from the tap, the way a phone wants it
+        return pdfSoon().then(go).catch(function () { mailTo(); });
+    }
+    if (pdfReady()) {                                                  // a computer: the PDF is saved, then your mail app opens filled in - attach the saved file
+        return savePdf().then(function () { try { showToast('The PDF was saved - attach it to the email', 'info'); } catch (e) { /* ignore */ } mailTo(); }, mailTo);
+    }
+    mailTo(); return Promise.resolve();
 }
 function savePdf() {
     return (pdfCache ? Promise.resolve(pdfCache) : pdfSoon()).then(function (b) {
@@ -32916,7 +32982,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.15 (v60)';
+var VERSION = '2026.11.15 (v61)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
