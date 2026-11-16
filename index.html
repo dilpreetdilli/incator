@@ -7323,7 +7323,8 @@ var LS = window.localStorage;
 var configured = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID) && GOOGLE_CLIENT_ID.indexOf('PASTE_') !== 0;
 var setupMode = !configured;               // Google login not configured yet: app behaves exactly as before
 var SYNC_KEYS = { incomeEntries: 1, appSettings: 1, incomeQuotes: 1, incomeProjects: 1, incomeReceipts: 1, jobPhotos: 1, incomeTrash: 1 };
-var VOLATILE_SETTINGS = ['lastBackupAt', 'backupSnoozeUntil', 'theme', 'font'];   // ignored when comparing copies
+var VOLATILE_SETTINGS = ['lastBackupAt', 'backupSnoozeUntil', '_setAt'];   // ignored when comparing copies (theme and font now travel to your other devices too)
+var NO_STAMP = { _setAt: 1, lastBackupAt: 1, backupSnoozeUntil: 1, nextInvoiceNumber: 1, nextQuoteNumber: 1, nextProjectNumber: 1, navCopy: 1 };   // these follow their own rules
 var SESSION_KEY = 'incator:session';
 var TOKEN_KEY = 'incator:tok';
 
@@ -7403,10 +7404,25 @@ var Cloud = { ready: false, paused: false, uploading: false, pendingAgain: false
               status: { kind: 'boot', text: 'Starting...' }, token: null };
 var appStore = {
     getItem: function (k) { var p = pfx(); return p === null ? null : LS.getItem(p + k); },
-    setItem: function (k, v) { var p = pfx(); if (p === null) return; if (window.__incSyncReload && SYNC_KEYS[k]) return; LS.setItem(p + k, v); if (SYNC_KEYS[k]) localChanged(k); },
+    setItem: function (k, v) { var p = pfx(); if (p === null) return; if (window.__incSyncReload && SYNC_KEYS[k]) return; if (k === 'appSettings') v = stampSettings(p, v); LS.setItem(p + k, v); if (SYNC_KEYS[k]) localChanged(k); },
     removeItem: function (k) { var p = pfx(); if (p === null) return; if (window.__incSyncReload && SYNC_KEYS[k]) return; LS.removeItem(p + k); if (SYNC_KEYS[k]) localChanged(k); }
 };
 window.appStore = appStore;
+/* Every setting remembers when it was last changed, so when two devices both changed settings, each setting keeps the
+   newest value (one device's change never wipes out another's). */
+function stampSettings(p, v) {
+    try {
+        var nw = JSON.parse(v); if (!nw || typeof nw !== 'object' || Array.isArray(nw)) return v;
+        var old = {}; try { old = JSON.parse(LS.getItem(p + 'appSettings')) || {}; } catch (e) { old = {}; }
+        var oa = old._setAt && typeof old._setAt === 'object' ? old._setAt : {}, na = nw._setAt && typeof nw._setAt === 'object' ? nw._setAt : {}, at = {};
+        Object.keys(Object.assign({}, oa, na)).forEach(function (k) { var a = oa[k], b = na[k]; at[k] = !a ? b : !b ? a : (a >= b ? a : b); });
+        var t = nowIso();
+        Object.keys(Object.assign({}, old, nw)).forEach(function (k) { if (!NO_STAMP[k] && stable(old[k]) !== stable(nw[k])) at[k] = t; });
+        nw._setAt = at;
+        try { if (typeof appSettings === 'object' && appSettings) appSettings._setAt = at; } catch (e) { /* not loaded yet */ }
+        return JSON.stringify(nw);
+    } catch (e) { return v; }
+}
 
 function readLocal() {
     var p = pfx(), entries = [], settings = null, quotes = [], projects = [], receipts = [];
@@ -8237,8 +8253,10 @@ function mergeData(local, cloudBackup, localChangedAt) {
     // typed details (invoice name, address, GST number...): the one typed last wins, and a blank never replaces a filled one
     var la = (ls._setAt && typeof ls._setAt === 'object') ? ls._setAt : {}, ca = (cs._setAt && typeof cs._setAt === 'object') ? cs._setAt : {}, at = {};
     Object.keys(Object.assign({}, la, ca)).forEach(function (k) {
+        if (NO_STAMP[k]) return;
         var a = la[k], b = ca[k], win = !b ? ls : !a ? cs : (a >= b ? ls : cs);
         if (Object.prototype.hasOwnProperty.call(win, k)) settings[k] = win[k];
+        else if (win === ls ? a : b) delete settings[k];                    // removed on the device that changed it last
         at[k] = !b ? a : !a ? b : (a >= b ? a : b);
     });
     if (Object.keys(at).length) settings._setAt = at;
@@ -20697,6 +20715,10 @@ var css = [
 '.tr-main { flex: 1; min-width: 0; } .tr-t { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .tr-s { font-size: .82rem; color: rgba(255,255,255,.84); }',
 '.tr-when { font-size: .76rem; margin-top: 2px; color: rgba(255,255,255,.72); } .tr-when.soon { color: #fca5a5; font-weight: 600; }',
 '.tr-btns { display: flex; align-items: center; gap: 8px; flex: none; } .tr-btns .app-btn { padding: 8px 12px !important; }',
+'html[data-theme="sleek"] #trash-page .tr-t { color: var(--sk-fg) !important; } html[data-theme="sleek"] #trash-page .tr-s, html[data-theme="sleek"] #trash-page .tr-when:not(.soon) { color: var(--sk-mut) !important; }',
+'html[data-theme="sleek"] #trash-page .tr-ic { color: var(--sk-fg); }',
+'html.lm:not([data-theme="sleek"]) #trash-page .tr-t { color: #1e1b4b !important; } html.lm:not([data-theme="sleek"]) #trash-page .tr-s, html.lm:not([data-theme="sleek"]) #trash-page .tr-when:not(.soon) { color: #475569 !important; }',
+'html.lm #trash-page .tr-when.soon { color: #dc2626 !important; } html.lm:not([data-theme="sleek"]) #trash-page .tr-danger { color: #dc2626 !important; border-color: rgba(220,38,38,.45) !important; }',
 '@media (max-width: 480px) { .tr-row { flex-wrap: wrap; } .tr-btns { width: 100%; justify-content: flex-end; } }'
 ].join('\n');
 
@@ -29184,6 +29206,86 @@ window.IncNotes = { open: open, close: close, add: add, all: all, unread: unread
 })();
 
 </script>
+<script id="incator-searchicon">
+/* Search bars become a search icon (phone and iPad). The page gets its room back: each search sits as a small
+   magnifier next to that page's buttons (JobNest: with Filter & Sort, New Invoice and Select all; Settings: with
+   Arrange sections; Quotes and Projects: in their tool row; SlipVault: next to Filters). Tap it and the search box
+   opens right there with the keyboard up; tap it again (or empty the box and tap away) and it folds away again.
+   A computer keeps the full search bars. */
+(function () {
+'use strict';
+if (window.IncSearchIcon) return;
+var MQ = window.matchMedia ? window.matchMedia('(max-width: 1024px)') : { matches: false };
+var SPOTS = [
+    { input: '#search-input', box: function (i) { return i.closest('.mb-6') || i.parentNode; }, row: '#view-page .filter-bar', first: true, label: 'Search jobs' },
+    { input: '#sf-input', box: function () { return document.getElementById('set-find'); }, row: '#so-bar', first: true, label: 'Search settings' },
+    { input: '#qz-search', box: function (i) { return i; }, row: function (i) { return i.parentNode; }, first: true, label: 'Search quotes' },
+    { input: '#pj-search', box: function (i) { return i; }, row: function (i) { return i.parentNode; }, first: true, label: 'Search projects' },
+    { input: '#rc-q', box: function (i) { return i; }, also: function (i) { return i.parentNode.querySelector(':scope > i.fa-search'); }, row: function (i) { return i.parentNode; }, before: '#rc-ftog', label: 'Search receipts' }
+];
+function el(s, ctx) { return typeof s === 'function' ? s(ctx) : document.querySelector(s); }
+function setOpen(sp, on, focus) {
+    var i = sp.inp, b = sp.btn; if (!i || !b) return;
+    [sp.boxEl, sp.alsoEl].forEach(function (x) { if (x) x.classList.toggle('si-open', !!on); });
+    if (sp.rowEl) sp.rowEl.classList.toggle('si-row-open', !!on && sp.boxEl === i);
+    b.classList.toggle('on', !!on); b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on && focus) setTimeout(function () { try { i.focus({ preventScroll: false }); } catch (e) { i.focus(); } }, 30);
+}
+function clearInput(i) {
+    if (!i.value) return;
+    i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('search', { bubbles: true }));
+}
+function attach(sp) {
+    var i = document.querySelector(sp.input); if (!i) return;
+    if (sp.inp === i && sp.btn && document.body.contains(sp.btn)) return;   // already there (pages that rebuild get a new one)
+    var row = el(sp.row, i), box = sp.box(i); if (!row || !box) return;
+    sp.inp = i; sp.rowEl = row; sp.boxEl = box; sp.alsoEl = sp.also ? sp.also(i) : null;
+    box.classList.add('si-hide'); if (sp.alsoEl) sp.alsoEl.classList.add('si-hide');
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'si-btn'; b.setAttribute('aria-label', sp.label); b.title = sp.label;
+    b.setAttribute('aria-expanded', 'false'); b.innerHTML = '<i class="fas fa-search"></i>';
+    var ref = sp.before ? row.querySelector(sp.before) : (sp.first ? row.firstChild : null);
+    row.insertBefore(b, ref || null);
+    sp.btn = b;
+    b.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var open = box.classList.contains('si-open');
+        if (open) { clearInput(i); setOpen(sp, false); } else setOpen(sp, true, true);
+    });
+    i.addEventListener('blur', function () { setTimeout(function () { if (!i.value && document.activeElement !== i && !(sp.btn && sp.btn.matches(':active'))) setOpen(sp, false); }, 180); });
+    i.addEventListener('keydown', function (e) { if (e.key === 'Escape') { clearInput(i); setOpen(sp, false); i.blur(); } });
+    if (i.value) setOpen(sp, true);                                        // a search that is already on stays visible
+}
+function scan() { if (!document.body) return; SPOTS.forEach(attach); }
+function mode() { document.documentElement.classList.toggle('si-on', !!MQ.matches); }
+var CSS = [
+'.si-btn { display: none; }',
+'html.si-on .si-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 42px; min-width: 42px; height: 42px; padding: 0; border-radius: 12px; border: 1px solid rgba(148,148,170,.38); background: rgba(148,148,170,.12); color: inherit; font-size: 15px; cursor: pointer; -webkit-tap-highlight-color: transparent; }',
+'html.si-on .si-btn.on { border-color: rgb(var(--pr4, 139, 92, 246)); box-shadow: 0 0 0 2px rgba(var(--pr4, 139, 92, 246), .35); }',
+'html.si-on .si-hide:not(.si-open) { display: none !important; }',
+'html.si-on .si-open { animation: siIn .18s ease-out; } @keyframes siIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }',
+'html.si-on .bz-toolbar.si-row-open > .inv-input.si-open { flex: 1 1 100%; order: 5; }',
+'html.si-on .rc-search .si-btn { width: 38px; min-width: 38px; height: 38px; }',
+'html.si-on .rc-search .inv-input.si-open { flex: 1 1 auto; }',
+'html.si-on #view-page .filter-bar { display: grid !important; grid-template-columns: 42px repeat(3, minmax(0, 1fr)) !important; gap: 8px !important; align-items: center; }',
+'html.si-on #view-page .filter-bar > .app-btn { min-width: 0; width: 100%; justify-content: center; padding: 10px 6px !important; font-size: .8rem !important; white-space: nowrap; }',
+'html.si-on #view-page .filter-bar > .si-btn { width: 42px; height: 100%; min-height: 40px; }',
+'html.si-on #view-page .filter-bar > #view-filter-summary { grid-column: 1 / -1; }',
+'html.si-on #view-page .filter-bar #select-all-btn .lbl-long { display: none; } html.si-on #view-page .filter-bar #select-all-btn .lbl-short { display: inline; }',
+'html.si-on #so-bar { justify-content: space-between; align-items: center; }',
+'html.si-on #set-find.si-open { margin-bottom: 10px; }',
+'html[data-theme="sleek"].si-on .si-btn { border-color: var(--sk-line2) !important; background: transparent !important; color: var(--sk-fg) !important; border-radius: 999px; }'
+].join('\n');
+function boot() {
+    var st = document.createElement('style'); st.id = 'incator-searchicon-css'; st.textContent = CSS; document.head.appendChild(st);
+    mode(); if (MQ.addEventListener) MQ.addEventListener('change', mode); else if (MQ.addListener) MQ.addListener(mode);
+    scan();
+    try { new MutationObserver(function () { clearTimeout(boot.t); boot.t = setTimeout(scan, 120); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { setInterval(scan, 1500); }
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+window.IncSearchIcon = { scan: scan, spots: SPOTS };
+})();
+
+</script>
 <script id="incator-layout">
 /* Layout touches (v35):
    - Phone: the "Good Morning" greeting only shows on Home; other pages start with their own title at the top.
@@ -29197,8 +29299,8 @@ var css = [
 /* ---- phone: greeting only on Home ---- */
 '@media (max-width: 700px) {',
 '  body[data-pg]:not([data-pg="home"]) #greeting, body[data-pg]:not([data-pg="home"]) .wx-greet, body[data-pg]:not([data-pg="home"]) #wx-greet { display: none !important; }',
-'  body[data-pg]:not([data-pg="home"]) #main-header { padding: max(10px, env(safe-area-inset-top, 0px)) 0 0 !important; margin: 0 0 4px !important; min-height: 0 !important; }',
-'  html.hdr-set body[data-pg]:not([data-pg="home"]) #main-header { padding-top: max(10px, env(safe-area-inset-top, 0px)) !important; margin-top: 0 !important; }',
+'  body[data-pg]:not([data-pg="home"]) #main-header { padding: 4px 0 0 !important; margin: 0 0 4px !important; min-height: 0 !important; }',   /* the page itself already keeps clear of the status bar */
+'  html.hdr-set body[data-pg]:not([data-pg="home"]) #main-header { padding-top: 4px !important; margin-top: 0 !important; }',
 '}',
 /* ---- phone: the page title lives in the header ---- */
 '#pg-head { display: none; }',
@@ -29206,7 +29308,7 @@ var css = [
 '  html.ph-docked #pg-head:not([hidden]) { display: flex; align-items: center; gap: 12px; margin: 0 16px; padding: 6px 52px 6px 2px; min-height: 48px; text-align: left; }',
 '  #pg-head { color: #fff; }',
 '  html.ph-docked body[data-pg]:not([data-pg="home"]) .page.active .magical-header, html.ph-docked body[data-pg]:not([data-pg="home"]) #receipts-page .rc-top, html.ph-docked .page .magical-header, html.ph-docked #receipts-page .rc-top { display: none !important; }',
-'  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header { padding: max(12px, calc(env(safe-area-inset-top, 0px) + 6px)) 0 0 !important; margin: 0 0 10px !important; }',
+'  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header { padding: 0 !important; margin: 0 0 8px !important; }',   /* the title sits level with the IncAtor ring at the top right */
 '  html.ph-docked body[data-pg]:not([data-pg="home"]) #main-header > .max-w-5xl { display: none !important; }',
 '  #pg-head .ph-ic { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; background: linear-gradient(135deg, rgb(var(--pr4, 139, 92, 246)), rgb(var(--acc2, 236, 72, 153))); box-shadow: inset 0 1px 1px rgba(255,255,255,.35), 0 6px 16px rgba(0,0,0,.28); }',
 '  #pg-head .ph-tx { flex: 1 1 auto; min-width: 0; display: block; }',
@@ -30650,7 +30752,7 @@ var MOVIES = ['Rocket Ride', 'Deep Blue', 'Speedy Red', 'Hoppy Hills'];   // the
 var PROPS = {
     mug: '<g><path class="hs-msteam" d="M-.8 -7.4c-1.2-1.6 .8-2.6 0-4.4M1.2 -7.6c-1-1.4 .8-2.4 0-4"/><rect x="-2.6" y="-6" width="5.2" height="6.4" rx="1.3" fill="#ef4444"/><rect x="-2.2" y="-5.8" width="4.4" height=".9" rx=".4" fill="#7c2d12"/><path d="M2.6 -4.6c1.8 0 1.8 3 0 3" fill="none" stroke="#ef4444" stroke-width="1"/></g>',
     cup: '<g><rect x="-2" y="-5" width="4" height="5" rx=".8" fill="#f8fafc" stroke="#94a3b8" stroke-width=".4"/></g>',
-    book2: '<g><g transform="rotate(-26)"><rect x="-3" y="-7.6" width="1.2" height="14.4" rx=".4" fill="#f8fafc"/><rect x="-2.2" y="-8" width="5.6" height="15.2" rx=".7" fill="#b91c1c"/><rect x="-2.2" y="-8" width="1.1" height="15.2" rx=".5" fill="#7f1d1d"/><path d="M-.4 -4.6h2.8M-.4 -2.8h2.2M-.4 3.4h2.6" stroke="#fcd34d" stroke-width=".6" stroke-linecap="round"/></g></g>',   // seen from beside him: the cover faces us, the open pages face him
+    book2: '<g><g transform="rotate(-48) scale(.62 1)"><path d="M0 -6.6 C-3 -8.4 -6.4 -8.6 -9.4 -7.6 L-9.4 8.6 C-6.4 7.6 -3 7.8 0 9.6 C3 7.8 6.4 7.6 9.4 8.6 L9.4 -7.6 C6.4 -8.6 3 -8.4 0 -6.6Z" fill="#b91c1c"/><path d="M0 -6 C-2.8 -7.6 -6 -7.8 -8.6 -7 L-8.6 7.8 C-6 7 -2.8 7.2 0 8.8Z" fill="#f8fafc"/><path d="M0 -6 C2.8 -7.6 6 -7.8 8.6 -7 L8.6 7.8 C6 7 2.8 7.2 0 8.8Z" fill="#eef2f7"/><path d="M0 -6V8.8" stroke="#cbd5e1" stroke-width=".5"/><path d="M-7.4 -4.6C-5.4 -5.2 -3.4 -5 -1.4 -4.2M-7.4 -2.4C-5.4 -3 -3.4 -2.8 -1.4 -2M-7.4 -.2C-5.4 -.8 -3.4 -.6 -1.4 .2M-7.4 2C-5.4 1.4 -3.4 1.6 -1.4 2.4M-7.4 4.2C-5.4 3.6 -3.4 3.8 -2.6 4.2M1.4 -4.2C3.4 -5 5.4 -5.2 7.4 -4.6M1.4 -2C3.4 -2.8 5.4 -3 7.4 -2.4M1.4 .2C3.4 -.6 5.4 -.8 7.4 -.2M1.4 2.4C3.4 1.6 5.4 1.4 7.4 2M2.6 4.6C4.4 3.8 5.6 3.6 7.4 4.2" stroke="#94a3b8" stroke-width=".42" fill="none" stroke-linecap="round"/></g></g>',   // open, its pages turned towards his face (we see them from beside him)
     phoneup: '<g><rect x="-3.4" y="-.6" width="6.8" height="1.2" rx=".5" fill="#111827"/><rect x="-3" y=".5" width="6" height=".45" fill="#7dd3fc"/><path d="M-3 1L-6 10H6L3 1z" fill="#7dd3fc" opacity=".14"/></g>',   // a phone held over his face, screen down towards him
     spoon: '<g><path d="M0 0l3 9" stroke="#78350f" stroke-width="1.2" stroke-linecap="round"/></g>',
     can: '<g><path d="M-4 -3h7v6h-7z" fill="#22c55e"/><path d="M3 -2l6 -4" stroke="#16a34a" stroke-width="1.4" stroke-linecap="round"/><path d="M-4 -3c-3 0-3 5 0 5" fill="none" stroke="#16a34a" stroke-width="1"/></g>',
@@ -32814,7 +32916,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.15 (v59)';
+var VERSION = '2026.11.15 (v60)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
