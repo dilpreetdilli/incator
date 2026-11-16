@@ -15097,7 +15097,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 if (window.IncApMenu) return;
 var ITEMS = [
     ['themes', 'Themes', 'palette', function (s) { var b = s.querySelector('.theme-card[aria-pressed="true"] .theme-name'); return b ? b.textContent : ''; }],
-    ['fonts', 'Fonts', 'font', function (s) { var b = s.querySelector('.font-card[aria-pressed="true"] .font-name'); if (!b) return ''; var t = ''; b.childNodes.forEach(function (n) { if (n.nodeType === 3) t += n.textContent; }); return t.trim(); }],
+    ['fonts', 'Fonts', 'font', function (s) { var b = s.querySelector('.font-card[aria-pressed="true"] .font-name'); if (!b) return ''; var t = ''; b.childNodes.forEach(function (n) { if (n.nodeType === 3) t += n.textContent; }); var ts = window.IncTextSize ? IncTextSize.get() : 30; return t.trim() + (ts !== 30 ? ' · Text ' + ts + '%' : ''); }],
     ['nav', 'Navigation bar', 'sliders-h', function () { var v = document.getElementById('navglass-val'), n = window.IncNavMore ? IncNavMore.pinned().length : 0, all = n && IncNavMore.isAll && IncNavMore.isAll(); return (n ? (all ? 'All ' + n + ' buttons · ' : n + ' button' + (n === 1 ? '' : 's') + ' + More · ') : '') + (v ? 'glass ' + v.textContent : ''); }],
     ['bubbles', 'Bubbles', 'bubbles', function () { var a = document.getElementById('bub-bg-val'), c = document.getElementById('bub-card-val'); if (window.IncBubbles && IncBubbles.shown && !IncBubbles.shown()) return 'Off'; return a && c ? a.textContent + ' background · ' + c.textContent + ' per card' : ''; }],
     ['opening', 'Opening & sync', 'magic', function () { var v = document.getElementById('burst-delay-val'), t = document.getElementById('sync-screen-toggle'); if (!v || !t) return ''; return 'Logo delay ' + (v.textContent === 'None' ? 'none' : v.textContent) + ' · sync screen ' + (t.classList.contains('active') ? 'on' : 'off'); }]
@@ -29206,6 +29206,114 @@ window.IncNotes = { open: open, close: close, add: add, all: all, unread: unread
 })();
 
 </script>
+<script id="incator-textsize">
+/* Settings > Appearance > Fonts > Text size: 1% to 100%, where 30% is the size IncAtor has always had.
+   Smaller below 30% (down to 85% of today at 1%), bigger above it (up to 1.5 times today at 100%).
+   The whole app grows with the text: the base size every card, button, gap and rounded corner is measured from
+   goes up together, and text set in fixed pixels follows the same factor - so cards get taller and roomier
+   instead of cutting words off. Invoices and quotes keep their real A4 sizes, and Dil's drawings stay as they are.
+   It is a setting like the others, so it follows you to your other devices. */
+(function () {
+'use strict';
+if (window.IncTextSize) return;
+var DEF = 30, root = document.documentElement, base = 0, done = new WeakSet(), cur = null;
+function S() { try { var v = +appSettings.textSize; return v >= 1 && v <= 100 ? Math.round(v) : DEF; } catch (e) { return DEF; } }
+function factor(v) { v = Math.max(1, Math.min(100, +v || DEF)); return v <= DEF ? 0.85 + (v - 1) / (DEF - 1) * 0.15 : 1 + (v - DEF) / (100 - DEF) * 0.5; }
+var SKIP = /\.iv-|#inv-sheet|\.ilm-|\.ilb-|#qz-doc|\.qd-|\.qz-doc|\.qt-|\.hs-|\.zb-|\.ob-|\.wm-scene|#wm-|\.trip-|@page/;
+function fixRules(list) {                                               // text set in fixed pixels follows the same factor
+    for (var i = 0; i < list.length; i++) {
+        var r = list[i];
+        try {
+            if (r.cssRules && !r.selectorText) { fixRules(r.cssRules); continue; }   // inside @media / @supports
+            if (!r.style || !r.selectorText || SKIP.test(r.selectorText)) continue;
+            var fs = r.style.getPropertyValue('font-size');
+            if (!fs || fs.indexOf('var(--ts') >= 0) continue;
+            var m = /^\s*([\d.]+)px\s*$/.exec(fs); if (!m) continue;
+            r.style.setProperty('font-size', 'calc(' + m[1] + 'px * var(--ts, 1))', r.style.getPropertyPriority('font-size'));
+        } catch (e) { /* a rule we cannot read */ }
+    }
+}
+function fixSheets() {
+    Array.prototype.forEach.call(document.styleSheets, function (sh) {
+        try { var o = sh.ownerNode; if (o && done.has(o) && o.__tsLen === sh.cssRules.length) return; fixRules(sh.cssRules); if (o) { done.add(o); o.__tsLen = sh.cssRules.length; } } catch (e) { /* another site's sheet */ }
+    });
+}
+function apply(v) {
+    cur = v == null ? S() : Math.max(1, Math.min(100, Math.round(+v) || DEF));
+    var k = factor(cur);
+    if (!base) { root.style.fontSize = ''; base = parseFloat(getComputedStyle(root).fontSize) || 16; }
+    root.style.setProperty('--ts', String(Math.round(k * 1000) / 1000));
+    root.style.fontSize = k === 1 ? '' : (Math.round(base * k * 100) / 100) + 'px';
+    root.classList.toggle('ts-big', k > 1.15);
+    root.classList.toggle('ts-huge', k > 1.32);
+    paint();
+}
+/* ---- the slider, under the fonts */
+function paint() {
+    var v = cur == null ? S() : cur, r = document.getElementById('ts-range'), b = document.getElementById('ts-val');
+    if (r && document.activeElement !== r) r.value = v;
+    if (b) b.textContent = (r ? +r.value : v) + '%';
+    var rs = document.getElementById('ts-reset'); if (rs) rs.disabled = (r ? +r.value : v) === DEF;
+}
+var saveT = 0;
+function save(v) {
+    clearTimeout(saveT);
+    saveT = setTimeout(function () {
+        try { if (v === DEF) delete appSettings.textSize; else appSettings.textSize = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* storage full */ }
+        try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* ignore */ }
+    }, 350);
+}
+function block() {
+    var d = document.createElement('div'); d.className = 'ts-block'; d.id = 'ts-block';
+    d.innerHTML = '<div class="ts-head"><span><i class="fas fa-font"></i> Text size</span><b id="ts-val">30%</b></div>' +
+        '<div class="ts-row"><span class="ts-a" aria-hidden="true">A</span><input type="range" id="ts-range" min="1" max="100" step="1" value="30" aria-label="Text size, 1 to 100 percent (30 is the usual size)"><span class="ts-a ts-a2" aria-hidden="true">A</span></div>' +
+        '<div class="ts-foot"><small>30% is the usual size. Cards and buttons grow with the text.</small><button type="button" id="ts-reset" class="ts-reset">Reset to 30%</button></div>';
+    var r = d.querySelector('#ts-range');
+    r.addEventListener('input', function () { var v = +r.value; apply(v); document.getElementById('ts-val').textContent = v + '%'; save(v); });
+    r.addEventListener('change', function () { save(+r.value); });
+    d.querySelector('#ts-reset').addEventListener('click', function () { r.value = DEF; apply(DEF); save(DEF); paint(); });
+    return d;
+}
+function mount() {
+    if (document.getElementById('ts-block')) { paint(); return true; }
+    var host = document.querySelector('#ap-menu .ap-item[data-ap="fonts"] .ap-in');
+    if (!host) return false;
+    host.appendChild(block()); paint(); return true;
+}
+var CSS = [
+'.ts-block { margin-top: 14px; padding: 12px 12px 10px; border-radius: 14px; border: 1px solid rgba(148,148,170,.28); background: rgba(148,148,170,.07); }',
+'.ts-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .9rem; font-weight: 600; }',
+'.ts-head i { margin-right: 6px; opacity: .8; } .ts-head b { font-variant-numeric: tabular-nums; font-size: .95rem; }',
+'.ts-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; } .ts-row input { flex: 1 1 auto; min-width: 0; }',
+'.ts-a { font-weight: 700; font-size: .78rem; opacity: .75; } .ts-a2 { font-size: 1.3rem; }',
+'.ts-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }',
+'.ts-foot small { font-size: .74rem; opacity: .65; line-height: 1.35; flex: 1 1 160px; }',
+'.ts-reset { border-radius: 10px; padding: 6px 12px; font-size: .78rem; font-weight: 600; border: 1px solid rgba(148,148,170,.4); background: transparent; color: inherit; }',
+'.ts-reset:disabled { opacity: .4; }',
+/* bigger text: things that were sized for one line may now take two, so let them */
+'html.ts-big .app-btn, html.ts-big .magic-btn, html.ts-big button { white-space: normal; }',
+'html.ts-big .whitespace-nowrap { white-space: normal !important; }',
+'html.ts-big .truncate { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }',
+'html.ts-big #pg-head .ph-s, html.ts-big #pg-head .ph-t { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }',
+/* JobNest: the search icon, Filter & Sort and New Invoice on one line, Select all under them */
+'html.ts-big.si-on #view-page .filter-bar { grid-template-columns: auto repeat(2, minmax(0, 1fr)) !important; }',
+'html.ts-big.si-on #view-page .filter-bar > .si-btn { width: calc(42px * var(--ts, 1)); min-width: calc(42px * var(--ts, 1)); }',
+'html.ts-big.si-on #view-page .filter-bar > #select-all-btn, html.ts-big.si-on #view-page .filter-bar > #sel-actions-btn { grid-column: 1 / -1; }',
+'html.ts-big .si-btn { width: calc(42px * var(--ts, 1)) !important; min-width: calc(42px * var(--ts, 1)) !important; height: calc(42px * var(--ts, 1)) !important; }'
+].join('\n');
+function boot() {
+    var st = document.createElement('style'); st.id = 'incator-textsize-css'; st.textContent = CSS; document.head.appendChild(st);
+    fixSheets(); apply();
+    try { new MutationObserver(function (ms) { var more = ms.some(function (m) { return Array.prototype.some.call(m.addedNodes, function (n) { return n.nodeName === 'STYLE' || n.nodeName === 'LINK'; }); }); if (more) { clearTimeout(boot.t); boot.t = setTimeout(fixSheets, 60); } }).observe(document.head, { childList: true }); } catch (e) { /* ignore */ }
+    var n = 0, t = setInterval(function () { if (mount() || ++n > 240) clearInterval(t); }, 250);
+    setTimeout(fixSheets, 1500); setTimeout(fixSheets, 4000);           // modules that add their looks a little later
+    document.addEventListener('incator:settings-applied', function () { apply(); });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+window.IncTextSize = { apply: apply, factor: factor, get: function () { return cur == null ? S() : cur; }, fix: fixSheets };
+})();
+
+</script>
 <script id="incator-searchicon">
 /* Search bars become a search icon (phone and iPad). Each search sits as a small magnifier on its page's button row
    (JobNest: with Filter & Sort, New Invoice and Select all; Settings: with Arrange sections; Quotes and Projects: in
@@ -32982,7 +33090,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.15 (v61)';
+var VERSION = '2026.11.15 (v62)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
