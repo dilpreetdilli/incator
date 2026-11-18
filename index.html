@@ -5815,7 +5815,7 @@ setTimeout(wrap, 500);
                         <button type="button" class="mh-tile mh-t1" onclick="showPage('view')"><span class="mh-tile-icon"><i class="fas fa-layer-group"></i></span><b>JobNest</b></button>
                         <button type="button" class="mh-tile mh-t2" onclick="showPage('summary')"><span class="mh-tile-icon"><i class="fas fa-chart-bar"></i></span><b>Analytics</b></button>
                         <button type="button" class="mh-tile mh-t3" onclick="showPage('data')"><span class="mh-tile-icon"><i class="fas fa-cloud"></i></span><b>Backup</b></button>
-                        <button type="button" class="mh-tile mh-t4" onclick="showPage('receipts')"><span class="mh-tile-icon"><i class="fas fa-receipt"></i></span><b>SlipVault</b></button>
+                        <button type="button" class="mh-tile mh-t4" id="mh-tile-receipts" onclick="rcHomeTap(event)"><span class="mh-tile-icon"><i class="fas fa-receipt"></i><span class="hc-cam" aria-hidden="true"><i class="fas fa-camera"></i></span></span><b>SlipVault</b></button>
                     </div>
                 </div>
 
@@ -17595,6 +17595,7 @@ const backupPhotosOn = () => sget('receiptBackupPhotos', true) !== false;
 const cropOn = () => sget('rcSmartCrop', true) !== false;                  // Smart Crop: keep only the receipt (on by default)
 const autoCapOn = () => sget('rcAutoCapture', true) !== false;             // Auto Capture: the camera takes the photo when the receipt is steady
 const autoReadOn = () => sget('rcAutoRead', false) === true;
+const lightAfter = () => { const v = +sget('rcLightAfter', 3); return v >= 1 && v <= 15 ? v : 3; };   // Settings > SlipVault: seconds without a photo before the flashlight helps
 const autoLightOn = () => sget('rcAutoLight', false) === true;             // Auto Light: the phone's flashlight comes on by itself when it is too dark to see the receipt               // Auto Read: after Auto Capture takes the photo, start reading it straight away (off by default)
 async function smartCrop(blob) {                                          // never fails: the original comes back when no receipt is found clearly
     if (!cropOn() || !window.IncCrop) return { blob: blob, cropped: false };
@@ -18505,7 +18506,7 @@ function openCamera() {
             else if (!darkTold) { darkTold = true; stEl.textContent = 'Too dark to see the receipt - turn on a light. This phone\'s browser does not let IncAtor use the flashlight.'; }
             return;
         }
-        if (torchOk && autoCapOn() && lookAt && Date.now() - lookAt > 3000 && UI.pages[key].length < MAX_PAGES) setTorch(true, 'help');
+        if (torchOk && autoCapOn() && lookAt && Date.now() - lookAt > lightAfter() * 1000 && UI.pages[key].length < MAX_PAGES) setTorch(true, 'help');
     }
     const paintAuto = () => { const on = autoCapOn(), rd = autoReadOn(), lt = autoLightOn(); lightBtn.classList.toggle('on', lt); lightBtn.setAttribute('aria-checked', String(lt)); autoBtn.classList.toggle('on', on); autoBtn.setAttribute('aria-checked', String(on)); readBtn.classList.toggle('on', rd); readBtn.setAttribute('aria-checked', String(rd)); readBtn.hidden = !on; if (!on) { stEl.textContent = ''; drawBox(null); } };
     function drawBox(box, good) {                                   // the outline of the receipt the camera sees
@@ -20061,6 +20062,8 @@ function injectSettings() {
             <div id="rcs-catlist" class="rc-catlist"></div>
             <div class="rc-catadd"><input id="rcs-catname" class="inv-input" maxlength="40" placeholder="New category, e.g. Training" autocomplete="off"><select id="rcs-catclaim" class="inv-input" aria-label="Tax claim"><option value="1">Claimable</option><option value="0.5">50% claimable</option><option value="0">Not claimable</option><option value="">Ask me</option></select><button type="button" class="app-btn" id="rcs-catadd"><i class="fas fa-plus mr-2"></i>Add</button></div></div>
         <div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-camera"></i></div><div class="setting-content"><h4 class="setting-title">Save receipt photos by default</h4><p class="setting-description">When this is on, every receipt you scan or upload keeps its photo inside IncAtor (never in your phone's gallery). You can still switch it off for a single scan on the Receipts page.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-toggle"><div class="toggle-orb"></div></div></div></div>
+        <div class="setting-item" id="rcs-light-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-bolt"></i></div><div class="setting-content"><h4 class="setting-title">Auto flashlight timing</h4><p class="setting-description">With Auto Light on in the camera, the flashlight comes on to help when no receipt photo has been taken after this many seconds. (When it is too dark, it still comes on straight away.)</p></div></div>
+            <div class="rcs-la"><span class="rcs-la-a">1 s</span><input type="range" id="rcs-lightafter" min="1" max="15" step="1" value="3" aria-label="Seconds before the flashlight comes on"><span class="rcs-la-a">15 s</span><b id="rcs-lightafter-v">3 seconds</b><button type="button" class="app-btn rcs-la-reset" id="rcs-lightafter-reset">Reset to 3</button></div></div>
         <div class="setting-item" id="rcs-quiet-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-eye-slash"></i></div><div class="setting-content"><h4 class="setting-title">Read receipts in the background</h4><p class="setting-description">With this on, the "Reading your receipt" window does not open. A thin line at the bottom shows it is working, and you can keep using IncAtor while it reads. Best together with Auto save receipts.</p></div></div><div class="setting-control"><div class="magic-toggle" id="rcs-quiet" role="switch" tabindex="0" aria-label="Read receipts in the background"><div class="toggle-orb"></div></div></div></div>
         <div class="setting-item" id="rcs-learn-item" style="flex-direction:column;align-items:stretch;"><div class="setting-header"><div class="setting-icon"><i class="fas fa-brain"></i></div><div class="setting-content"><h4 class="setting-title">Learn what I claim</h4><p class="setting-description">After you claim (or mark personal) receipts from the same store, or the same kind of item, a couple of times, IncAtor starts doing it for you on new receipts. They show a <b>Learned</b> tag, and your own choice on a receipt always wins. It also learns how each store prints its dates.</p><p class="setting-description" id="rcs-learn-stats"></p></div><div class="setting-control"><div class="magic-toggle" id="rcs-learn" role="switch" tabindex="0" aria-label="Learn what I claim"><div class="toggle-orb"></div></div></div></div>
             <div><button type="button" class="app-btn" id="rcs-learn-forget"><i class="fas fa-eraser mr-2"></i>Forget what it learned</button></div></div>
@@ -20072,6 +20075,14 @@ function injectSettings() {
         </div>`;
     if (anchor) anchor.insertAdjacentElement('afterend', sec); else page.querySelector('.form-grid, .stunning-form-container').appendChild(sec);
     paintTaxSetting(); paintCatManager();
+    (function () {                                                       // Auto flashlight timing
+        const r = sec.querySelector('#rcs-lightafter'), v = sec.querySelector('#rcs-lightafter-v'), rs = sec.querySelector('#rcs-lightafter-reset');
+        if (!r) return;
+        const paint = n => { v.textContent = n + (n === 1 ? ' second' : ' seconds'); rs.disabled = n === 3; };
+        r.value = lightAfter(); paint(lightAfter());
+        r.addEventListener('input', () => { const n = Math.round(+r.value); paint(n); sset('rcLightAfter', n); });
+        rs.addEventListener('click', () => { r.value = 3; paint(3); sset('rcLightAfter', 3); showToast('The flashlight helps after 3 seconds again', 'info'); });
+    })();
     sec.addEventListener('change', ev => {
         const t = ev.target;
         if (t.name === 'rcs-tm') { setTaxMode(t.value); return; }
@@ -20444,7 +20455,7 @@ window.RcptStore = {
     },
     refresh: renderAll
 };
-window.RcptNav = { inSub: function () { return UI.view !== 'hub' && document.body.getAttribute('data-pg') === 'receipts'; }, hub: function () { setView('hub'); }, summary: function () { showPage('receipts'); setTimeout(openTax, 120); }, view: function (v) { showPage('receipts'); setTimeout(function () { setView(v || 'all'); }, 120); } };
+window.RcptNav = { scan: function () { showPage('receipts'); setTimeout(function () { try { setView('hub'); } catch (e) { /* ignore */ } openCamera(); }, 260); }, inSub: function () { return UI.view !== 'hub' && document.body.getAttribute('data-pg') === 'receipts'; }, hub: function () { setView('hub'); }, summary: function () { showPage('receipts'); setTimeout(openTax, 120); }, view: function (v) { showPage('receipts'); setTimeout(function () { setView(v || 'all'); }, 120); } };
 BIZ.rcpt = { openEditor: openEditor, openTax: openTax, readPages: readPages };
 
 /* ------------------------------------------------------------------ boot ------------------------------------------------------------------ */
@@ -28294,10 +28305,15 @@ function paintButton() {
 var histOpen = false, histDay = null, histAt = 0, histBusy = false;
 function rowHtml(c) {
     var r = c.error ? '<span class="bad">Failed: ' + esc(c.error) + '</span>' : c.found ? '<span class="ok">' + c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found</span>' : '<span>Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '') + '</span>';
-    var who = (c.from || []).map(function (f) { return esc([f.n, f.e].filter(Boolean).join(', ')); }).filter(Boolean);
+    var fl = (c.from || []).filter(function (f) { return f && (f.n || f.e || f.s); });
+    var who = fl.map(function (f, i) {                                   // every email it looked at, each on its own line
+        var top = f.n || f.e || '', sub = [f.n ? f.e : '', f.s ? '\u201c' + f.s + '\u201d' : ''].filter(Boolean).join(' \u00b7 ');
+        return '<span class="wm-fe"><i class="fas fa-envelope"></i><span class="wm-fet"><b>' + (fl.length > 1 ? (i + 1) + '. ' : '') + esc(top) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span></span>';
+    });
+    var more = (c.emails || 0) - fl.length;
     return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? (c.wake ? 'woke up' : 'auto') : 'by hand') + '</em>' + r +
         (c.wake ? '<span class="wm-from"><i class="fas fa-sun"></i> First check of the day: looked back to ' + esc(stamp(c.wake)) + '</span>' : '') +
-        (who.length ? '<span class="wm-from"><i class="fas fa-envelope"></i> ' + who.join('<br>') + '</span>' : '') + '</div>';
+        (who.length ? '<span class="wm-from wm-froms">' + who.join('') + (more > 0 ? '<span class="wm-fe wm-fmore"><i class="fas fa-envelope"></i><span class="wm-fet">and ' + more + ' more email' + (more === 1 ? '' : 's') + ' from ' + (fl.length === 1 ? 'this sender' : 'these senders') + '</span></span>' : '') + '</span>' : '') + '</div>';
 }
 function daySum() {
     var d = status && status.checks_day, list = (status && status.checks) || [];
@@ -28525,6 +28541,10 @@ var css = [
 '.wm-hlist { max-height: 340px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-right: 2px; }',
 '.wm-hist { text-align: left; margin-top: 12px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 8px; } .wm-hh { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .6; margin-bottom: 4px; }',
 '.wm-hr .wm-from { grid-column: 1 / -1; font-size: .74rem; opacity: .8; margin-top: -2px; overflow-wrap: anywhere; } .wm-hr .wm-from i { opacity: .6; margin-right: 3px; }',
+'.wm-hr .wm-froms { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }',
+'.wm-hr .wm-fe { display: flex; align-items: flex-start; gap: 6px; padding: 5px 8px; border-radius: 9px; background: rgba(148,148,170,.1); }',
+'.wm-hr .wm-fe > i { margin-top: 2px; } .wm-hr .wm-fet { min-width: 0; } .wm-hr .wm-fet b { display: block; font-weight: 600; } .wm-hr .wm-fet small { display: block; opacity: .8; }',
+'.wm-hr .wm-fmore { background: transparent; padding-top: 0; font-style: italic; }',
 '.wm-hr { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; font-size: .78rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); } .wm-hr time { white-space: nowrap; opacity: .85; } .wm-hr em { font-style: normal; font-size: .68rem; opacity: .55; } .wm-hr .ok { font-weight: 600; } .wm-hr .bad { color: #f87171; }',
 'html.lm .wm-autorow { border-color: rgba(29,23,51,.12); background: rgba(29,23,51,.03); } html.lm .wm-hist, html.lm .wm-hr { border-color: rgba(29,23,51,.08); } html.lm .wm-hr .bad { color: #b91c1c; }',
 '#wm-live { margin-top: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); text-align: left; } .wm-lh { display: flex; align-items: center; gap: 8px; } .wm-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: .84rem; } .wm-ev { margin: 6px 0 4px 18px; font-size: .8rem; color: rgba(255,255,255,.8); }',
@@ -33090,7 +33110,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.15 (v62)';
+var VERSION = '2026.11.18 (v63)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33102,6 +33122,31 @@ if (!put()) document.addEventListener('DOMContentLoaded', put);
 window.IncVersion = VERSION;
 })();
 
+</script>
+<script id="incator-hometap">
+/* Home > SlipVault tile on a phone: tap the receipt icon (the top half of the tile) and the camera opens straight away to scan
+   a receipt; tap the name "SlipVault" (the bottom half) and SlipVault opens as usual. The computer's Home cards are unchanged. */
+(function () {
+    'use strict';
+    window.rcHomeTap = function (e) {
+        var tile = (e && e.currentTarget) || document.getElementById('mh-tile-receipts');
+        var name = tile && tile.querySelector('b');
+        var y = e && typeof e.clientY === 'number' && (e.clientX || e.clientY) ? e.clientY : null;   // a keyboard "click" has no point: open SlipVault
+        if (name && y !== null && y < name.getBoundingClientRect().top - 2 && window.RcptNav && RcptNav.scan) { RcptNav.scan(); return; }
+        showPage('receipts');
+    };
+    var st = document.createElement('style'); st.id = 'incator-hometap-css';
+    st.textContent = [
+        '#mh-tile-receipts .mh-tile-icon { position: relative; }',
+        '#mh-tile-receipts .hc-cam { position: absolute; right: -6px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; background: #fff; color: #111; box-shadow: 0 1px 5px rgba(0,0,0,.35); }',
+        'html[data-theme="sleek"] #mh-tile-receipts .hc-cam { background: var(--sk-fg, #111); color: var(--sk-bg, #fff); }',
+        '.rcs-la { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px 10px; margin-top: 10px; }',
+        '.rcs-la input { width: 100%; } .rcs-la-a { font-size: .72rem; opacity: .65; }',
+        '.rcs-la b { grid-column: 1 / 3; font-size: .9rem; } .rcs-la-reset { justify-self: end; padding: 6px 12px !important; font-size: .78rem !important; }',
+        '.rcs-la-reset:disabled { opacity: .45; }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
 </script>
 </body>
 </html>
