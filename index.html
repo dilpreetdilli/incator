@@ -7156,8 +7156,13 @@ setTimeout(wrap, 500);
                             </div>
                             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px;">
                                 <button type="button" class="app-btn" onclick="IncAtorCloud.backupNow(true)"><i class="fas fa-cloud mr-2"></i> Back up now</button>
+                                <button type="button" class="app-btn" id="gd-restore-btn" onclick="IncAtorCloud.restoreLatest()"><i class="fas fa-download mr-2"></i> Restore Backup</button>
                                 <button type="button" class="app-btn" onclick="IncAtorCloud.openHistory()"><i class="fas fa-undo-alt mr-2"></i> Backup history</button>
                                 <button type="button" class="app-btn" onclick="IncAtorCloud.signOut()"><i class="fas fa-log-out mr-2"></i> Sign out</button>
+                            </div>
+                            <div class="gdl" id="gd-log">
+                                <button type="button" class="gdl-head" id="gdl-head" aria-expanded="false" aria-controls="gdl-body"><span class="gdl-ic"><i class="fas fa-calendar-alt"></i></span><span class="gdl-tt"><b>Last 30 days of backups</b><small id="gdl-sum">Tap to see every backup</small></span><i class="fas fa-chevron-down gdl-chev" aria-hidden="true"></i></button>
+                                <div class="gdl-body" id="gdl-body" hidden></div>
                             </div>
                         </div>
 
@@ -7235,7 +7240,7 @@ setTimeout(wrap, 500);
                                 </div>
                             </div>
                             
-                            <p class="text-gray-300 mb-4 text-sm">Delete all your income entries. They wait in the Trash first, so you can still restore them before the countdown runs out.</p>
+                            <p class="text-gray-300 mb-4 text-sm">Delete every bit of data in IncAtor: jobs, quotes, projects, receipts, photos, the Trash and work order drafts, on all your devices. You choose whether your settings go back to the defaults too. Your backup files in Google Drive are kept, so Restore Backup can bring it all back.</p>
                             
                             <button onclick="clearAllData()" class="magic-btn secondary-magic w-full text-left" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px;">
                                 <div class="btn-bg-effect"></div>
@@ -8008,7 +8013,7 @@ async function ensureFolder(token) {
 function parseFile(f) {
     var p = f.appProperties || {};
     return { id: f.id, name: f.name, createdTime: f.createdTime, size: parseInt(f.size, 10) || 0, gen: parseInt(p.gen, 10) || 0,
-             n: parseInt(p.n, 10), t: parseInt(p.t, 10) || 0, h: p.h || '', dev: p.dev || '' };
+             n: parseInt(p.n, 10), t: parseInt(p.t, 10) || 0, h: p.h || '', dev: p.dev || '', why: p.why || '' };
 }
 async function listBackups(token, folderId, sub) {
     var q = "'" + folderId + "' in parents and trashed=false and appProperties has { key='acct' and value='" + sub + "' }";
@@ -8078,7 +8083,7 @@ async function performBackup(opts) {
         var bytes = new TextEncoder().encode(json).length;
         var boundary = 'incator' + Math.random().toString(36).slice(2);
         var metadata = { name: 'IncAtor-Backup_' + stamp(new Date()) + '_g' + gen + '.json', parents: [folderId], mimeType: 'application/json',
-                         appProperties: { acct: sess.sub, gen: String(gen), n: String(local.entries.length), t: String(Date.now()), h: obj.checksum, dev: deviceId(), sch: '1' } };
+                         appProperties: { acct: sess.sub, gen: String(gen), n: String(local.entries.length), t: String(Date.now()), h: obj.checksum, dev: deviceId(), sch: '1', why: String(opts.reason || 'change').slice(0, 20) } };
         var body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + '\r\n--' + boundary +
                    '\r\nContent-Type: application/json\r\n\r\n' + json + '\r\n--' + boundary + '--';
         var up = await rawFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,appProperties', {
@@ -8095,6 +8100,8 @@ async function performBackup(opts) {
         var after = await listBackups(token, folderId, sess.sub);
         var dup = after.filter(function (f) { return f.gen === gen && f.id !== created.id && f.dev !== deviceId(); });
         if (dup.length) { writeMeta({ baseGen: gen - 1 }); throw ConflictError('Another device saved at the same time', { duplicate: true }); }
+        logAdd({ g: gen, at: obj.savedAt, n: local.entries.length, dev: deviceId(), why: opts.reason || 'change', id: created.id, size: bytes });
+        logMerge(after);
         await prune(token, after);
         return { uploaded: true, gen: gen, name: metadata.name };
     });
@@ -8159,18 +8166,19 @@ async function runBackup(o) {
     var result = null;
     try {
         if (!navigator.onLine) throw NetError('offline');
-        result = await performBackup({ allowEmpty: !!o.allowEmpty });
+        result = await performBackup({ allowEmpty: !!o.allowEmpty, force: !!o.scheduled, reason: o.manual ? 'manual' : o.scheduled ? 'scheduled' : 'change' });
         Cloud.retryIdx = 0; Cloud.autoMerges = 0; Cloud.pendingSince = 0;
         setStatus('ok', '');
         setTimeout(photosChanged, 800);
         if (o.manual) toast(result.uploaded ? 'Backed up to Google Drive' : 'Google Drive already has your latest data', 'success');
+        try { if (window.IncBackupLog) IncBackupLog.paint(); } catch (e2) { /* optional */ }
     } catch (e) {
         result = { error: e };
         if (is(e, 'NetError') || (is(e, 'ApiError') && e.retry)) {
             setStatus('offline', 'Offline - will retry automatically');
             var wait = CFG.RETRY_MS[Math.min(Cloud.retryIdx++, CFG.RETRY_MS.length - 1)];
             clearTimeout(Cloud.timer);
-            Cloud.timer = setTimeout(function () { runBackup({ auto: true }); }, wait);
+            Cloud.timer = setTimeout(function () { runBackup({ auto: true, scheduled: !!o.scheduled }); }, wait);
             if (o.manual) toast('No connection - the backup will retry automatically', 'info');
         } else if (is(e, 'AuthError') || is(e, 'WrongAccountError')) {
             setStatus('needs-auth', 'Google Drive is reconnecting in the background');
@@ -8219,10 +8227,15 @@ async function decide(sess, cloud) {
         return localHas || cEmpty ? { kind: 'local-newer', lh: lh } : { kind: 'local-empty', lh: lh };
     }
     if (c.gen > meta.baseGen) {
-        if (!dirty) return cEmpty && localHas ? { kind: 'cloud-empty', lh: lh } : { kind: 'cloud-newer', lh: lh };
+        if (!dirty) return cEmpty && localHas && !wipedSince(c, meta) ? { kind: 'cloud-empty', lh: lh } : { kind: 'cloud-newer', lh: lh };
         return { kind: 'conflict', lh: lh };
     }
     return localHas ? { kind: 'local-newer', behind: true, lh: lh } : { kind: 'cloud-newer', lh: lh };
+}
+function wipedSince(c, meta) {                             // Danger Zone > Delete Everything was used on another device after this one last synced
+    var w = c && c.backup && c.backup.data && c.backup.data.settings && c.backup.data.settings.wipedAt;
+    if (c && c.file && c.file.why === 'wipe') return true;
+    return !!w && new Date(w).getTime() > (new Date((meta && meta.lastBackupAt) || 0).getTime() || 0);
 }
 function sideBox(title, count, label, when, extra) {
     return '<div class="ic-box"><b>' + esc(title) + '</b>' + count + ' job' + (count === 1 ? '' : 's') + '<br>' + esc(label) + ' ' + esc(when ? fmtTime(when) : 'unknown') + (extra ? '<br>' + esc(extra) : '') + '</div>';
@@ -8461,8 +8474,8 @@ async function bootstrap() {
     if (setupMode) { setStatus('local', 'Local mode (Google login not set up)'); Cloud.booted = true; return; }
     var sess = readSession();
     if (!sess) { document.documentElement.classList.remove('inc-pre'); showGate(); Cloud.booted = true; return; }
-    var screenOn = syncScreenOn();
-    if (screenOn) overlay(stepsHtml(sess.email)); else enterApp();        // default: open the app at once, sync in the background
+    var screenOn = false;                                                 // opening always syncs with Google Drive in the background
+    enterApp();        // default: open the app at once, sync in the background
     var out;
     try { out = await recover(sess); }
     catch (e) {
@@ -8636,7 +8649,7 @@ async function pullIn(c) {
         saveRecovery('before merging changes from another device', local);
         writeLocal(m.entries, m.settings, m.quotes, m.projects, m.receipts, m.extra);
         writeMeta({ baseGen: c.gen, syncedHash: '', syncedEntriesHash: '', localChangedAt: nowIso() });
-        try { await performBackup({}); } catch (e) { /* sent on the next try, after the restart */ }
+        try { await performBackup({ reason: 'merge' }); } catch (e) { /* sent on the next try, after the restart */ }
     }
     try { sessionStorage.setItem('incator:restored', JSON.stringify({ at: Date.now(), n: (merged ? readLocal() : c.backup.data).entries.length, live: true, merged: merged })); sessionStorage.setItem('incator:quietBoot', '1'); } catch (e) { /* ignore */ }
     icReload(merged ? 'synced: merged with changes from another device' : 'synced: changes from another device', 0);
@@ -8760,7 +8773,7 @@ async function openHistory() {
                     saveRecovery('before restoring version ' + f.gen, readLocal());
                     writeLocal(d.backup.data.entries, d.backup.data.settings || readLocal().settings, d.backup.data.quotes, d.backup.data.projects, d.backup.data.receipts, d.backup.data.extra);
                     writeMeta({ baseGen: files[0].gen, syncedHash: '', syncedEntriesHash: '' });
-                    var r = await performBackup({ force: true }).catch(function (e) { return { error: e }; });
+                    var r = await performBackup({ force: true, reason: 'restore' }).catch(function (e) { return { error: e }; });
                     try { sessionStorage.setItem('incator:restored', JSON.stringify({ at: Date.now(), n: d.backup.data.entries.length })); } catch (e) { /* ignore */ }
                     icReload('restored a version from Backup history', 0);
                 } catch (e) { toast('Restore failed: ' + (e.message || 'error'), 'error'); b.disabled = false; }
@@ -8899,10 +8912,168 @@ async function photoRemove(fileId) {
 function photosChanged() { try { if (window.RcptStore && RcptStore.syncPhotos) RcptStore.syncPhotos(); } catch (e) { /* receipts module not loaded */ } }
 window.addEventListener('online', function () { setTimeout(photosChanged, 1500); });
 
+/* ---------- Data Management > Google Drive Backup: the last 30 days of backups, timed backups, Restore Backup ----------
+   Every backup made by any of your devices is written down here (date, time, why, which device). Lines older than 30 days
+   are removed by themselves; the newest 30 days are always kept. The list is read from Google Drive too, so backups made on
+   your other devices show up as well. */
+var LOG_DAYS = 30, EVERY_MS = 4 * 3600000;                                 // at least 6 backups a day: one every 4 hours at the most
+function logKey() { var p = pfx(); return p === null ? null : p + 'backupLog'; }
+function logRead() { var k = logKey(); if (!k) return []; try { var a = JSON.parse(LS.getItem(k) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function logWrite(list) {
+    var k = logKey(); if (!k) return [];
+    var cut = Date.now() - LOG_DAYS * 86400000, seen = {};
+    list = list.filter(function (x) { var t = new Date(x && x.at).getTime(); if (!x || !isFinite(t) || t < cut) return false; var id = x.g + '|' + (x.dev || ''); if (seen[id]) return false; seen[id] = 1; return true; })
+        .sort(function (a, b) { return new Date(b.at) - new Date(a.at); }).slice(0, 4000);
+    try { LS.setItem(k, JSON.stringify(list)); } catch (e) { /* storage full: the list is a convenience */ }
+    try { if (window.IncBackupLog) IncBackupLog.paint(); } catch (e) { /* optional */ }
+    return list;
+}
+function logAdd(x) { var l = logRead(); l.unshift(x); return logWrite(l); }
+function logMerge(files) {                                                 // Drive's file list fills in backups made by your other devices
+    var l = logRead(), by = {};
+    l.forEach(function (x) { by[x.g + '|' + (x.dev || '')] = x; });
+    (files || []).forEach(function (f) {
+        if (!f || !f.gen) return;
+        var at = f.t ? new Date(f.t).toISOString() : f.createdTime, k = f.gen + '|' + (f.dev || ''), o = by[k];
+        if (o) { o.id = f.id; if (!o.why && f.why) o.why = f.why; if (!o.size) o.size = f.size; }
+        else { o = { g: f.gen, at: at, n: f.n, dev: f.dev, why: f.why || '', id: f.id, size: f.size }; l.push(o); by[k] = o; }
+    });
+    var ids = {}; (files || []).forEach(function (f) { ids[f.id] = 1; });
+    if (files) l.forEach(function (x) { x.inDrive = !!(x.id && ids[x.id]); });
+    return logWrite(l);
+}
+async function logRefresh() {
+    var sess = readSession(); if (setupMode || !sess) return logRead();
+    return withToken(async function (token) { var folderId = await ensureFolder(token); return logMerge(await listBackups(token, folderId, sess.sub)); });
+}
+function lastAnyBackup() {                                                 // the newest backup made by any of your devices
+    var t = 0; try { var m = readMeta(); t = new Date(m.lastBackupAt || 0).getTime() || 0; } catch (e) { /* ignore */ }
+    var l = logRead(); if (l.length) t = Math.max(t, new Date(l[0].at).getTime() || 0);
+    return t;
+}
+function timedBackup(why) {
+    if (setupMode || !Cloud.ready || Cloud.paused || Cloud.uploading || !navigator.onLine || window.__incSyncReload || !readSession()) return;
+    if (Date.now() - lastAnyBackup() < EVERY_MS) return;
+    runBackup({ auto: true, scheduled: true });
+}
+setInterval(function () { timedBackup('every minute check'); }, 60000);
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { timedBackup('opened again'); }, 4000); });
+(function waitBoot() { if (Cloud.booted) { setTimeout(function () { timedBackup('opened'); }, 5000); return; } setTimeout(waitBoot, 1000); })();
+
+async function restoreFromDrive(fileId) {
+    if (setupMode) { toast('Google login is not set up yet - see the setup guide.', 'info'); return; }
+    var sess = readSession(); if (!sess) { toast('Sign in with Google first', 'error'); return; }
+    if (!navigator.onLine) { toast('You appear to be offline. Connect to the internet and try again.', 'error'); return; }
+    try { if (window.IncWait) IncWait.show('restore', 'Reading Google Drive...'); } catch (e) { /* optional */ }
+    var token, files, f = null, d = null;
+    try {
+        token = await getToken({ interactive: true });
+        var folderId = await ensureFolder(token);
+        files = await listBackups(token, folderId, sess.sub);
+        logMerge(files);
+        var pick = fileId ? files.filter(function (x) { return x.id === fileId; }) : files.slice(0, 15);
+        for (var i = 0; i < pick.length; i++) { var t = await downloadBackup(token, pick[i], sess); if (t.ok) { f = pick[i]; d = t; break; } }
+    } catch (e) {
+        try { if (window.IncWait) IncWait.hide('restore'); } catch (e2) { /* optional */ }
+        toast(is(e, 'NetError') ? 'You appear to be offline.' : 'Could not read Google Drive: ' + (e.message || 'error'), 'error'); return;
+    }
+    try { if (window.IncWait) IncWait.hide('restore'); } catch (e) { /* optional */ }
+    if (!files || !files.length) { await dialog({ title: 'No backups yet', html: '<p>There are no IncAtor backups in your Google Drive yet.</p>', actions: [{ id: 'ok', label: 'OK', kind: 'primary' }] }); return; }
+    if (!f) { toast(fileId ? 'That backup file is no longer in Google Drive, or it is damaged' : 'The newest backup files are damaged and cannot be restored', 'error'); return; }
+    var B = d.backup.data || {}, cnt = function (a) { return Array.isArray(a) ? a.length : 0; };
+    var older = !fileId && f.id !== files[0].id ? '<p style="font-size:.8rem;opacity:.75">The very newest file could not be read, so this is the newest one that can.</p>' : '';
+    var emptyNote = cnt(B.entries) === 0 && files.some(function (x) { return isFinite(x.n) && x.n > 0; }) ? '<p style="font-size:.82rem;color:#fbbf24">This backup has no jobs. Older backups with jobs are in the Last 30 days list and in Backup history.</p>' : '';
+    var ok = await dialog({ title: fileId ? 'Restore this backup?' : 'Restore your latest backup?', html:
+        '<p>Bring back your data from the Google Drive backup of <b>' + esc(fmtTime(f.t ? new Date(f.t).toISOString() : f.createdTime)) + '</b>:</p>' +
+        '<p style="margin:8px 0 10px;line-height:1.7"><b>' + cnt(B.entries) + '</b> jobs · <b>' + cnt(B.quotes) + '</b> quotes · <b>' + cnt(B.projects) + '</b> projects · <b>' + cnt(B.receipts) + '</b> receipts</p>' + older + emptyNote +
+        '<p style="font-size:.8rem;opacity:.75">It replaces what is on this device now, and your other devices get it too. A safety copy of this device\'s data is kept first, and every backup stays in Google Drive.</p>',
+        actions: [{ id: 'no', label: 'Cancel' }, { id: 'yes', label: 'Restore', kind: 'primary' }] });
+    if (ok !== 'yes') return;
+    try { if (window.IncWait) IncWait.show('restore', 'Restoring your backup...'); } catch (e) { /* optional */ }
+    try {
+        saveRecovery('before Restore Backup (' + fmtTime(f.createdTime) + ')', readLocal());
+        window.__incSyncReload = true; clearTimeout(Cloud.timer);
+        writeLocal(B.entries || [], B.settings || readLocal().settings, B.quotes || [], B.projects || [], B.receipts || [], B.extra || { trash: [] });
+        writeMeta({ baseGen: files[0].gen, syncedHash: '', syncedEntriesHash: '', localChangedAt: nowIso() });
+        await performBackup({ force: true, reason: 'restore' }).catch(function () { /* sent after the restart */ });
+        try { sessionStorage.setItem('incator:restored', JSON.stringify({ at: Date.now(), n: cnt(B.entries) })); } catch (e) { /* ignore */ }
+        icReload('Restore Backup: ' + f.name, 0);
+    } catch (e) {
+        window.__incSyncReload = false;
+        try { if (window.IncWait) IncWait.hide('restore'); } catch (e2) { /* optional */ }
+        toast('Restore failed: ' + (e.message || 'error'), 'error');
+    }
+}
+
+/* ---------- Data Management > Danger Zone > Delete Everything ----------
+   Removes every job, quote, project, receipt (and its photos), job photo, the Trash and work order drafts from IncAtor, on
+   this device and on your other devices. First it asks whether your settings should go back to the defaults too.
+   Before anything is removed, the latest data is backed up to Google Drive, and the backup files there are kept,
+   so Restore Backup or Backup history can still bring it all back. */
+var WIPE_KEYS = ['incomeEntries', 'incomeQuotes', 'incomeProjects', 'incomeReceipts', 'incomeTrash', 'jobPhotos', 'jobPhotoDel', 'jobVaultDel', 'rcptPhotoDel', 'woDrafts', 'celebrated', 'quoteNudgeSnooze', 'recovery', 'jobNs', 'rcptNs'];
+function defaultSettings(old) {
+    old = old || {};
+    var d = { userName: 'Dilpreet', currency: '$', dateFormat: 'LONG', autoSave: false, confirmations: true, floatingEffects: true, notifications: true,
+              splitByPercent: false, splitPercent: 50, defaultAddress: '', gstRate: 5 };
+    ['nextInvoiceNumber', 'nextQuoteNumber', 'nextProjectNumber'].forEach(function (k) { if (old[k] != null) d[k] = old[k]; });   // numbers keep counting, so none ever repeat
+    return d;
+}
+async function wipeFlow() {
+    var L = readLocal(), cnt = function (a) { return (a || []).length; }, photos = 0;
+    try { var jp = L.extra && L.extra.jobPhotos && L.extra.jobPhotos.jobs; if (jp) Object.keys(jp).forEach(function (k) { photos += (jp[k] || []).length || 0; }); } catch (e) { /* ignore */ }
+    var cloudOn = !setupMode && !!readSession();
+    var a = await dialog({ title: 'Delete everything?', html:
+        '<p>This deletes <b>all</b> of your data in IncAtor:</p><p style="margin:8px 0 10px;line-height:1.7"><b>' + cnt(L.entries) + '</b> jobs · <b>' + cnt(L.quotes) + '</b> quotes · <b>' + cnt(L.projects) + '</b> projects · <b>' + cnt(L.receipts) + '</b> receipts and their photos' + (photos ? ' · <b>' + photos + '</b> job photos' : ' · job photos') + ' · the Trash · work order drafts</p>' +
+        (cloudOn ? '<p style="font-size:.82rem;opacity:.8">It is deleted on this device and on your other devices. Your backup files in Google Drive are kept: the latest data is backed up first, so <b>Restore Backup</b> can bring it all back.</p>'
+                 : '<p style="font-size:.82rem;color:#fca5a5">You are not signed in with Google, so there is no Google Drive backup to bring it back from.</p>'),
+        actions: [{ id: 'no', label: 'Cancel' }, { id: 'go', label: 'Continue', kind: 'danger' }] });
+    if (a !== 'go') return;
+    var b = await dialog({ title: 'Reset settings to default too?', html:
+        '<p><b>Reset to default</b>: your invoice details, logo, theme, fonts, SlipVault and other settings go back to how they were when IncAtor was new. Invoice, quote and project numbers keep counting, so none ever repeat.</p>' +
+        '<p style="margin-top:8px"><b>Keep my settings</b>: only your data is deleted; every setting stays as it is.</p>',
+        actions: [{ id: 'no', label: 'Cancel' }, { id: 'keep', label: 'Keep my settings', kind: 'primary' }, { id: 'reset', label: 'Reset to default', kind: 'danger' }] });
+    if (b !== 'keep' && b !== 'reset') return;
+    return wipeAll(b === 'reset');
+}
+async function wipeAll(resetSettings) {
+    var p = pfx(); if (p === null) return;
+    var cloudOn = !setupMode && !!readSession() && Cloud.ready && navigator.onLine;
+    try { if (window.IncWait) IncWait.show('wipe', cloudOn ? 'Backing up first...' : 'Deleting...'); } catch (e) { /* optional */ }
+    if (cloudOn) { try { clearTimeout(Cloud.timer); await performBackup({ reason: 'before-wipe' }); } catch (e) { /* Drive already holds every earlier backup */ } }
+    try { if (window.IncWait) IncWait.show('wipe', 'Deleting everything...'); } catch (e) { /* optional */ }
+    window.__incSyncReload = true; clearTimeout(Cloud.timer); Cloud.paused = true;            // nothing on the page may write its old data back now
+    var dbs = [];
+    try { var jn = LS.getItem(p + 'jobNs'), rn = LS.getItem(p + 'rcptNs'); if (jn) dbs.push('incator-jobphotos-' + jn, 'incator-jobvault-' + jn); if (rn) dbs.push('incator-photos-' + rn); } catch (e) { /* ignore */ }
+    WIPE_KEYS.forEach(function (k) { try { LS.removeItem(p + k); } catch (e) { /* ignore */ } });
+    var oldS = readLocal().settings || {}, newS = resetSettings ? defaultSettings(oldS) : Object.assign({}, oldS);
+    newS.wipedAt = nowIso();                                                // tells your other devices this empty copy is on purpose
+    try { LS.setItem(p + 'appSettings', stampSettings(p, JSON.stringify(newS))); } catch (e) { /* ignore */ }
+    writeLocal([], undefined, [], [], [], { trash: [] });
+    try { var q = JSON.parse(LS.getItem('incator:dbDel') || '[]'); LS.setItem('incator:dbDel', JSON.stringify(q.concat(dbs).slice(-30))); } catch (e) { /* ignore */ }
+    dbs.forEach(function (n) { try { indexedDB.deleteDatabase(n); } catch (e) { /* finished after the restart */ } });
+    var synced = false;
+    if (cloudOn) {
+        try {
+            Cloud.allowEmptyUntil = Date.now() + 120000;
+            var sess = readSession();
+            await withToken(async function (token) { var folderId = await ensureFolder(token); var f = await listBackups(token, folderId, sess.sub); writeMeta({ baseGen: f.length ? f[0].gen : 0, syncedHash: '', syncedEntriesHash: '', localChangedAt: nowIso() }); });
+            await performBackup({ force: true, allowEmpty: true, reason: 'wipe' }); synced = true;
+        } catch (e) { synced = false; }
+    }
+    try { sessionStorage.setItem('incator:wiped', JSON.stringify({ at: Date.now(), reset: !!resetSettings, synced: synced, cloud: !setupMode && !!readSession() })); } catch (e) { /* ignore */ }
+    icReload('Danger Zone: deleted everything' + (resetSettings ? ' and reset settings' : ''), 200);
+}
+(function sweepDbs() {                                                     // finish deleting old photo stores left from Delete Everything
+    try { var q = JSON.parse(LS.getItem('incator:dbDel') || '[]'); if (!q.length) return; LS.removeItem('incator:dbDel'); q.forEach(function (n) { try { indexedDB.deleteDatabase(n); } catch (e) { /* ignore */ } }); } catch (e) { /* ignore */ }
+})();
+
 window.IncAtorCloud = {
     setupMode: setupMode,
     photos: { ready: photosReady, list: photoList, upload: photoUpload, download: photoDownload, remove: photoRemove },
     files: { list: driveFiles, remove: driveDelete, prune: drivePrune, protect: PROTECT, keep: keepFiles },
+    backupLog: { list: logRead, refresh: logRefresh, days: LOG_DAYS, everyHours: EVERY_MS / 3600000, last: lastAnyBackup },
+    restoreLatest: function () { return restoreFromDrive(null); }, restoreFile: restoreFromDrive,
+    wipe: wipeFlow, wipeNow: wipeAll, cloudReady: function () { return !!Cloud.ready; },
     token: function () { if (setupMode || !readSession()) return Promise.resolve(null); return withToken(function (t) { return t; }).catch(function () { return null; }); },   // for your IncAtor server: proves who you are
     tokenTap: function () { if (setupMode || !readSession()) return Promise.resolve(null); return getTokenFromTap().catch(function () { return null; }); },   // same, from a tap: Google may need you to confirm it is you
     session: readSession,
@@ -8925,7 +9096,7 @@ window.IncAtorCloud = {
 
 /* Start immediately: lock the screen before the app can show anything */
 if (!setupMode) {
-    if (readSession()) { if (syncScreenOn()) overlay(stepsHtml(readSession().email)); }   // signed in: the app opens at once unless the sync screen is turned on
+    if (readSession()) { /* signed in: the app opens at once and syncs with Google Drive in the background */ }
     else overlay('<div class="ic-card">' + logoHtml() + '<div class="ic-spin" style="margin:10px auto"></div></div>');
 }
 bootstrap();
@@ -33110,7 +33281,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.18 (v63)';
+var VERSION = '2026.11.19 (v64)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33144,6 +33315,88 @@ window.IncVersion = VERSION;
         '.rcs-la input { width: 100%; } .rcs-la-a { font-size: .72rem; opacity: .65; }',
         '.rcs-la b { grid-column: 1 / 3; font-size: .9rem; } .rcs-la-reset { justify-self: end; padding: 6px 12px !important; font-size: .78rem !important; }',
         '.rcs-la-reset:disabled { opacity: .45; }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-backuplog">
+/* Data Management > Google Drive Backup > Last 30 days of backups (opens and closes), Restore Backup,
+   and Danger Zone > Delete Everything (everything, on all your devices; asks about the settings). */
+(function () {
+    'use strict';
+    var open = false, loading = false, loadedAt = 0;
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function C() { return window.IncAtorCloud && IncAtorCloud.backupLog ? IncAtorCloud : null; }
+    var WHY = { change: ['fa-edit', 'You changed something'], scheduled: ['fa-clock', 'Timed backup (every 4 hours)'], manual: ['fa-cloud', 'Back up now'],
+                restore: ['fa-undo-alt', 'Restored a backup'], merge: ['fa-sync-alt', 'Joined changes from two devices'], 'before-wipe': ['fa-save', 'Safety copy before Delete Everything'],
+                wipe: ['fa-trash-alt', 'After Delete Everything'] };
+    function myDev() { try { return localStorage.getItem('incator:deviceId') || ''; } catch (e) { return ''; } }
+    function dayLabel(d) {
+        var t = new Date(); t.setHours(0, 0, 0, 0); var x = new Date(d); x.setHours(0, 0, 0, 0); var diff = Math.round((t - x) / 86400000);
+        return diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : x.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: x.getFullYear() === t.getFullYear() ? undefined : 'numeric' });
+    }
+    function tm(d) { return new Date(d).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+    function ago(t) { var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; }
+    function paint() {
+        var c = C(), sum = document.getElementById('gdl-sum'), body = document.getElementById('gdl-body'), head = document.getElementById('gdl-head');
+        if (!sum || !body || !c) return;
+        var list = c.backupLog.list(), last = c.backupLog.last();
+        sum.textContent = (list.length ? list.length + ' backup' + (list.length === 1 ? '' : 's') + ' in the last 30 days' : 'No backups in the last 30 days yet') + (last ? ' · last ' + ago(last) : '');
+        head.setAttribute('aria-expanded', open ? 'true' : 'false'); body.hidden = !open; document.getElementById('gd-log').classList.toggle('open', open);
+        if (!open) return;
+        var me = myDev(), html = '<p class="gdl-note">IncAtor backs up by itself as soon as anything changes, and at least every 4 hours while it is open. Lines older than 30 days are removed by themselves.</p>';
+        if (loading && !list.length) html += '<p class="gdl-msg">Reading Google Drive...</p>';
+        else if (!list.length) html += '<p class="gdl-msg">No backups yet.' + (c.setupMode ? ' Sign in with Google to back up to Google Drive.' : '') + '</p>';
+        var day = '';
+        list.forEach(function (x) {
+            var dl = dayLabel(x.at);
+            if (dl !== day) { day = dl; html += '<div class="gdl-day">' + esc(dl) + '</div>'; }
+            var w = WHY[x.why] || ['fa-cloud', 'Backup'];
+            html += '<div class="gdl-row"><span class="gdl-ri"><i class="fas ' + w[0] + '"></i></span><span class="gdl-rt"><b>' + esc(tm(x.at)) + '</b><small>' + esc(w[1]) +
+                ' · ' + (x.dev && x.dev === me ? 'this device' : 'another device') + (isFinite(x.n) && x.n !== null ? ' · ' + x.n + ' job' + (x.n === 1 ? '' : 's') : '') + '</small></span>' +
+                (x.id && x.inDrive !== false ? '<button type="button" class="gdl-rs" data-gdl-restore="' + esc(x.id) + '" title="Restore this backup"><i class="fas fa-undo-alt"></i><span>Restore</span></button>' : '<span class="gdl-gone" title="This file was removed from Google Drive by Auto Delete; only its date and time are listed">Time only</span>') + '</div>';
+        });
+        body.innerHTML = html;
+    }
+    function refresh(force) {
+        var c = C(); if (!c || loading || c.setupMode) return;
+        if (!force && Date.now() - loadedAt < 60000) return;
+        loading = true; paint();
+        c.backupLog.refresh().then(function () { loadedAt = Date.now(); }, function () { /* offline: the list on this device is shown */ }).then(function () { loading = false; paint(); });
+    }
+    document.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('#gdl-head')) { open = !open; paint(); if (open) refresh(false); return; }
+        var r = e.target.closest && e.target.closest('[data-gdl-restore]'); if (r && C()) { C().restoreFile(r.getAttribute('data-gdl-restore')); }
+    });
+    window.IncBackupLog = { paint: paint, refresh: refresh, isOpen: function () { return open; } };
+    setInterval(function () { var pg = document.body.getAttribute('data-pg'); if (pg === 'data') paint(); }, 30000);
+    var n = 0, tm0 = setInterval(function () { if (C() && document.getElementById('gdl-sum')) { paint(); clearInterval(tm0); } else if (++n > 80) clearInterval(tm0); }, 250);
+
+    /* Danger Zone > Delete Everything */
+    function wire() { if (!C()) return false; window.clearAllData = function () { return C().wipe(); }; return true; }
+    var m = 0, tm1 = setInterval(function () { if (wire() || ++m > 80) clearInterval(tm1); }, 250);
+    var w = null; try { w = JSON.parse(sessionStorage.getItem('incator:wiped') || 'null'); sessionStorage.removeItem('incator:wiped'); } catch (e) { w = null; }
+    if (w && Date.now() - w.at < 120000) setTimeout(function () {
+        try { showToast('Everything was deleted' + (w.reset ? ' and your settings are back to the defaults' : '') + (w.cloud ? (w.synced ? '. Your other devices follow in a moment.' : '. Go online so your other devices delete it too.') : '.'), w.cloud && !w.synced ? 'info' : 'success'); } catch (e) { /* ignore */ }
+    }, 1800);
+
+    var st = document.createElement('style'); st.id = 'incator-backuplog-css';
+    st.textContent = [
+        '#sync-screen-item { display: none !important; }',
+        '.gdl { margin-top: 14px; border: 1px solid rgba(56,189,248,.28); border-radius: 16px; overflow: hidden; background: rgba(56,189,248,.05); }',
+        '.gdl-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; }',
+        '.gdl-ic { width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: rgba(56,189,248,.2); color: #38bdf8; }',
+        '.gdl-tt { flex: 1; min-width: 0; } .gdl-tt b { display: block; font-size: .95rem; } .gdl-tt small { display: block; font-size: .74rem; opacity: .7; }',
+        '.gdl-chev { opacity: .7; transition: transform .25s; } .gdl.open .gdl-chev { transform: rotate(180deg); }',
+        '.gdl-body { padding: 0 12px 12px; max-height: 60vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }',
+        '.gdl-note { font-size: .74rem; opacity: .65; margin: 0 2px 6px; } .gdl-msg { padding: 14px 4px; text-align: center; opacity: .7; font-size: .85rem; }',
+        '.gdl-day { position: sticky; top: 0; z-index: 1; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .85; padding: 10px 4px 5px; background: inherit; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }',
+        '.gdl-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-top: 1px solid rgba(255,255,255,.06); }',
+        '.gdl-ri { width: 26px; text-align: center; opacity: .7; flex: 0 0 auto; } .gdl-rt { flex: 1; min-width: 0; } .gdl-rt b { display: block; font-size: .88rem; } .gdl-rt small { display: block; font-size: .72rem; opacity: .65; }',
+        '.gdl-rs { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(56,189,248,.45); background: rgba(56,189,248,.1); color: inherit; font-size: .74rem; cursor: pointer; }',
+        '.gdl-gone { flex: 0 0 auto; font-size: .68rem; opacity: .5; padding: 0 4px; }',
+        'html.lm .gdl-row { border-color: rgba(29,23,51,.08); }',
+        'html[data-theme="sleek"] .gdl { border-color: var(--sk-line); background: transparent; } html[data-theme="sleek"] .gdl-ic { background: var(--sk-raise); color: var(--sk-fg); } html[data-theme="sleek"] .gdl-rs { border-color: var(--sk-line); background: var(--sk-raise); } html[data-theme="sleek"] .gdl-row { border-color: var(--sk-line); }'
     ].join('\n');
     document.head.appendChild(st);
 })();
