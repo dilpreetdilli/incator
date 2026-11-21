@@ -7196,6 +7196,7 @@ setTimeout(wrap, 500);
                                 <button type="button" class="app-btn" onclick="IncAtorCloud.openHistory()"><i class="fas fa-undo-alt mr-2"></i> Backup history</button>
                                 <button type="button" class="app-btn" onclick="IncAtorCloud.signOut()"><i class="fas fa-log-out mr-2"></i> Sign out</button>
                             </div>
+                            <div class="gd-auto" id="gd-auto"></div>
                             <div class="gdl" id="gd-log">
                                 <button type="button" class="gdl-head" id="gdl-head" aria-expanded="false" aria-controls="gdl-body"><span class="gdl-ic"><i class="fas fa-calendar-alt"></i></span><span class="gdl-tt"><b>Last 30 days of backups</b><small id="gdl-sum">Tap to see every backup</small></span><i class="fas fa-chevron-down gdl-chev" aria-hidden="true"></i></button>
                                 <div class="gdl-body" id="gdl-body" hidden></div>
@@ -7997,12 +7998,39 @@ async function acceptTokenResponse(resp) {
     storeToken(t);
     return t.token;
 }
+/* Fully automatic backups: after one "Make backups fully automatic" tap, your IncAtor server keeps a Google Drive pass
+   and hands this device a fresh one whenever it is needed, so iPhone never has to ask Google again every hour. */
+var AUTO_KEY = 'incator:driveAuto', srvTokP = null;
+function autoOn() { try { return LS.getItem(AUTO_KEY) === '1'; } catch (e) { return false; } }
+function setAuto(v) { try { if (v) LS.setItem(AUTO_KEY, '1'); else LS.removeItem(AUTO_KEY); } catch (e) { /* ignore */ } }
+function serverToken() {
+    var M = window.IncMail;
+    if (!M || !M.api || !M.hasPass || !M.hasPass()) return Promise.resolve(null);   // only with the server's remembered pass (never loops back to Google)
+    if (srvTokP) return srvTokP;
+    srvTokP = M.api('/drive/token', {}).then(function (j) {
+        srvTokP = null;
+        if (!j || j.connected === false) { setAuto(false); return null; }
+        var sess = readSession();
+        if (!j.access_token || !sess || (j.sub && String(j.sub) !== String(sess.sub))) return null;
+        setAuto(true);
+        var t = { token: j.access_token, exp: Date.now() + Math.max(300, (parseInt(j.expires_in, 10) || 3600)) * 1000, sub: sess.sub, srv: 1 };
+        storeToken(t);
+        return t.token;
+    }, function () { srvTokP = null; return null; });
+    return srvTokP;
+}
 async function getToken(o) {
     o = o || {};
     var c = cachedToken();
     if (c) return c;
-    await loadGsi();
-    return acceptTokenResponse(await requestToken(!!o.interactive));
+    if (!o.interactive && autoOn()) { var s1 = await serverToken(); if (s1) return s1; }
+    try {
+        await loadGsi();
+        return await acceptTokenResponse(await requestToken(!!o.interactive));
+    } catch (e) {
+        if (!o.interactive && !autoOn() && !is(e, 'WrongAccountError')) { var s2 = await serverToken(); if (s2) return s2; }   // turned on from another device
+        throw e;
+    }
 }
 function getTokenFromTap() {                                         // call straight from a tap: the Google window must open in the same step
     var c = cachedToken();
@@ -9129,6 +9157,7 @@ window.IncAtorCloud = {
     token: function () { if (setupMode || !readSession()) return Promise.resolve(null); return withToken(function (t) { return t; }).catch(function () { return null; }); },   // for your IncAtor server: proves who you are
     tokenTap: function () { if (setupMode || !readSession()) return Promise.resolve(null); return getTokenFromTap().catch(function () { return null; }); },   // same, from a tap: Google may need you to confirm it is you
     session: readSession,
+    auto: { on: autoOn, set: setAuto, token: serverToken, clear: clearToken },
     ui: { overlay: overlay, hide: hideOverlay },
     status: function () { return Cloud.status; },
     backupNow: backupNow,
@@ -12617,7 +12646,7 @@ bootstrap();
             return f;
         }
         function placeSel() {
-            const fab = document.getElementById('sel-fab'), dock = document.getElementById('sel-dock'), nav = document.querySelector('.floating-nav');
+            const fab = document.getElementById('sel-fab'), dock = document.getElementById('sel-dock'), nav = window.incNavBox ? incNavBox() : document.querySelector('.floating-nav');
             const ab = document.getElementById('sel-actions-btn');
             if (dock && ab && ab.offsetParent) {                                                          // the Actions button in the toolbar: open just below it (or above, near the bottom)
                 const b = ab.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, dw = Math.min(372, vw - 16);
@@ -12626,8 +12655,8 @@ bootstrap();
                 dock.style.maxHeight = Math.max(160, Math.round(vh - b.bottom - 20)) + 'px'; dock.style.overflowY = 'auto';
                 return;
             }
-            if (!fab || !dock || !nav) return;
-            const r = nav.getBoundingClientRect(), vw = window.innerWidth, S = 54;
+            if (!fab || !dock) return;
+            const r = nav ? nav.getBoundingClientRect() : { top: window.innerHeight - 20, right: window.innerWidth, height: 0 }, vw = window.innerWidth, S = 54;   // no bottom bar (Regular's sidebar on computers): the corner
             let left, top;
             if (vw - r.right >= S + 18) { left = r.right + 10; top = r.top + (r.height - S) / 2; }          // beside the nav bar (room on the right)
             else { left = vw - S - 12; top = r.top - S - 12; }                                                // narrow phones: nav bar fills the width, so sit just above its right end
@@ -15440,12 +15469,12 @@ function fitHome() {
     if (!hp) return;
     var on = hp.classList.contains('active');
     if (!on) { document.body.classList.remove('home-fit', 'on-home'); hp.style.removeProperty('--home-h'); return; }
-    var nav = document.querySelector('.floating-nav');
+    var nav = window.incNavBox ? incNavBox() : document.querySelector('.floating-nav');
     document.body.classList.add('on-home', 'home-fit');
     window.scrollTo(0, 0);
     var prev = hp.style.transform;
     var top = hp.getBoundingClientRect().top - (parseFloat((getComputedStyle(hp).transform.match(/matrix\(([^)]+)\)/) || [0, '1,0,0,1,0,0'])[1].split(',')[5]) || 0);
-    var navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight - 90;
+    var navTop = nav ? nav.getBoundingClientRect().top - (nav.id === 'rg-nav' ? 14 : 0) : window.innerHeight - 90;   // Regular's tab bar: room for its round Create button
     var app = document.getElementById('app');
     var z = (app && parseFloat(getComputedStyle(app).zoom)) || 1;
     var h = Math.floor((navTop - (window.innerWidth <= 340 ? 18 : 10) - top) / z);     // the slimmer nav on very narrow phones needs a little more air above it
@@ -24542,7 +24571,7 @@ function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, 
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /#inv-sheet|#wm-home|\.hs-|#wm-trip|\.tr-|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|html\.lm|html\.glass-op/;
+var SKIP = /#inv-sheet|#wm-home|\.hs-|#wm-trip|\.tr-|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|#bk-warn|\.bkw-|#rg-|\.rg[nsmp]-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
 function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
@@ -24658,7 +24687,7 @@ function fixInline(el) {
     }
     el.setAttribute('data-lm-done', el.getAttribute('style'));
 }
-var SKIPEL = '#inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
+var SKIPEL = '#bk-warn, #rg-orbpick, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
 function fixAll(root) { Array.prototype.forEach.call((root || document).querySelectorAll('[style]'), fixInline); }
 function undoInline() { Array.prototype.forEach.call(document.querySelectorAll('[' + ORIG + ']'), function (el) { el.setAttribute('style', el.getAttribute(ORIG)); el.removeAttribute(ORIG); el.removeAttribute('data-lm-done'); }); }
 var mo = null, hm = null, t = 0;
@@ -26354,7 +26383,7 @@ window.IncRoof = { calc: calc, job: () => job, len: len, lenInfo: lenInfo, plan:
 'use strict';
 if (window.IncInk) return;
 var BRIGHT = { alpine: 1, canyon: 1, seaset: 1, hills: 1, partly: 1, overcast: 1, rooftops: 1, snowpines: 1, waves: 1, pines: 1 };
-var SKIP = '.bgx, #inc-sky, #inc-stars, .floating-bubbles, .rc-cam, .jp-view, .pn-ed, .bgpv, .sky-pv, .cel-layer, svg, canvas, .lgx-lens, .ie-scene';
+var SKIP = '#bk-warn, #rg-orbpick, #rg-menu, #rg-side, #rg-nav, .bgx, #inc-sky, #inc-stars, .floating-bubbles, .rc-cam, .jp-view, .pn-ed, .bgpv, .sky-pv, .cel-layer, svg, canvas, .lgx-lens, .ie-scene';
 function bgKey() { try { return window.IncSky ? IncSky.mode() : 'theme'; } catch (e) { return 'theme'; } }
 function active() { var k = bgKey(); return !!k && k !== 'theme' && !document.documentElement.classList.contains('lm'); }
 function bright() { return active() && !!BRIGHT[bgKey()]; }
@@ -28961,7 +28990,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     try { new MutationObserver(function () { if (onAdd()) tick(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
     setInterval(function () { if (onAdd()) { if (Date.now() - statusAt > 60000) tick(); else paintButton(); } }, 30000);
 })();
-window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, repaint: function () { paintButton(); }, sleeperHtml: function () { return SLEEPER; }, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
+window.IncMail = { api: api, forget: dropSess, hasPass: function () { return !!sess(); }, signIn: async function () { var t = window.IncAtorCloud && IncAtorCloud.tokenTap ? await IncAtorCloud.tokenTap() : null; if (!t || !server()) return false; await fetchSess({ 'x-google-token': t }); return !!sess(); }, refresh: refresh, status: function () { return status; }, pullDrafts: pullDrafts, openDrafts: openDrafts, checkNow: checkNow, reconnect: reconnect, enablePush: enablePush, pushJobs: pushJobs, askStart: askStart, repaint: function () { paintButton(); }, sleeperHtml: function () { return SLEEPER; }, schedule: function () { return sched(); }, sleeping: sleeping, wakeAt: wakeAt, saveSchedule: function (s) { saveSched(core().schedClean(s), true); } };
 })();
 
 </script>
@@ -29577,7 +29606,7 @@ if (window.IncTextSize) return;
 var DEF = 30, root = document.documentElement, base = 0, done = new WeakSet(), cur = null;
 function S() { try { var v = +appSettings.textSize; return v >= 1 && v <= 100 ? Math.round(v) : DEF; } catch (e) { return DEF; } }
 function factor(v) { v = Math.max(1, Math.min(100, +v || DEF)); return v <= DEF ? 0.85 + (v - 1) / (DEF - 1) * 0.15 : 1 + (v - DEF) / (100 - DEF) * 0.5; }
-var SKIP = /\.iv-|#inv-sheet|\.ilm-|\.ilb-|#qz-doc|\.qd-|\.qz-doc|\.qt-|\.hs-|\.zb-|\.ob-|\.wm-scene|#wm-|\.trip-|@page/;
+var SKIP = /#bk-warn|\.bkw-|#rg-|\.rg[nsmp]-|\.iv-|#inv-sheet|\.ilm-|\.ilb-|#qz-doc|\.qd-|\.qz-doc|\.qt-|\.hs-|\.zb-|\.ob-|\.wm-scene|#wm-|\.trip-|@page/;
 function fixRules(list) {                                               // text set in fixed pixels follows the same factor
     for (var i = 0; i < list.length; i++) {
         var r = list[i];
@@ -33448,7 +33477,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.21 (v69)';
+var VERSION = '2026.11.21 (v70)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33593,7 +33622,7 @@ window.IncVersion = VERSION;
         if (!b) { b = document.createElement('div'); b.id = 'bk-warn'; b.setAttribute('role', 'alert'); document.body.appendChild(b); }
         var last = st.h.last ? new Date(st.h.last).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (' + ago(st.h.last) + ')' : 'never';
         b.innerHTML = '<span class="bkw-ic"><i class="fas fa-exclamation-triangle"></i></span><div class="bkw-tx"><b>Backups have stopped</b><small>Last backup: ' + esc(last) + '</small><small>Reason: ' + esc(st.why) + '</small>' +
-            '<div class="bkw-bt"><button type="button" data-bkw="now"><i class="fas fa-cloud"></i> Back up now</button><button type="button" data-bkw="open">Details</button></div></div>' +
+            '<div class="bkw-bt">' + (window.IncDriveAuto && IncDriveAuto.offer() ? '<button type="button" data-bkw="auto"><i class="fas fa-magic"></i> Make backups automatic</button>' : '') + '<button type="button" data-bkw="now"><i class="fas fa-cloud"></i> Back up now</button><button type="button" data-bkw="open">Details</button></div></div>' +
             '<button type="button" class="bkw-x" data-bkw="x" aria-label="Hide for now"><i class="fas fa-times"></i></button>';
         requestAnimationFrame(function () { b.classList.add('show'); });
         return st;
@@ -33603,6 +33632,7 @@ window.IncVersion = VERSION;
         var a = t.getAttribute('data-bkw');
         if (a === 'x') { hiddenUntil = Date.now() + 3 * 3600000; hide(); }
         else if (a === 'open') { hide(); hiddenUntil = Date.now() + 600000; try { showPage('data'); } catch (e2) { /* ignore */ } }
+        else if (a === 'auto') { try { IncDriveAuto.connect(); } catch (e4) { /* ignore */ } }
         else if (a === 'now') { t.disabled = true; t.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Backing up...'; try { IncAtorCloud.backupNow(true); } catch (e3) { /* ignore */ } setTimeout(function () { check(); }, 9000); }
     });
     /* Tell the IncAtor server how backups are going, so it can send a notification when they stop, even while IncAtor is closed. */
@@ -33648,6 +33678,387 @@ window.IncVersion = VERSION;
         '.bkw-bt button:first-child { background: #fff; color: #991b1b; border-color: #fff; }',
         '.bkw-x { background: none; border: 0; color: #fff; opacity: .8; padding: 2px 4px; font-size: 1rem; }',
         '@media (min-width: 701px) { #bk-warn { top: 18px; } }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-driveauto">
+/* Fully automatic Google Drive backups (Data Management > Google Drive Backup, and the "Backups have stopped" banner).
+   On iPhone Google's quick sign-in runs out about every hour and can only be renewed with a tap, so backups could stop.
+   One tap on "Make backups fully automatic" lets your IncAtor server keep a Google Drive pass (sealed, for your own
+   Google account only, and only for the files IncAtor made). From then on every device gets fresh Drive access from the
+   server by itself: backups, the 30-day history and syncing keep running without asking. Turn it off any time. */
+(function () {
+    'use strict';
+    function C() { return window.IncAtorCloud; }
+    function M() { return window.IncMail; }
+    function toast(m, k) { try { showToast(m, k || 'info'); } catch (e) { /* ignore */ } }
+    function on() { var c = C(); return !!(c && c.auto && c.auto.on()); }
+    function hasServer() { var m = M(); return !!(m && m.api && m.hasPass && m.hasPass()); }
+    function srvAddr() { try { return String(appSettings.woServer || '').trim(); } catch (e) { return ''; } }
+    var busy = false, checkedAt = 0;
+    async function connect() {
+        if (busy) return; busy = true;
+        try {
+            if (!srvAddr()) { toast('First add your IncAtor server address: Settings > Work Orders > Work Order Email Integration.', 'error'); try { showPage('settings'); } catch (e) { /* ignore */ } return; }
+            if (!hasServer() && !(M() && M().signIn && await M().signIn())) { toast('Google did not confirm it is you. Please try again.', 'error'); return; }   // one Google tap, remembered 180 days
+            var sess = C() && C().session ? C().session() : null;
+            var j = await M().api('/drive/connect', { back: location.href.replace(/#.*$/, ''), email: sess && sess.email || '' });
+            if (j && j.url) { toast('Opening Google... choose ' + (sess && sess.email || 'your account') + ' and tap Allow.', 'info'); setTimeout(function () { location.href = j.url; }, 400); }
+        } catch (e) {
+            toast(/Unknown|404|not found/i.test(e && e.message || '') ? 'Your IncAtor server needs the new update first (see the steps from Claude).' : (e && e.message) || 'Could not start. Please try again.', 'error');
+        } finally { busy = false; }
+    }
+    async function turnOff() {
+        if (!confirmOff()) return;
+        try { await M().api('/drive/disconnect', {}); } catch (e) { /* ignore */ }
+        try { C().auto.set(false); C().auto.clear(); } catch (e) { /* ignore */ }
+        toast('Fully automatic backups are off. Google may ask you to reconnect now and then.', 'info'); paint();
+    }
+    function confirmOff() { try { return window.confirm('Turn off fully automatic backups? Google will ask you to reconnect now and then, and backups pause until you do.'); } catch (e) { return true; } }
+    function status() {                                               // ask the server once in a while (turned on from another device?)
+        if (!hasServer() || Date.now() - checkedAt < 6 * 3600000) return;
+        checkedAt = Date.now();
+        M().api('/drive/status').then(function (j) { if (j && C() && C().auto) { C().auto.set(!!j.connected); paint(); } }, function () { /* old server: nothing to do */ checkedAt = Date.now(); });
+    }
+    function paint() {
+        var el = document.getElementById('gd-auto'); if (!el) return;
+        if (!C() || C().setupMode) { el.innerHTML = ''; return; }
+        if (on()) {
+            el.className = 'gd-auto is-on';
+            el.innerHTML = '<span class="gda-ic"><i class="fas fa-infinity"></i></span><div class="gda-tx"><b>Fully automatic backups are on</b><small>Your IncAtor server renews Google Drive access by itself, so backups never wait for a tap.</small></div><button type="button" class="gda-off" data-gda="off">Turn off</button>';
+        } else {
+            el.className = 'gd-auto';
+            el.innerHTML = '<span class="gda-ic"><i class="fas fa-magic"></i></span><div class="gda-tx"><b>Make backups fully automatic</b><small>Google asks again about every hour on iPhone, so backups can stop. Do this once and IncAtor keeps backing up by itself on all your devices.</small>' +
+                (srvAddr() ? '' : '<small class="gda-need">Needs your IncAtor server address (Settings > Work Orders).</small>') + '</div><button type="button" class="gda-go" data-gda="go">Turn on</button>';
+        }
+    }
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-gda]'); if (!b) return;
+        if (b.getAttribute('data-gda') === 'go') connect(); else turnOff();
+    });
+    /* back from Google */
+    function back() {
+        var m = /#drive=([a-z]+)/.exec(location.hash || ''); if (!m) return;
+        try { history.replaceState(null, '', location.href.replace(/#.*$/, '')); } catch (e) { /* ignore */ }
+        var k = m[1];
+        var msg = { connected: 'Done! Backups are now fully automatic.', cancelled: 'Not turned on: Google was cancelled.', wrongaccount: 'Please choose the same Google account you use for IncAtor and try again.',
+                    noscope: 'Please tick the Google Drive box on Google\'s screen and try again.', norefresh: 'Google did not give a lasting pass. Please try again.', expired: 'That took too long. Please try again.' }[k] || 'Google did not finish. Please try again.';
+        setTimeout(function () {
+            toast(msg, k === 'connected' ? 'success' : 'error');
+            if (k === 'connected') {
+                try { C().auto.set(true); C().auto.clear(); } catch (e) { /* ignore */ }
+                checkedAt = Date.now();
+                setTimeout(function () { try { C().backupNow(false); } catch (e) { /* ignore */ } }, 1500);
+            }
+            try { showPage('data'); } catch (e) { /* ignore */ }
+            paint();
+        }, 1200);
+    }
+    back();
+    window.addEventListener('hashchange', back);
+    window.IncDriveAuto = { connect: connect, off: turnOff, paint: paint, on: on, offer: function () { return !on() && !!(C() && !C().setupMode); } };
+    setTimeout(function () { paint(); status(); }, 2500);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') status(); });
+    new MutationObserver(function () { var el = document.getElementById('gd-auto'); if (el && !el.firstChild) paint(); }).observe(document.body, { childList: true });
+    var st = document.createElement('style'); st.id = 'incator-driveauto-css';
+    st.textContent = [
+        '.gd-auto { display: flex; gap: 12px; align-items: center; margin-top: 14px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(56,189,248,.35); background: rgba(56,189,248,.08); }',
+        '.gd-auto.is-on { border-color: rgba(34,197,94,.4); background: rgba(34,197,94,.08); }',
+        '.gda-ic { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: rgba(56,189,248,.18); color: #38bdf8; }',
+        '.gd-auto.is-on .gda-ic { background: rgba(34,197,94,.18); color: #22c55e; }',
+        '.gda-tx { flex: 1; min-width: 0; } .gda-tx b { display: block; font-size: .92rem; } .gda-tx small { display: block; font-size: .76rem; opacity: .78; margin-top: 2px; line-height: 1.35; } .gda-tx .gda-need { color: #f59e0b; opacity: 1; }',
+        '.gda-go, .gda-off { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: .82rem; border: 1px solid transparent; cursor: pointer; }',
+        '.gda-go { background: #0ea5e9; color: #fff; } .gda-off { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }',
+        '@media (max-width: 520px) { .gd-auto { flex-wrap: wrap; } .gda-go, .gda-off { margin-left: 48px; } }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-regular-nav">
+/* Regular theme, v70: its own navigation and look (nothing like Sleek's floating bar).
+   - Phones: a full-width tab bar docked at the bottom with names under the icons: your first two pages, a big round
+     Create Job button in the middle, Ask (your assistant), and Menu (every page as colour app icons, and your account).
+   - Computers: a sidebar on the left like a regular website: the IncAtor logo, Create New Job, every page with its
+     colour icon and name, and your assistant at the bottom.
+   - Home: choose the IncAtor logo colour and the colour of its rings, just under the logo ("Logo colours").
+   - Page titles: large and left-aligned, the system font of your phone or computer.
+   The pages and every feature are exactly the same as in the other themes. */
+(function () {
+    'use strict';
+    var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', roofcalc: 'RoofVision', account: 'Account' };
+    var SHORT = { projects: 'Quotes', data: 'Backup', summary: 'Analytics', receipts: 'SlipVault', roofcalc: 'RoofVision' };
+    var ICON = { home: 'home', add: 'plus', view: 'layer-group', projects: 'briefcase', receipts: 'receipt', summary: 'chart-bar', data: 'cloud', settings: 'cog', trash: 'trash' };
+    var TINT = { home: '#2563eb', add: '#2563eb', view: '#4f46e5', projects: '#e8710a', receipts: '#16a34a', summary: '#0284c7', data: '#0891b2', settings: '#6b7280', trash: '#dc2626', roofcalc: '#92643a' };
+    var LOGO = [['Blue', '#2563eb'], ['Purple', '#7c3aed'], ['Pink', '#db2777'], ['Red', '#dc2626'], ['Orange', '#ea580c'], ['Gold', '#ca8a04'], ['Green', '#16a34a'], ['Teal', '#0d9488'], ['Sky', '#0284c7'], ['Graphite', '#374151']];
+    var RING = [['Rainbow', 'rainbow'], ['Same as logo', 'match']].concat(LOGO).concat([['No rings', 'none']]);
+    function esc(x) { return String(x == null ? '' : x).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function on() { return document.documentElement.getAttribute('data-theme') === 'regular'; }
+    function desk() { return window.innerWidth > 700; }
+    function S() { try { return appSettings || {}; } catch (e) { return {}; } }
+    function saveS(k, v) { try { appSettings[k] = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ } }
+    function cur() { return document.body.getAttribute('data-pg') || 'home'; }
+    function go(pg) { closeMenu(); try { if (window.IncAsk && IncAsk.isOpen && IncAsk.isOpen()) IncAsk.close(); } catch (e) { /* ignore */ } try { navigateToPage(pg); } catch (e) { try { showPage(pg); } catch (e2) { /* ignore */ } } }
+    function pages() {                                               // every page the app has, in your Settings > Appearance > Navigation bar order
+        var o = [];
+        try { if (window.IncNavMore && IncNavMore.order) o = IncNavMore.order().slice(); } catch (e) { /* ignore */ }
+        Array.prototype.forEach.call(document.querySelectorAll('.floating-nav .nav-item[data-page]'), function (it) { var k = it.getAttribute('data-page'); if (o.indexOf(k) < 0) o.push(k); });
+        if (!o.length) o = ['home', 'add', 'view', 'projects', 'receipts', 'summary', 'data', 'settings', 'trash'];
+        return o.filter(function (k) { return !!document.getElementById(k + '-page') || k === 'home'; });
+    }
+    function nm(k) { var it = document.querySelector('.floating-nav .nav-item[data-page="' + k + '"]'); return NAMES[k] || (it && it.getAttribute('data-tooltip')) || k; }
+    function ic(k) { var it = document.querySelector('.floating-nav .nav-item[data-page="' + k + '"] i'); var m = it && /fa-([a-z0-9-]+)/.exec(it.className); return ICON[k] || (m ? m[1] : 'circle'); }
+    function askOn() { return S().askFab !== false && !!window.IncAsk; }
+    function askName() { try { return (window.IncAsk && IncAsk.name && IncAsk.name()) || 'Ask IncAtor'; } catch (e) { return 'Ask IncAtor'; } }
+    function trashN() { var b = document.querySelector('.floating-nav .nav-item[data-page="trash"] .nav-badge'); return b ? String(b.textContent || '').trim() : ''; }
+    function acct() { try { return (window.IncAtorCloud && IncAtorCloud.session && IncAtorCloud.session()) || null; } catch (e) { return null; } }
+
+    /* ------------------------------------------------ the logo colours ------------------------------------------------ */
+    function rgb(h) { var m = /^#?([0-9a-f]{6})$/i.exec(h || ''); if (!m) return [37, 99, 235]; var n = parseInt(m[1], 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+    function mix(c, w, t) { return 'rgb(' + c.map(function (v, i) { return Math.round(v + (w[i] - v) * t); }).join(',') + ')'; }
+    function orb() { var o = S().rgOrb || {}; return { logo: /^#[0-9a-f]{6}$/i.test(o.logo || '') ? o.logo : '#2563eb', ring: o.ring || 'rainbow' }; }
+    function paintOrb() {
+        var o = orb(), c = rgb(o.logo), r = document.documentElement.style;
+        r.setProperty('--lg-1', mix(c, [255, 255, 255], 0.72)); r.setProperty('--lg-2', 'rgb(' + c.join(',') + ')'); r.setProperty('--lg-3', mix(c, [0, 0, 0], 0.5)); r.setProperty('--lg-rgb', c.join(','));
+        var ring = o.ring === 'match' ? o.logo : o.ring, img, rc;
+        if (ring === 'rainbow') { img = 'conic-gradient(from 0deg, #8b5cf6, #6366f1, #22d3ee, #ec4899, #8b5cf6)'; rc = '139,92,246'; }
+        else if (ring === 'none') { img = 'none'; rc = '0,0,0'; }
+        else { var k = rgb(ring); img = 'conic-gradient(from 0deg, ' + ring + ', ' + mix(k, [255, 255, 255], 0.55) + ', ' + ring + ', ' + mix(k, [0, 0, 0], 0.35) + ', ' + ring + ')'; rc = k.join(','); }
+        r.setProperty('--rg-ring', img); r.setProperty('--rg-ring-rgb', rc);
+        document.documentElement.classList.toggle('rg-noring', ring === 'none');
+        paintPick();
+    }
+    function pickHtml() {
+        var o = orb();
+        function row(list, key, val) {
+            return list.map(function (x) {
+                var v = x[1], sw = v === 'rainbow' ? 'conic-gradient(#8b5cf6, #6366f1, #22d3ee, #ec4899, #8b5cf6)' : v === 'match' ? o.logo : v === 'none' ? 'transparent' : v;
+                return '<button type="button" class="rgp-sw' + (v === val ? ' on' : '') + (v === 'none' ? ' none' : '') + (v === 'match' ? ' match' : '') + '" data-rgp="' + key + '" data-v="' + v + '" title="' + esc(x[0]) + '" aria-label="' + esc(x[0]) + '" aria-pressed="' + (v === val) + '" style="background:' + sw + '"></button>';
+            }).join('');
+        }
+        return '<div class="rgp-h"><b>Logo colours</b><button type="button" class="rgp-x" data-rgp="close" aria-label="Close"><i class="fas fa-times"></i></button></div>' +
+            '<div class="rgp-l">Logo</div><div class="rgp-row">' + row(LOGO, 'logo', o.logo) + '</div>' +
+            '<div class="rgp-l">Rings</div><div class="rgp-row">' + row(RING, 'ring', o.ring) + '</div>' +
+            '<button type="button" class="rgp-reset" data-rgp="reset">Back to the original colours</button>';
+    }
+    var pickEl = null, pickFor = null;
+    function paintPick() { if (pickEl && pickEl.classList.contains('open')) pickEl.innerHTML = pickHtml(); }
+    function openPick(anchor) {
+        if (!pickEl) { pickEl = document.createElement('div'); pickEl.id = 'rg-orbpick'; pickEl.setAttribute('role', 'dialog'); pickEl.setAttribute('aria-label', 'Logo colours'); document.body.appendChild(pickEl); }
+        if (pickEl.classList.contains('open') && pickFor === anchor) { closePick(); return; }
+        pickFor = anchor; pickEl.innerHTML = pickHtml(); pickEl.classList.add('open');
+        var b = anchor.getBoundingClientRect(), w = Math.min(330, window.innerWidth - 24);
+        pickEl.style.width = w + 'px';
+        pickEl.style.left = Math.round(Math.min(Math.max(12, b.left + b.width / 2 - w / 2), window.innerWidth - w - 12)) + 'px';
+        pickEl.style.top = Math.round(b.bottom + 8) + 'px';
+        anchor.setAttribute('aria-expanded', 'true');
+    }
+    function closePick() { if (pickEl) pickEl.classList.remove('open'); if (pickFor) pickFor.setAttribute('aria-expanded', 'false'); pickFor = null; }
+    function ensureChip() {
+        var w = document.querySelector('#mobile-home .mh-orb-wrap'); if (!w) return;
+        var c = document.getElementById('rg-orbchip');
+        if (!c) {
+            c = document.createElement('button'); c.type = 'button'; c.id = 'rg-orbchip'; c.setAttribute('aria-expanded', 'false');
+            c.innerHTML = '<span class="rgc-dot"></span>Logo colours<i class="fas fa-chevron-down"></i>';
+            w.parentNode.insertBefore(c, w.nextSibling);
+        }
+    }
+
+    /* ------------------------------------------------ phone: the tab bar ------------------------------------------------ */
+    var bar = null, side = null, menu = null, built = '';
+    function tabs() {
+        var o = pages().filter(function (k) { return k !== 'add'; }), left = o.slice(0, 2), right = askOn() ? ['ask'] : o.slice(2, 3);
+        return left.concat(['add']).concat(right).concat(['menu']);
+    }
+    function tabHtml(k) {
+        if (k === 'add') return '<button type="button" class="rgn-t rgn-add" data-rgn="add" aria-label="Create Job"><span class="rgn-plus"><i class="fas fa-plus"></i></span><span class="rgn-l">Create</span></button>';
+        if (k === 'ask') return '<button type="button" class="rgn-t" data-rgn="ask" aria-label="' + esc(askName()) + '"><span class="rgn-i"><i class="fas fa-magic"></i></span><span class="rgn-l">' + esc(askName().replace(/^Ask\s+/i, 'Ask ').split(' ')[0]) + '</span></button>';
+        if (k === 'menu') return '<button type="button" class="rgn-t" data-rgn="menu" aria-label="Menu" aria-expanded="false"><span class="rgn-i"><i class="fas fa-th-large"></i><em class="rgn-dot"></em></span><span class="rgn-l">Menu</span></button>';
+        return '<button type="button" class="rgn-t" data-rgn="' + k + '" aria-label="' + esc(nm(k)) + '"><span class="rgn-i"><i class="fas fa-' + ic(k) + '"></i></span><span class="rgn-l">' + esc(SHORT[k] || nm(k)) + '</span></button>';
+    }
+    function buildBar() {
+        if (!bar) { bar = document.createElement('nav'); bar.id = 'rg-nav'; bar.setAttribute('aria-label', 'Main'); document.body.appendChild(bar); }
+        var t = tabs(), key = t.join(',') + '|' + askName();
+        if (built !== key) { built = key; bar.innerHTML = t.map(tabHtml).join(''); }
+    }
+    /* ------------------------------------------------ computers: the sidebar ------------------------------------------------ */
+    function buildSide() {
+        if (!side) { side = document.createElement('aside'); side.id = 'rg-side'; side.setAttribute('aria-label', 'Main'); document.body.appendChild(side); }
+        var ps = pages().filter(function (k) { return k !== 'add'; }), a = acct();
+        var key = ps.join(',') + '|' + askOn() + askName() + '|' + (a && a.email || '');
+        if (side.dataset.k === key) return; side.dataset.k = key;
+        side.innerHTML = '<div class="rgs-brand"><button type="button" class="rgs-logo" data-rgp="open" aria-label="Logo colours" title="Logo colours"><span class="rgs-orb"><i class="fas fa-coins"></i></span></button><b>IncAtor</b></div>' +
+            '<button type="button" class="rgs-new" data-rgn="add"><i class="fas fa-plus"></i>Create New Job</button>' +
+            '<div class="rgs-list">' + ps.map(function (k) { return '<button type="button" class="rgs-it" data-rgn="' + k + '"><span class="rgs-ic" style="--t:' + (TINT[k] || '#2563eb') + '"><i class="fas fa-' + ic(k) + '"></i></span><span class="rgs-tx">' + esc(nm(k)) + '</span>' + (k === 'trash' ? '<em class="rgs-n"></em>' : '') + '</button>'; }).join('') + '</div>' +
+            '<div class="rgs-foot">' + (askOn() ? '<button type="button" class="rgs-ask" data-rgn="ask"><i class="fas fa-magic"></i><span>' + esc(askName()) + '</span></button>' : '') +
+            '<button type="button" class="rgs-acct" data-rgn="account"><span class="rgs-av">' + esc(((a && (a.name || a.email)) || '?').charAt(0).toUpperCase()) + '</span><span class="rgs-who"><b>' + esc(a && a.name || 'Account') + '</b><small>' + esc(a && a.email || '') + '</small></span></button></div>';
+    }
+    /* ------------------------------------------------ Menu (phones) ------------------------------------------------ */
+    function openMenu() {
+        if (!menu) { menu = document.createElement('div'); menu.id = 'rg-menu'; document.body.appendChild(menu); }
+        var ps = pages().filter(function (k) { return k !== 'add'; }), a = acct(), n = trashN();
+        menu.innerHTML = '<div class="rgm-back" data-rgn="close"></div><div class="rgm-sheet" role="dialog" aria-label="Menu"><div class="rgm-grab"></div>' +
+            '<div class="rgm-grid">' + ps.map(function (k) { return '<button type="button" class="rgm-it' + (k === cur() ? ' on' : '') + '" data-rgn="' + k + '"><span class="rgm-ic" style="background:' + (TINT[k] || '#2563eb') + '"><i class="fas fa-' + ic(k) + '"></i>' + (k === 'trash' && n ? '<em>' + esc(n) + '</em>' : '') + '</span><span>' + esc(nm(k)) + '</span></button>'; }).join('') + '</div>' +
+            '<button type="button" class="rgm-acct" data-rgn="account"><span class="rgs-av">' + esc(((a && (a.name || a.email)) || '?').charAt(0).toUpperCase()) + '</span><span class="rgs-who"><b>' + esc(a && a.name || 'Account') + '</b><small>' + esc(a && a.email || 'Sign-in, devices and sign out') + '</small></span><i class="fas fa-chevron-right"></i></button></div>';
+        requestAnimationFrame(function () { menu.classList.add('open'); });
+        var mb = bar && bar.querySelector('[data-rgn="menu"]'); if (mb) mb.setAttribute('aria-expanded', 'true');
+        wireSwipe(menu.querySelector('.rgm-sheet'));
+    }
+    function closeMenu() { if (menu && menu.classList.contains('open')) { menu.classList.remove('open'); var mb = bar && bar.querySelector('[data-rgn="menu"]'); if (mb) mb.setAttribute('aria-expanded', 'false'); } }
+    function wireSwipe(sh) {                                         // pull the menu down to close it
+        var y0 = null, dy = 0;
+        sh.addEventListener('touchstart', function (e) { y0 = e.touches[0].clientY; dy = 0; sh.style.transition = 'none'; }, { passive: true });
+        sh.addEventListener('touchmove', function (e) { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); sh.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
+        sh.addEventListener('touchend', function () { sh.style.transition = ''; sh.style.transform = ''; if (dy > 70) closeMenu(); y0 = null; });
+    }
+    /* ------------------------------------------------ the active page ------------------------------------------------ */
+    function mark() {
+        var p = cur();
+        [bar, side].forEach(function (box) {
+            if (!box) return;
+            Array.prototype.forEach.call(box.querySelectorAll('[data-rgn]'), function (b) {
+                var k = b.getAttribute('data-rgn'), a = k === p || (k === 'ask' && window.IncAsk && IncAsk.isOpen && IncAsk.isOpen()) || (k === 'menu' && bar && !bar.querySelector('[data-rgn="' + p + '"]') && p !== 'add');
+                if (k === 'ask' && window.IncAsk && IncAsk.isOpen && IncAsk.isOpen()) a = true;
+                b.classList.toggle('on', !!a); if (k !== 'menu' && k !== 'ask' && k !== 'add') b.setAttribute('aria-current', a ? 'page' : 'false');
+            });
+        });
+        var n = trashN(), d = bar && bar.querySelector('.rgn-dot'); if (d) d.classList.toggle('show', !!n);
+        var sn = side && side.querySelector('.rgs-n'); if (sn) sn.textContent = n;
+    }
+    function sync() {
+        var o = on(); document.documentElement.classList.toggle('rg-nav-on', o);
+        if (!o) { closeMenu(); closePick(); return; }
+        buildBar(); buildSide(); ensureChip(); mark();
+    }
+    document.addEventListener('click', function (e) {
+        var t = e.target.closest && e.target.closest('[data-rgn], [data-rgp], #rg-orbchip');
+        if (!t) { if (pickEl && pickEl.classList.contains('open') && !(e.target.closest && e.target.closest('#rg-orbpick'))) closePick(); return; }
+        if (t.id === 'rg-orbchip') { openPick(t); return; }
+        var p = t.getAttribute('data-rgp');
+        if (p) {
+            if (p === 'open') { openPick(t); return; }
+            if (p === 'close') { closePick(); return; }
+            var o = orb();
+            if (p === 'reset') o = { logo: '#2563eb', ring: 'rainbow' };
+            else o[p] = t.getAttribute('data-v');
+            saveS('rgOrb', o); paintOrb(); return;
+        }
+        var k = t.getAttribute('data-rgn');
+        if (k === 'close') { closeMenu(); return; }
+        if (k === 'menu') { if (menu && menu.classList.contains('open')) closeMenu(); else openMenu(); return; }
+        if (k === 'ask') { closeMenu(); try { if (IncAsk.isOpen()) IncAsk.close(); else IncAsk.open(); } catch (er) { /* ignore */ } setTimeout(mark, 60); return; }
+        if (k === 'account') { closeMenu(); try { IncNavMore.account(); } catch (er) { /* ignore */ } return; }
+        go(k);
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenu(); closePick(); } });
+    window.addEventListener('resize', function () { closePick(); });
+    window.addEventListener('scroll', function () { if (pickFor && pickFor.id === 'rg-orbchip') closePick(); }, { passive: true });
+    window.incNavBox = function () {                                   // the bottom bar other parts of IncAtor line up with
+        if (on()) { var n = document.getElementById('rg-nav'); return n && n.offsetHeight ? n : null; }
+        return document.querySelector('.floating-nav');
+    };
+    window.IncRegularNav = { sync: sync, openMenu: openMenu, closeMenu: closeMenu, openPick: function () { var c = document.getElementById('rg-orbchip'); if (c) openPick(c); }, orb: orb, paintOrb: paintOrb, tabs: tabs };
+    function boot() {
+        paintOrb(); sync();
+        new MutationObserver(function () { sync(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        new MutationObserver(function () { closeMenu(); mark(); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] });
+        var lastOrb = JSON.stringify(orb());
+        setInterval(function () { if (!on()) return; sync(); var o = JSON.stringify(orb()); if (o !== lastOrb) { lastOrb = o; paintOrb(); } }, 1500);   // pages added later (RoofVision...), your assistant's name, the Trash count, colours from your other devices
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
+
+    var R = 'html[data-theme="regular"]', X = 'html[data-theme="regular"][data-theme] body:not(#rg-x)';
+    var st = document.createElement('style'); st.id = 'incator-regular-nav-css';
+    st.textContent = [
+        '#rg-nav, #rg-side, #rg-orbchip, #rg-orbpick, #rg-menu { display: none; }',
+        '.fa-th-large { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Crect%20x=%273%27%20y=%273%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3Crect%20x=%2714%27%20y=%273%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3Crect%20x=%273%27%20y=%2714%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3Crect%20x=%2714%27%20y=%2714%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3C/svg%3E"); }',
+        X + ' #rg-side .rgs-ic i, ' + X + ' #rg-menu .rgm-ic i, ' + X + ' #rg-side .rgs-orb i, ' + X + ' .rgn-plus i, ' + X + ' #rg-side .rgs-new i, ' + X + ' #rg-side .rgs-new { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+        X + ' #rg-side .rgs-new { color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; } ' + X + ' #rg-side .rgs-new i { color: var(--rg-on) !important; }',
+        '@media (min-width: 701px) { ' + X + '[data-pg]:not([data-pg="home"]) #main-header { display: none !important; } }',
+        /* ---- the logo you chose (Home) ---- */
+        X + ' .mh-orb:not(.has-logo) { background: radial-gradient(circle at 30% 25%, var(--lg-1), var(--lg-2) 48%, var(--lg-3)) !important; color: #fff !important; box-shadow: 0 0 40px rgba(var(--lg-rgb), .5), inset 0 -8px 16px rgba(0,0,0,.28) !important; }',
+        X + ' .mh-orb i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+        X + ' .mh-ring { background: var(--rg-ring) !important; filter: drop-shadow(0 0 8px rgba(var(--rg-ring-rgb), .5)) !important; }',
+        'html.rg-noring[data-theme="regular"] .mh-ring { display: none !important; }',
+        R + ' #rg-orbchip { display: inline-flex; align-items: center; gap: 7px; margin: -2px auto 8px; padding: 5px 11px 5px 7px; border-radius: 999px; border: 1px solid var(--sk-line2); background: var(--sk-raise); color: var(--sk-mut); font-size: .74rem; font-weight: 600; line-height: 1.2; flex: 0 0 auto; position: relative; z-index: 2; }',
+        R + ' #rg-orbchip i { font-size: .62rem; transition: transform .2s; } ' + R + ' #rg-orbchip[aria-expanded="true"] i { transform: rotate(180deg); }',
+        '#rg-orbchip .rgc-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--lg-2); box-shadow: 0 0 0 2px var(--sk-raise), 0 0 0 3.5px rgba(var(--rg-ring-rgb), .9); }',
+        R + ' #rg-orbpick.open { display: block; position: fixed; z-index: 9600; padding: 12px 14px 14px; border-radius: 18px; background: var(--sk-raise); color: var(--sk-fg); border: 1px solid var(--sk-line2); box-shadow: 0 18px 44px rgba(0,0,0,.22); animation: rgPop .18s ease-out; }',
+        '@keyframes rgPop { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }',
+        '#rg-orbpick .rgp-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; } #rg-orbpick .rgp-h b { font-size: .95rem; }',
+        '#rg-orbpick .rgp-x { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--sk-soft); color: var(--sk-mut); }',
+        '#rg-orbpick .rgp-l { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--sk-mut); margin: 10px 0 6px; }',
+        '#rg-orbpick .rgp-row { display: flex; flex-wrap: wrap; gap: 9px; }',
+        '#rg-orbpick .rgp-sw { width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); position: relative; }',
+        '#rg-orbpick .rgp-sw.on { box-shadow: 0 0 0 2px var(--sk-raise), 0 0 0 4px var(--sk-fg); }',
+        '#rg-orbpick .rgp-sw.on::after { content: "\\2713"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: .8rem; text-shadow: 0 1px 2px rgba(0,0,0,.45); }',
+        '#rg-orbpick .rgp-sw.none { background: var(--sk-raise) !important; box-shadow: inset 0 0 0 1.5px var(--sk-line2); } #rg-orbpick .rgp-sw.none::before { content: ""; position: absolute; left: 50%; top: 4px; bottom: 4px; width: 2px; background: #dc2626; transform: rotate(45deg); }',
+        '#rg-orbpick .rgp-sw.none.on::after { color: var(--sk-fg); text-shadow: none; }',
+        '#rg-orbpick .rgp-sw.match { -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px); mask: radial-gradient(circle, transparent 7px, #000 7.5px); }',
+        '#rg-orbpick .rgp-reset { margin-top: 12px; border: 0; background: none; color: var(--rg-acc); font-weight: 600; font-size: .8rem; padding: 4px 0; }',
+        /* ---- page titles: large, left, system font ---- */
+        [' ', ' button', ' input', ' select', ' textarea'].map(function (x) { return 'html[data-theme="regular"]:not([data-font]) body:not(#rg-x)' + x; }).join(', ') + ' { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }',
+        '@media (max-width: 700px) {',
+        '  ' + R + ' #pg-head .ph-ic { display: none !important; }',
+        '  ' + R + ' #pg-head .ph-t { font-size: 1.85rem !important; font-weight: 800 !important; letter-spacing: -.02em; }',
+        '  ' + R + ' #pg-head .ph-s { font-size: .8rem !important; opacity: 1 !important; color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+        '  ' + R + ' #pg-head.ph-back .ph-t::before { content: "\\2039"; display: inline-block; margin-right: 8px; color: var(--rg-acc); font-weight: 400; }',
+        '}',
+        X + ' .magical-header .header-content { text-align: left !important; align-items: flex-start !important; }',
+        X + ' .magical-header .magic-icon, ' + X + ' .magical-header .floating-orb { display: none !important; }',
+        X + ' .magical-header .magic-title { font-size: clamp(1.7rem, 3vw, 2.3rem) !important; font-weight: 800 !important; letter-spacing: -.02em; text-align: left !important; margin: 0 !important; }',
+        X + ' .magical-header .magic-subtitle { text-align: left !important; color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+        /* ---- the old floating bar and the round button are replaced ---- */
+        R + ' .floating-nav, ' + R + ' .floating-nav.lg-refract { display: none !important; }',
+        R + ' #ask-fab { display: none !important; }',
+        /* ---- phones: the tab bar ---- */
+        '@media (max-width: 700px) {',
+        '  ' + R + ' #rg-nav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; align-items: stretch; justify-content: space-around; padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--sk-raise); border-top: 1px solid var(--sk-line2); box-shadow: 0 -6px 20px rgba(0,0,0,.05); }',
+        '  ' + R + ' .rgn-t { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 2px 0 0; border: 0; background: none; color: var(--sk-mut); font-size: 10.5px; font-weight: 600; line-height: 1.1; -webkit-tap-highlight-color: transparent; }',
+        '  ' + R + ' .rgn-i { position: relative; width: 54px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background .2s, color .2s; }',
+        '  ' + R + ' .rgn-t.on { color: var(--rg-acc); } ' + R + ' .rgn-t.on .rgn-i { background: rgba(var(--pr), .14); }',
+        '  ' + R + ' .rgn-l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
+        '  ' + R + ' .rgn-add { color: var(--sk-fg); } ' + R + ' .rgn-plus { width: 48px; height: 48px; margin-top: -20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; background: radial-gradient(circle at 30% 25%, var(--lg-1), var(--lg-2) 55%, var(--lg-3)); box-shadow: 0 0 0 4px var(--sk-raise), 0 6px 16px rgba(var(--lg-rgb), .45); }',
+        '  ' + R + ' .rgn-add.on .rgn-plus { transform: rotate(45deg); } ' + R + ' .rgn-plus { transition: transform .25s; } ' + R + ' .rgn-add:active .rgn-plus { transform: scale(.94); }',
+        '  ' + R + ' .rgn-dot { position: absolute; top: 3px; right: 13px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px var(--sk-raise); display: none; } ' + R + ' .rgn-dot.show { display: block; }',
+        '  ' + R + ' #rg-menu { display: block; position: fixed; inset: 0; z-index: 9400; pointer-events: none; }',
+        '  ' + R + ' #rg-menu.open { pointer-events: auto; }',
+        '  #rg-menu .rgm-back { position: absolute; inset: 0; background: rgba(0,0,0,.32); opacity: 0; transition: opacity .25s; } #rg-menu.open .rgm-back { opacity: 1; }',
+        '  #rg-menu .rgm-sheet { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-radius: 24px 24px 0 0; background: var(--sk-raise); color: var(--sk-fg); transform: translateY(105%); transition: transform .3s cubic-bezier(.2,.9,.3,1); box-shadow: 0 -10px 40px rgba(0,0,0,.2); }',
+        '  #rg-menu.open .rgm-sheet { transform: none; }',
+        '  #rg-menu .rgm-grab { width: 40px; height: 5px; border-radius: 3px; background: var(--sk-line2); margin: 2px auto 14px; }',
+        '  #rg-menu .rgm-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 6px; }',
+        '  #rg-menu .rgm-it { display: flex; flex-direction: column; align-items: center; gap: 7px; border: 0; background: none; color: var(--sk-fg); font-size: .72rem; font-weight: 600; line-height: 1.2; text-align: center; padding: 4px 0; border-radius: 14px; }',
+        '  #rg-menu .rgm-it.on { background: var(--sk-soft); }',
+        '  #rg-menu .rgm-ic { position: relative; width: 52px; height: 52px; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 21px; box-shadow: 0 4px 10px rgba(0,0,0,.12); }',
+        '  #rg-menu .rgm-ic em { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 700; line-height: 18px; font-style: normal; box-shadow: 0 0 0 2px var(--sk-raise); }',
+        '  #rg-menu .rgm-acct { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 18px; padding: 12px; border-radius: 16px; border: 1px solid var(--sk-line); background: var(--sk-soft); color: var(--sk-fg); text-align: left; }',
+        '  #rg-menu .rgm-acct > i { color: var(--sk-faint); font-size: .8rem; }',
+        '}',
+        '.rgs-av { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; background: radial-gradient(circle at 30% 25%, var(--lg-1), var(--lg-2) 55%, var(--lg-3)); }',
+        '.rgs-who { flex: 1; min-width: 0; display: block; } .rgs-who b { display: block; font-size: .88rem; } .rgs-who small { display: block; font-size: .72rem; color: var(--sk-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
+        /* ---- computers: the sidebar ---- */
+        '@media (min-width: 701px) {',
+        '  ' + R + ' body { padding-left: 248px !important; }',
+        '  ' + R + ' #rg-side { display: flex; flex-direction: column; position: fixed; left: 0; top: 0; bottom: 0; width: 248px; z-index: 100; padding: 18px 14px; background: var(--sk-raise); border-right: 1px solid var(--sk-line2); color: var(--sk-fg); overflow-y: auto; }',
+        '  #rg-side .rgs-brand { display: flex; align-items: center; gap: 11px; padding: 2px 6px 16px; } #rg-side .rgs-brand b { font-size: 1.25rem; font-weight: 800; letter-spacing: -.02em; }',
+        '  #rg-side .rgs-logo { width: 40px; height: 40px; padding: 3px; border-radius: 50%; border: 0; background: var(--rg-ring); cursor: pointer; } html.rg-noring #rg-side .rgs-logo { background: transparent; }',
+        '  #rg-side .rgs-orb { width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; border: 2px solid var(--sk-raise); background: radial-gradient(circle at 30% 25%, var(--lg-1), var(--lg-2) 50%, var(--lg-3)); }',
+        '  #rg-side .rgs-new { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 11px 14px; margin-bottom: 14px; border-radius: 12px; border: 0; background: var(--rg-acc); color: var(--rg-on); font-weight: 700; font-size: .92rem; cursor: pointer; box-shadow: 0 2px 6px rgba(var(--pr), .3); }',
+        '  #rg-side .rgs-new.on { outline: 2px solid rgba(var(--pr), .35); outline-offset: 2px; }',
+        '  #rg-side .rgs-list { display: flex; flex-direction: column; gap: 2px; }',
+        '  #rg-side .rgs-it { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 0; background: none; color: var(--sk-fg); font-size: .9rem; font-weight: 500; text-align: left; cursor: pointer; position: relative; }',
+        '  #rg-side .rgs-it:hover { background: var(--sk-soft); }',
+        '  #rg-side .rgs-it.on { background: rgba(var(--pr), .1); color: var(--rg-acc); font-weight: 700; }',
+        '  #rg-side .rgs-it.on::before { content: ""; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--rg-acc); }',
+        '  #rg-side .rgs-ic { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; background: var(--t); }',
+        '  #rg-side .rgs-tx { flex: 1; }',
+        '  #rg-side .rgs-n:empty { display: none; } #rg-side .rgs-n { font-style: normal; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }',
+        '  #rg-side .rgs-foot { margin-top: auto; padding-top: 14px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--sk-line); }',
+        '  #rg-side .rgs-ask { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sk-line2); background: var(--sk-raise); color: var(--sk-fg); font-weight: 600; font-size: .88rem; cursor: pointer; }',
+        '  #rg-side .rgs-ask i { color: var(--rg-acc); } #rg-side .rgs-ask.on { border-color: var(--rg-acc); background: rgba(var(--pr), .08); }',
+        '  #rg-side .rgs-acct { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 12px; border: 0; background: none; color: var(--sk-fg); text-align: left; cursor: pointer; } #rg-side .rgs-acct:hover { background: var(--sk-soft); }',
+        '}'
     ].join('\n');
     document.head.appendChild(st);
 })();
@@ -33825,6 +34236,8 @@ window.IncVersion = VERSION;
         { sel: '#glow-item', pg: 'settings', t: 'Glow colour', k: 'colour color accent theme glow' },
         { sel: '#ts-range', pg: 'settings', t: 'Text size', k: 'text size font bigger smaller larger read' },
         { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
+        { sel: '#gd-auto', pg: 'data', t: 'Make backups fully automatic', k: 'automatic backups stopped reconnect google drive keeps asking backup stopped always backup never stop' },
+        { sel: '#rg-orbchip', pg: 'home', t: 'Logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
         { sel: '#gd-log', pg: 'data', t: 'Last 30 days of backups', k: 'backup history list when backed up' },
         { sel: '#gd-card', pg: 'data', t: 'Google Drive Backup', k: 'google drive backup sync sign in' },
         { sel: '#ins-card', pg: 'data', t: 'Install on your phone', k: 'install home screen app icon add to home' },
@@ -34731,7 +35144,7 @@ window.IncVersion = VERSION;
     'use strict';
     var ON = false, T = 0, busy = false;
     var MARK = 'data-cg', ORIG = 'data-cg-orig';
-    var SKIP = '#inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
+    var SKIP = '#bk-warn, #rg-orbpick, #rg-menu, #rg-side, #rg-nav, #rg-orbchip, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
     var SCOPE = '.page.active, .floating-nav, #mobile-home, .modal.show, .modal.active, .modal-content, .ic-dialog-layer, .notification, .entry-menu, .nm-sheet, .inc-mini-in, #ask-sheet, #ask-tour, #bk-warn, .popup-overlay.active, .popup-content';
     function parse(c) { var m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; var p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
     function lum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
