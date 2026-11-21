@@ -24687,7 +24687,7 @@ function fixInline(el) {
     }
     el.setAttribute('data-lm-done', el.getAttribute('style'));
 }
-var SKIPEL = '#bk-warn, #rg-orbpick, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
+var SKIPEL = '#bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
 function fixAll(root) { Array.prototype.forEach.call((root || document).querySelectorAll('[style]'), fixInline); }
 function undoInline() { Array.prototype.forEach.call(document.querySelectorAll('[' + ORIG + ']'), function (el) { el.setAttribute('style', el.getAttribute(ORIG)); el.removeAttribute(ORIG); el.removeAttribute('data-lm-done'); }); }
 var mo = null, hm = null, t = 0;
@@ -25069,11 +25069,29 @@ function regularCss() {
     RX + ' .floating-nav .nav-ask .na-orb { background: var(--rg-acc) !important; box-shadow: none !important; } ' + RX + ' .floating-nav .nav-ask .na-orb i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
     /* ---- the chat ---- */
     RX + ' #ask-sheet { --c-bg: #0f1115; --c-dot: transparent; --c-head: #181b21; --c-line: rgba(255,255,255,.08); --c-in: #1f232b; --c-out: #2563eb; --c-tx: #e8eaee; --c-out-tx: #fff; --c-mut: #9aa1ad; --c-field: #1f232b; --c-acc: #60a5fa; --c-acc2: #60a5fa; --c-chip: rgba(96,165,250,.1); --c-chipb: rgba(96,165,250,.35); }',
-    'html.lm[data-theme="regular"] #ask-sheet { --c-bg: #f5f6f8; --c-head: #ffffff; --c-line: rgba(17,24,39,.08); --c-in: #ffffff; --c-out: #2563eb; --c-tx: #111827; --c-out-tx: #fff; --c-mut: #6b7280; --c-field: #ffffff; --c-acc: #2563eb; --c-acc2: #2563eb; --c-chip: rgba(37,99,235,.06); --c-chipb: rgba(37,99,235,.3); }',
+    'html.lm[data-theme="regular"][data-theme] body:not(#rg-x) #ask-sheet { --c-bg: #f5f6f8; --c-head: #ffffff; --c-line: rgba(17,24,39,.08); --c-in: #ffffff; --c-out: #2563eb; --c-tx: #111827; --c-out-tx: #fff; --c-mut: #6b7280; --c-field: #ffffff; --c-acc: #2563eb; --c-acc2: #2563eb; --c-chip: rgba(37,99,235,.06); --c-chipb: rgba(37,99,235,.3); }',
     RX + ' .ask-av, ' + RX + ' .ask-send, ' + RX + ' .ask-act.main, ' + RX + ' #ask-fab, ' + RX + ' .at-ic, ' + RX + ' .at-bt .at-main { background: var(--rg-acc) !important; color: #fff !important; box-shadow: none !important; }',
     RX + ' .ask-m.me .ask-t i { color: #bfdbfe; }',
     RX + ' .ask-ring { border-color: var(--rg-acc) !important; box-shadow: 0 0 0 9999px rgba(15,17,21,.45), 0 0 18px 2px rgba(var(--pr), .6) !important; }',
     RX + ' #ask-tour, ' + RX + ' .ask-tip { background: var(--sk-raise) !important; color: var(--sk-fg) !important; border-color: var(--sk-line2) !important; } ' + RX + ' .at-tx b { color: var(--rg-acc) !important; }',
+    /* ---- v71: cleaner. Icons in soft tints of their colour, flat buttons, quiet dates, no shadows ---- */
+    ['.setting-icon', '.live-calc-icon', '.acc-ic', '.rc-ic', '.rc-hi', '.rc-tic', '.rc-reci', '.mo-ic', '.financial-icon', '.ap-ic', '.ins-ic', '.wo-dic', '.entry-main-icon', '.home-card-icon', '.mh-tile-icon'].map(function (c) { return RX + ' ' + c; }).join(', ') +
+        ' { background: rgba(107,114,128,.12) !important; background: color-mix(in srgb, var(--ic-c, var(--rg-acc)) 13%, transparent) !important; box-shadow: none !important; }',
+    ['.setting-icon', '.live-calc-icon', '.acc-ic', '.rc-ic', '.rc-hi', '.rc-tic', '.rc-reci', '.mo-ic', '.financial-icon', '.ap-ic', '.ins-ic', '.wo-dic', '.entry-main-icon', '.home-card-icon', '.mh-tile-icon'].map(function (c) { return RX + ' ' + c + ' i'; }).join(', ') +
+        ' { color: var(--ic-c, var(--rg-acc)) !important; -webkit-text-fill-color: var(--ic-c, var(--rg-acc)) !important; }',
+    RX + ' .mh-tile-icon, ' + RX + ' .home-card-icon { box-shadow: none !important; }',
+    RX + ' #mh-tile-receipts .hc-cam, ' + RX + ' .home-card .hc-cam { background: var(--ic-c, #16a34a) !important; box-shadow: 0 0 0 2px var(--sk-bg) !important; } ' + RX + ' .hc-cam i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+    RX + ' .app-btn, ' + RX + ' .magic-btn, ' + RX + ' .secondary-magic, ' + RX + ' .ic-btn:not(.primary), ' + RX + ' .confirmation-btn:not(.primary) { background: var(--sk-soft) !important; border: 1px solid transparent !important; box-shadow: none !important; }',
+    RX + ' .entry-action-btn { background: transparent !important; border: 0 !important; box-shadow: none !important; }',
+    RX + ' .entry-action-btn i { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+    RX + ' .entry-action-btn.delete-btn i { color: #dc2626 !important; -webkit-text-fill-color: #dc2626 !important; }',
+    RX + ' .entry-date-badge { background: none !important; border: 0 !important; padding-left: 0 !important; padding-right: 0 !important; }',
+    RX + ' .entry-date-badge i { display: none !important; }',
+    RX + ' .mh-tag { display: none !important; }',
+    RX + ' .mh-cta { box-shadow: none !important; }',
+    RX + ' .primary-magic, ' + RX + ' .wo-pri, ' + RX + ' .rf-main, ' + RX + ' button[type=submit] { box-shadow: none !important; }',
+    RX + ' .page .magic-calc-display, ' + RX + ' .page .acc { box-shadow: none !important; }',
+    RX + ' .floating-bubbles, ' + RX + ' .bubble { display: none !important; }',
     /* ---- the theme card ---- */
     /* closed job cards in the flat themes: the button row of the open card stays hidden (it peeked out on computers) */
     'html[data-theme="sleek"] .iconic-entry-card:not(.expanded) .entry-footer-actions, html[data-theme="sleek"] .iconic-entry-card:not(.expanded) .entry-card-footer, html[data-theme="regular"] .iconic-entry-card:not(.expanded) .entry-footer-actions, html[data-theme="regular"] .iconic-entry-card:not(.expanded) .entry-card-footer { display: none !important; }',
@@ -26383,7 +26401,7 @@ window.IncRoof = { calc: calc, job: () => job, len: len, lenInfo: lenInfo, plan:
 'use strict';
 if (window.IncInk) return;
 var BRIGHT = { alpine: 1, canyon: 1, seaset: 1, hills: 1, partly: 1, overcast: 1, rooftops: 1, snowpines: 1, waves: 1, pines: 1 };
-var SKIP = '#bk-warn, #rg-orbpick, #rg-menu, #rg-side, #rg-nav, .bgx, #inc-sky, #inc-stars, .floating-bubbles, .rc-cam, .jp-view, .pn-ed, .bgpv, .sky-pv, .cel-layer, svg, canvas, .lgx-lens, .ie-scene';
+var SKIP = '#bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, .bgx, #inc-sky, #inc-stars, .floating-bubbles, .rc-cam, .jp-view, .pn-ed, .bgpv, .sky-pv, .cel-layer, svg, canvas, .lgx-lens, .ie-scene';
 function bgKey() { try { return window.IncSky ? IncSky.mode() : 'theme'; } catch (e) { return 'theme'; } }
 function active() { var k = bgKey(); return !!k && k !== 'theme' && !document.documentElement.classList.contains('lm'); }
 function bright() { return active() && !!BRIGHT[bgKey()]; }
@@ -33477,7 +33495,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.21 (v70)';
+var VERSION = '2026.11.21 (v71)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33781,7 +33799,7 @@ window.IncVersion = VERSION;
      Create Job button in the middle, Ask (your assistant), and Menu (every page as colour app icons, and your account).
    - Computers: a sidebar on the left like a regular website: the IncAtor logo, Create New Job, every page with its
      colour icon and name, and your assistant at the bottom.
-   - Home: choose the IncAtor logo colour and the colour of its rings, just under the logo ("Logo colours").
+   - Settings > Appearance > Themes (with Regular chosen): the IncAtor logo colour and the colour of its rings.
    - Page titles: large and left-aligned, the system font of your phone or computer.
    The pages and every feature are exactly the same as in the other themes. */
 (function () {
@@ -33833,37 +33851,34 @@ window.IncVersion = VERSION;
         function row(list, key, val) {
             return list.map(function (x) {
                 var v = x[1], sw = v === 'rainbow' ? 'conic-gradient(#8b5cf6, #6366f1, #22d3ee, #ec4899, #8b5cf6)' : v === 'match' ? o.logo : v === 'none' ? 'transparent' : v;
-                return '<button type="button" class="rgp-sw' + (v === val ? ' on' : '') + (v === 'none' ? ' none' : '') + (v === 'match' ? ' match' : '') + '" data-rgp="' + key + '" data-v="' + v + '" title="' + esc(x[0]) + '" aria-label="' + esc(x[0]) + '" aria-pressed="' + (v === val) + '" style="background:' + sw + '"></button>';
+                return '<button type="button" class="rgp-sw' + (v === val ? ' on' : '') + (v === 'none' ? ' none' : '') + (v === 'rainbow' ? ' rb' : '') + (v === 'match' ? ' match' : '') + '" data-rgp="' + key + '" data-v="' + v + '" title="' + esc(x[0]) + '" aria-label="' + esc(x[0]) + '" aria-pressed="' + (v === val) + '" style="--sw:' + sw + '"></button>';
             }).join('');
         }
-        return '<div class="rgp-h"><b>Logo colours</b><button type="button" class="rgp-x" data-rgp="close" aria-label="Close"><i class="fas fa-times"></i></button></div>' +
+        return '<div class="rgp-h"><span class="rgp-prev"><span class="rgp-orb"><i class="fas fa-coins"></i></span></span><div><b>IncAtor logo</b><small>Only for the Regular theme</small></div></div>' +
             '<div class="rgp-l">Logo</div><div class="rgp-row">' + row(LOGO, 'logo', o.logo) + '</div>' +
             '<div class="rgp-l">Rings</div><div class="rgp-row">' + row(RING, 'ring', o.ring) + '</div>' +
             '<button type="button" class="rgp-reset" data-rgp="reset">Back to the original colours</button>';
     }
-    var pickEl = null, pickFor = null;
-    function paintPick() { if (pickEl && pickEl.classList.contains('open')) pickEl.innerHTML = pickHtml(); }
-    function openPick(anchor) {
-        if (!pickEl) { pickEl = document.createElement('div'); pickEl.id = 'rg-orbpick'; pickEl.setAttribute('role', 'dialog'); pickEl.setAttribute('aria-label', 'Logo colours'); document.body.appendChild(pickEl); }
-        if (pickEl.classList.contains('open') && pickFor === anchor) { closePick(); return; }
-        pickFor = anchor; pickEl.innerHTML = pickHtml(); pickEl.classList.add('open');
-        var b = anchor.getBoundingClientRect(), w = Math.min(330, window.innerWidth - 24);
-        pickEl.style.width = w + 'px';
-        pickEl.style.left = Math.round(Math.min(Math.max(12, b.left + b.width / 2 - w / 2), window.innerWidth - w - 12)) + 'px';
-        pickEl.style.top = Math.round(b.bottom + 8) + 'px';
-        anchor.setAttribute('aria-expanded', 'true');
+    function paintPick() { var t = document.getElementById('rg-tune'); if (t) t.innerHTML = pickHtml(); }
+    function ensureTune() {                                          // Settings > Appearance > Themes, under the theme cards
+        var grid = document.querySelector('#theme-settings-section .theme-grid'); if (!grid) return;
+        var t = document.getElementById('rg-tune');
+        if (!t) { t = document.createElement('div'); t.id = 'rg-tune'; t.setAttribute('role', 'group'); t.setAttribute('aria-label', 'IncAtor logo colours'); t.innerHTML = pickHtml(); var sk = document.getElementById('sk-tune'); var after = sk && sk.parentNode === grid.parentNode ? sk : grid; after.parentNode.insertBefore(t, after.nextSibling); }
     }
-    function closePick() { if (pickEl) pickEl.classList.remove('open'); if (pickFor) pickFor.setAttribute('aria-expanded', 'false'); pickFor = null; }
-    function ensureChip() {
-        var w = document.querySelector('#mobile-home .mh-orb-wrap'); if (!w) return;
-        var c = document.getElementById('rg-orbchip');
-        if (!c) {
-            c = document.createElement('button'); c.type = 'button'; c.id = 'rg-orbchip'; c.setAttribute('aria-expanded', 'false');
-            c.innerHTML = '<span class="rgc-dot"></span>Logo colours<i class="fas fa-chevron-down"></i>';
-            w.parentNode.insertBefore(c, w.nextSibling);
-        }
+    function closePick() { /* nothing floating any more */ }
+    function goTune() {                                              // the sidebar logo: straight to the colours in Settings
+        go('settings');
+        setTimeout(function () {
+            var sec = document.getElementById('theme-settings-section'); if (!sec) return;
+            var h = sec.querySelector('.acc-head'); if (h && h.getAttribute('aria-expanded') !== 'true' && !sec.classList.contains('open')) h.click();
+            setTimeout(function () {
+                ensureTune();
+                var t = document.getElementById('rg-tune'), it = t && t.closest('.ap-item');
+                if (it && !it.classList.contains('ap-open')) { var ah = it.querySelector('.ap-head'); if (ah) ah.click(); }
+                setTimeout(function () { if (t) t.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 300);
+            }, 350);
+        }, 450);
     }
-
     /* ------------------------------------------------ phone: the tab bar ------------------------------------------------ */
     var bar = null, side = null, menu = null, built = '';
     function tabs() {
@@ -33887,7 +33902,7 @@ window.IncVersion = VERSION;
         var ps = pages().filter(function (k) { return k !== 'add'; }), a = acct();
         var key = ps.join(',') + '|' + askOn() + askName() + '|' + (a && a.email || '');
         if (side.dataset.k === key) return; side.dataset.k = key;
-        side.innerHTML = '<div class="rgs-brand"><button type="button" class="rgs-logo" data-rgp="open" aria-label="Logo colours" title="Logo colours"><span class="rgs-orb"><i class="fas fa-coins"></i></span></button><b>IncAtor</b></div>' +
+        side.innerHTML = '<div class="rgs-brand"><button type="button" class="rgs-logo" data-rgp="open" aria-label="Logo colours" title="Logo colours (Settings)"><span class="rgs-orb"><i class="fas fa-coins"></i></span></button><b>IncAtor</b></div>' +
             '<button type="button" class="rgs-new" data-rgn="add"><i class="fas fa-plus"></i>Create New Job</button>' +
             '<div class="rgs-list">' + ps.map(function (k) { return '<button type="button" class="rgs-it" data-rgn="' + k + '"><span class="rgs-ic" style="--t:' + (TINT[k] || '#2563eb') + '"><i class="fas fa-' + ic(k) + '"></i></span><span class="rgs-tx">' + esc(nm(k)) + '</span>' + (k === 'trash' ? '<em class="rgs-n"></em>' : '') + '</button>'; }).join('') + '</div>' +
             '<div class="rgs-foot">' + (askOn() ? '<button type="button" class="rgs-ask" data-rgn="ask"><i class="fas fa-magic"></i><span>' + esc(askName()) + '</span></button>' : '') +
@@ -33928,16 +33943,14 @@ window.IncVersion = VERSION;
     function sync() {
         var o = on(); document.documentElement.classList.toggle('rg-nav-on', o);
         if (!o) { closeMenu(); closePick(); return; }
-        buildBar(); buildSide(); ensureChip(); mark();
+        buildBar(); buildSide(); ensureTune(); mark();
     }
     document.addEventListener('click', function (e) {
-        var t = e.target.closest && e.target.closest('[data-rgn], [data-rgp], #rg-orbchip');
-        if (!t) { if (pickEl && pickEl.classList.contains('open') && !(e.target.closest && e.target.closest('#rg-orbpick'))) closePick(); return; }
-        if (t.id === 'rg-orbchip') { openPick(t); return; }
+        var t = e.target.closest && e.target.closest('[data-rgn], [data-rgp]');
+        if (!t) return;
         var p = t.getAttribute('data-rgp');
         if (p) {
-            if (p === 'open') { openPick(t); return; }
-            if (p === 'close') { closePick(); return; }
+            if (p === 'open') { goTune(); return; }
             var o = orb();
             if (p === 'reset') o = { logo: '#2563eb', ring: 'rainbow' };
             else o[p] = t.getAttribute('data-v');
@@ -33951,13 +33964,11 @@ window.IncVersion = VERSION;
         go(k);
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenu(); closePick(); } });
-    window.addEventListener('resize', function () { closePick(); });
-    window.addEventListener('scroll', function () { if (pickFor && pickFor.id === 'rg-orbchip') closePick(); }, { passive: true });
     window.incNavBox = function () {                                   // the bottom bar other parts of IncAtor line up with
         if (on()) { var n = document.getElementById('rg-nav'); return n && n.offsetHeight ? n : null; }
         return document.querySelector('.floating-nav');
     };
-    window.IncRegularNav = { sync: sync, openMenu: openMenu, closeMenu: closeMenu, openPick: function () { var c = document.getElementById('rg-orbchip'); if (c) openPick(c); }, orb: orb, paintOrb: paintOrb, tabs: tabs };
+    window.IncRegularNav = { sync: sync, openMenu: openMenu, closeMenu: closeMenu, openColours: goTune, orb: orb, paintOrb: paintOrb, tabs: tabs };
     function boot() {
         paintOrb(); sync();
         new MutationObserver(function () { sync(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -33970,7 +33981,7 @@ window.IncVersion = VERSION;
     var R = 'html[data-theme="regular"]', X = 'html[data-theme="regular"][data-theme] body:not(#rg-x)';
     var st = document.createElement('style'); st.id = 'incator-regular-nav-css';
     st.textContent = [
-        '#rg-nav, #rg-side, #rg-orbchip, #rg-orbpick, #rg-menu { display: none; }',
+        '#rg-nav, #rg-side, #rg-tune, #rg-menu { display: none; }',
         '.fa-th-large { --ic: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Crect%20x=%273%27%20y=%273%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3Crect%20x=%2714%27%20y=%273%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3Crect%20x=%273%27%20y=%2714%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3Crect%20x=%2714%27%20y=%2714%27%20width=%277%27%20height=%277%27%20rx=%271.5%27/%3E%3C/svg%3E"); }',
         X + ' #rg-side .rgs-ic i, ' + X + ' #rg-menu .rgm-ic i, ' + X + ' #rg-side .rgs-orb i, ' + X + ' .rgn-plus i, ' + X + ' #rg-side .rgs-new i, ' + X + ' #rg-side .rgs-new { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
         X + ' #rg-side .rgs-new { color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; } ' + X + ' #rg-side .rgs-new i { color: var(--rg-on) !important; }',
@@ -33980,22 +33991,23 @@ window.IncVersion = VERSION;
         X + ' .mh-orb i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
         X + ' .mh-ring { background: var(--rg-ring) !important; filter: drop-shadow(0 0 8px rgba(var(--rg-ring-rgb), .5)) !important; }',
         'html.rg-noring[data-theme="regular"] .mh-ring { display: none !important; }',
-        R + ' #rg-orbchip { display: inline-flex; align-items: center; gap: 7px; margin: -2px auto 8px; padding: 5px 11px 5px 7px; border-radius: 999px; border: 1px solid var(--sk-line2); background: var(--sk-raise); color: var(--sk-mut); font-size: .74rem; font-weight: 600; line-height: 1.2; flex: 0 0 auto; position: relative; z-index: 2; }',
-        R + ' #rg-orbchip i { font-size: .62rem; transition: transform .2s; } ' + R + ' #rg-orbchip[aria-expanded="true"] i { transform: rotate(180deg); }',
-        '#rg-orbchip .rgc-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--lg-2); box-shadow: 0 0 0 2px var(--sk-raise), 0 0 0 3.5px rgba(var(--rg-ring-rgb), .9); }',
-        R + ' #rg-orbpick.open { display: block; position: fixed; z-index: 9600; padding: 12px 14px 14px; border-radius: 18px; background: var(--sk-raise); color: var(--sk-fg); border: 1px solid var(--sk-line2); box-shadow: 0 18px 44px rgba(0,0,0,.22); animation: rgPop .18s ease-out; }',
-        '@keyframes rgPop { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }',
-        '#rg-orbpick .rgp-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; } #rg-orbpick .rgp-h b { font-size: .95rem; }',
-        '#rg-orbpick .rgp-x { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--sk-soft); color: var(--sk-mut); }',
-        '#rg-orbpick .rgp-l { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--sk-mut); margin: 10px 0 6px; }',
-        '#rg-orbpick .rgp-row { display: flex; flex-wrap: wrap; gap: 9px; }',
-        '#rg-orbpick .rgp-sw { width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); position: relative; }',
-        '#rg-orbpick .rgp-sw.on { box-shadow: 0 0 0 2px var(--sk-raise), 0 0 0 4px var(--sk-fg); }',
-        '#rg-orbpick .rgp-sw.on::after { content: "\\2713"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: .8rem; text-shadow: 0 1px 2px rgba(0,0,0,.45); }',
-        '#rg-orbpick .rgp-sw.none { background: var(--sk-raise) !important; box-shadow: inset 0 0 0 1.5px var(--sk-line2); } #rg-orbpick .rgp-sw.none::before { content: ""; position: absolute; left: 50%; top: 4px; bottom: 4px; width: 2px; background: #dc2626; transform: rotate(45deg); }',
-        '#rg-orbpick .rgp-sw.none.on::after { color: var(--sk-fg); text-shadow: none; }',
-        '#rg-orbpick .rgp-sw.match { -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px); mask: radial-gradient(circle, transparent 7px, #000 7.5px); }',
-        '#rg-orbpick .rgp-reset { margin-top: 12px; border: 0; background: none; color: var(--rg-acc); font-weight: 600; font-size: .8rem; padding: 4px 0; }',
+        R + ' #rg-tune { display: block; margin: 14px 0 4px; padding: 14px; border-radius: 14px; border: 1px solid var(--sk-line2); background: var(--sk-raise); color: var(--sk-fg); }',
+        '#rg-tune .rgp-h { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; } #rg-tune .rgp-h b { display: block; font-size: .95rem; } #rg-tune .rgp-h small { display: block; font-size: .74rem; color: var(--sk-mut); }',
+        '#rg-tune .rgp-prev { width: 46px; height: 46px; padding: 3px; border-radius: 50%; background: var(--rg-ring); flex: 0 0 auto; } html.rg-noring #rg-tune .rgp-prev { background: transparent; }',
+        '#rg-tune .rgp-orb { width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--sk-raise); background: radial-gradient(circle at 30% 25%, var(--lg-1), var(--lg-2) 50%, var(--lg-3)); }',
+        X + ' #rg-tune .rgp-orb i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+        '#rg-tune .rgp-l { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--sk-mut); margin: 10px 0 6px; }',
+        '#rg-tune .rgp-row { display: flex; flex-wrap: wrap; gap: 9px; }',
+        X + ' #rg-tune .rgp-sw, ' + X + ' #rg-tune .rgp-sw[aria-pressed] { background: var(--sw) !important; background-image: none !important; border: 0 !important; }',
+        X + ' #rg-tune .rgp-sw.rb { background: conic-gradient(#8b5cf6, #6366f1, #22d3ee, #ec4899, #8b5cf6) !important; }',
+        X + ' #rg-tune .rgp-sw.none { background: var(--sk-raise) !important; }',
+        '#rg-tune .rgp-sw { width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); position: relative; }',
+        '#rg-tune .rgp-sw.on { box-shadow: 0 0 0 2px var(--sk-raise), 0 0 0 4px var(--sk-fg); }',
+        '#rg-tune .rgp-sw.on::after { content: "\\2713"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: .8rem; text-shadow: 0 1px 2px rgba(0,0,0,.45); }',
+        '#rg-tune .rgp-sw.none { background: var(--sk-raise) !important; box-shadow: inset 0 0 0 1.5px var(--sk-line2); } #rg-tune .rgp-sw.none::before { content: ""; position: absolute; left: 50%; top: 4px; bottom: 4px; width: 2px; background: #dc2626; transform: rotate(45deg); }',
+        '#rg-tune .rgp-sw.none.on::after { color: var(--sk-fg); text-shadow: none; }',
+        '#rg-tune .rgp-sw.match { -webkit-mask: radial-gradient(circle, transparent 7px, #000 7.5px); mask: radial-gradient(circle, transparent 7px, #000 7.5px); }',
+        '#rg-tune .rgp-reset { margin-top: 12px; border: 0; background: none; color: var(--rg-acc); font-weight: 600; font-size: .8rem; padding: 4px 0; }',
         /* ---- page titles: large, left, system font ---- */
         [' ', ' button', ' input', ' select', ' textarea'].map(function (x) { return 'html[data-theme="regular"]:not([data-font]) body:not(#rg-x)' + x; }).join(', ') + ' { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }',
         '@media (max-width: 700px) {',
@@ -34237,7 +34249,7 @@ window.IncVersion = VERSION;
         { sel: '#ts-range', pg: 'settings', t: 'Text size', k: 'text size font bigger smaller larger read' },
         { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
         { sel: '#gd-auto', pg: 'data', t: 'Make backups fully automatic', k: 'automatic backups stopped reconnect google drive keeps asking backup stopped always backup never stop' },
-        { sel: '#rg-orbchip', pg: 'home', t: 'Logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
+        { sel: '#rg-tune', pg: 'settings', t: 'IncAtor logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
         { sel: '#gd-log', pg: 'data', t: 'Last 30 days of backups', k: 'backup history list when backed up' },
         { sel: '#gd-card', pg: 'data', t: 'Google Drive Backup', k: 'google drive backup sync sign in' },
         { sel: '#ins-card', pg: 'data', t: 'Install on your phone', k: 'install home screen app icon add to home' },
@@ -35134,6 +35146,32 @@ window.IncVersion = VERSION;
     document.head.appendChild(st);
 })();
 </script>
+<script id="incator-ask-match">
+/* v71: Ask IncAtor (your assistant) matches the website. On phones the chat opens over the same background you see
+   in IncAtor (your theme's colours, or the background picture you chose), with the bubbles in your theme's colours.
+   On computers the chat window is see-through glass over the page. Sleek and Regular already use their own page colour. */
+(function () {
+    'use strict';
+    var C = 'html:not([data-theme="sleek"]):not([data-theme="regular"])', L = 'html.lm:not([data-theme="sleek"]):not([data-theme="regular"])';
+    var st = document.createElement('style'); st.id = 'incator-ask-match-css';
+    st.textContent = [
+        C + ' #ask-sheet { --c-bg: rgba(var(--bg3, 10, 3, 21), .32); --c-dot: transparent; --c-head: rgba(var(--panel, 28, 18, 58), .7); --c-line: rgba(255,255,255,.1); --c-in: rgba(var(--panel, 28, 18, 58), .88); --c-out: rgb(var(--pr5, 109, 40, 217)); --c-tx: #f5f3ff; --c-out-tx: #fff; --c-mut: rgba(245,243,255,.66); --c-field: rgba(var(--panel, 28, 18, 58), .9); --c-acc: rgb(var(--pr2, 192, 132, 252)); --c-acc2: rgb(var(--acc2, 236, 72, 153)); --c-chip: rgba(var(--pr, 168, 85, 247), .16); --c-chipb: rgba(var(--pr2, 192, 132, 252), .45); }',
+        L + ' #ask-sheet { --c-bg: rgba(255,255,255,.2); --c-head: rgba(255,255,255,.76); --c-line: rgba(29,23,51,.09); --c-in: rgba(255,255,255,.92); --c-out: rgb(var(--pr5, 109, 40, 217)); --c-tx: #1d1733; --c-out-tx: #fff; --c-mut: rgba(29,23,51,.58); --c-field: rgba(255,255,255,.95); --c-acc: rgb(var(--pr5, 109, 40, 217)); --c-acc2: rgb(var(--pr5, 109, 40, 217)); --c-chip: rgba(var(--pr, 168, 85, 247), .1); --c-chipb: rgba(var(--pr5, 109, 40, 217), .35); }',
+        C + ' .ask-av, ' + C + ' .ask-send, ' + C + ' .ask-act.main { background: linear-gradient(135deg, rgb(var(--pr4, 139, 92, 246)), rgb(var(--acc2, 236, 72, 153))) !important; }',
+        C + ' .ask-hd { -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); }',
+        C + ' .ask-m { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }',
+        /* phones: only the background stays behind the chat */
+        '@media (max-width: 700px) { html.ask-open-phone #app, html.ask-open-phone .floating-nav, html.ask-open-phone #rg-nav, html.ask-open-phone #bk-warn, html.ask-open-phone #sel-fab { visibility: hidden !important; } }',
+        /* computers: a glass window over the page */
+        '@media (min-width: 701px) {',
+        '  ' + C + ' #ask-sheet { --c-bg: rgba(var(--bg3, 10, 3, 21), .8); }',
+        '  ' + L + ' #ask-sheet { --c-bg: rgba(255,255,255,.82); }',
+        '  ' + C + ' .ask-box { -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3); }',
+        '}'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
 <script id="incator-contrast">
 /* Light appearance with any theme: every text and icon stays easy to read.
    Themes made for dark backgrounds use bright colours (cyan, gold, green, grey...) for titles, icons and buttons.
@@ -35144,7 +35182,7 @@ window.IncVersion = VERSION;
     'use strict';
     var ON = false, T = 0, busy = false;
     var MARK = 'data-cg', ORIG = 'data-cg-orig';
-    var SKIP = '#bk-warn, #rg-orbpick, #rg-menu, #rg-side, #rg-nav, #rg-orbchip, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
+    var SKIP = '#bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
     var SCOPE = '.page.active, .floating-nav, #mobile-home, .modal.show, .modal.active, .modal-content, .ic-dialog-layer, .notification, .entry-menu, .nm-sheet, .inc-mini-in, #ask-sheet, #ask-tour, #bk-warn, .popup-overlay.active, .popup-content';
     function parse(c) { var m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; var p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
     function lum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
