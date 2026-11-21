@@ -33495,7 +33495,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.21 (v71)';
+var VERSION = '2026.11.21 (v72)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -34075,6 +34075,150 @@ window.IncVersion = VERSION;
     document.head.appendChild(st);
 })();
 </script>
+<script id="incator-hometiles">
+/* Home tiles (phones): choose which page tiles Home shows and in what order.
+   Settings > Appearance > Home tiles. Two lists: up to 9 tiles for Sleek and Regular (3 rows of 3) and up to 6 for
+   the other themes (3 rows of 2). New tiles: Trash (with its count), RoofVision and Settings. Synced to your devices. */
+(function () {
+    'use strict';
+    var CAT = {
+        view: { n: 'JobNest', ic: 'layer-group', sel: '.mh-t1' },
+        quotes: { n: 'Quotes', ic: 'file-alt', sel: '.mh-tq', g: 'linear-gradient(135deg,rgb(var(--acc2)),#f43f5e)', cls: 'mh-tq' },
+        projects: { n: 'Projects', ic: 'briefcase', sel: '.mh-tp', g: 'linear-gradient(135deg,#14b8a6,#0ea5e9)', cls: 'mh-tp' },
+        summary: { n: 'Analytics', ic: 'chart-bar', sel: '.mh-t2' },
+        data: { n: 'Backup', ic: 'cloud', sel: '.mh-t3' },
+        receipts: { n: 'SlipVault', ic: 'receipt', sel: '#mh-tile-receipts' },
+        trash: { n: 'Trash', ic: 'trash', sel: '.mh-tt', g: 'linear-gradient(135deg,#f87171,#dc2626)', cls: 'mh-tt' },
+        roofcalc: { n: 'RoofVision', ic: 'house-roof', sel: '.mh-trv', g: 'linear-gradient(135deg,#f59e0b,#b45309)', cls: 'mh-trv' },
+        settings: { n: 'Settings', ic: 'cog', sel: '.mh-tst', g: 'linear-gradient(135deg,#94a3b8,#475569)', cls: 'mh-tst' }
+    };
+    var ORDER = ['view', 'quotes', 'projects', 'summary', 'data', 'receipts', 'trash', 'roofcalc', 'settings'];
+    var DEF = { six: ORDER.slice(0, 6), nine: ORDER.slice() };
+    var MAX = { six: 6, nine: 9 };
+    function S() { try { return appSettings || {}; } catch (e) { return {}; } }
+    function save(v) { try { appSettings.homeTiles = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ } }
+    function wide() { var t = document.documentElement.getAttribute('data-theme'); return t === 'sleek' || t === 'regular'; }
+    function mode() { return wide() ? 'nine' : 'six'; }
+    function list(m) {
+        var h = S().homeTiles || {}, l = Array.isArray(h[m]) ? h[m] : DEF[m], seen = {};
+        l = l.filter(function (k) { if (!CAT[k] || seen[k]) return false; seen[k] = 1; return true; }).slice(0, MAX[m]);
+        return l.length ? l : DEF[m].slice();
+    }
+    function setList(m, l) { var h = Object.assign({}, S().homeTiles || {}); h[m] = l; save(h); apply(); paintBox(); }
+    function toast(m, k) { try { showToast(m, k || 'info'); } catch (e) { /* ignore */ } }
+    function trashN() { var b = document.querySelector('.floating-nav .nav-item[data-page="trash"] .nav-badge'); var t = b ? String(b.textContent || '').trim() : ''; return t && t !== '0' ? t : ''; }
+    function tile(k) {
+        var c = CAT[k], box = document.querySelector('.mh-tiles'); if (!box) return null;
+        var el = box.querySelector(c.sel);
+        if (!el && c.cls) {
+            el = document.createElement('button'); el.type = 'button'; el.className = 'mh-tile ' + c.cls;
+            el.setAttribute('onclick', "showPage('" + k + "')");
+            el.innerHTML = '<span class="mh-tile-icon" style="background:' + c.g + ';"><i class="fas fa-' + c.ic + '"></i>' + (k === 'trash' ? '<em class="mh-tbadge"></em>' : '') + '</span><b>' + c.n + '</b>';
+            box.appendChild(el);
+        }
+        if (el) el.setAttribute('data-tile', k);
+        return el;
+    }
+    function apply() {
+        var box = document.querySelector('.mh-tiles'); if (!box) return false;
+        if (!box.querySelector('.mh-tq')) return false;                    // Quotes & Projects are still being added
+        var m = mode(), l = list(m), all = ORDER.map(function (k) { return [k, tile(k)]; });
+        all.forEach(function (x) { if (x[1]) x[1].classList.toggle('mh-off', l.indexOf(x[0]) < 0); });
+        l.forEach(function (k) { var el = tile(k); if (el) box.appendChild(el); });
+        var cols = m === 'nine' ? 3 : 2;
+        box.style.setProperty('--mh-rows', String(Math.max(1, Math.ceil(l.length / cols))));
+        box.setAttribute('data-tiles', m);
+        badge();
+        return true;
+    }
+    function badge() { var b = document.querySelector('.mh-tt .mh-tbadge'); if (b) { var n = trashN(); b.textContent = n; b.style.display = n ? '' : 'none'; } }
+
+    /* ---------------------------------- Settings > Appearance > Home tiles ---------------------------------- */
+    var tab = null, box = null;
+    function boxHtml() {
+        var m = tab || mode(), l = list(m), off = ORDER.filter(function (k) { return l.indexOf(k) < 0; });
+        function row(k, on, i) {
+            var c = CAT[k];
+            return '<div class="ht-row' + (on ? ' on' : '') + '"><button type="button" class="ht-tg" role="checkbox" aria-checked="' + on + '" data-ht="tg" data-k="' + k + '"><span class="ht-ck"><i class="fas fa-check"></i></span>' +
+                '<span class="ht-ic" style="background:' + (c.g || ({ view: 'linear-gradient(135deg,rgb(var(--pr)),rgb(var(--ind2)))', summary: 'linear-gradient(135deg,#06b6d4,#3b82f6)', data: 'linear-gradient(135deg,#f59e0b,#ef4444)', receipts: 'linear-gradient(135deg,#84cc16,#22c55e)' })[k]) + '"><i class="fas fa-' + c.ic + '"></i></span><span class="ht-n">' + c.n + '</span></button>' +
+                (on ? '<button type="button" class="ht-mv" data-ht="up" data-k="' + k + '" aria-label="Move ' + c.n + ' earlier"' + (i === 0 ? ' disabled' : '') + '><i class="fas fa-chevron-up"></i></button><button type="button" class="ht-mv" data-ht="dn" data-k="' + k + '" aria-label="Move ' + c.n + ' later"' + (i === l.length - 1 ? ' disabled' : '') + '><i class="fas fa-chevron-down"></i></button>' : '') + '</div>';
+        }
+        return '<div class="ht-seg" role="tablist"><button type="button" role="tab" data-ht="tab" data-m="nine" aria-selected="' + (m === 'nine') + '">Sleek &amp; Regular <small>9</small></button><button type="button" role="tab" data-ht="tab" data-m="six" aria-selected="' + (m === 'six') + '">Other themes <small>6</small></button></div>' +
+            '<p class="ht-note">' + l.length + ' of ' + MAX[m] + ' tiles on Home' + (m === mode() ? ' (your theme now)' : '') + '. Tap a tile to show or hide it; use the arrows to change the order.</p>' +
+            '<div class="ht-list">' + l.map(function (k, i) { return row(k, true, i); }).join('') + off.map(function (k) { return row(k, false, 0); }).join('') + '</div>' +
+            '<button type="button" class="ht-reset" data-ht="reset">Back to the original tiles</button>';
+    }
+    function paintBox() { if (box) box.innerHTML = boxHtml(); try { if (window.IncApMenu) IncApMenu.refresh(); } catch (e) { /* ignore */ } }
+    function mkBox() {
+        if (box || !window.IncApMenu || !IncApMenu.add) return !!box;
+        box = document.createElement('div'); box.id = 'ht-box'; box.innerHTML = boxHtml();
+        box.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-ht]'); if (!b) return;
+            var a = b.getAttribute('data-ht'), m = tab || mode(), l = list(m), k = b.getAttribute('data-k'), i = l.indexOf(k);
+            if (a === 'tab') { tab = b.getAttribute('data-m'); paintBox(); return; }
+            if (a === 'reset') { setList(m, DEF[m].slice()); toast('Home tiles are back to the original ones.', 'success'); return; }
+            if (a === 'tg') {
+                if (i >= 0) { if (l.length <= 1) { toast('Home needs at least one tile.', 'error'); return; } l.splice(i, 1); }
+                else { if (l.length >= MAX[m]) { toast('Up to ' + MAX[m] + ' tiles here. Turn one off first.', 'error'); return; } l.push(k); }
+                setList(m, l); return;
+            }
+            if ((a === 'up' && i > 0) || (a === 'dn' && i >= 0 && i < l.length - 1)) { var j = a === 'up' ? i - 1 : i + 1; l.splice(j, 0, l.splice(i, 1)[0]); setList(m, l); }
+        });
+        IncApMenu.add(['hometiles', 'Home tiles', 'th-large', function () { var m = mode(); return list(m).length + ' tiles · ' + (m === 'nine' ? 'Sleek & Regular' : 'this theme'); }], box);
+        place();
+        return true;
+    }
+    function place() {                                                 // right under Themes
+        var it = document.querySelector('#ap-menu .ap-item[data-ap="hometiles"]'), th = document.querySelector('#ap-menu .ap-item[data-ap="themes"]');
+        if (it && th && th.nextSibling !== it) th.parentNode.insertBefore(it, th.nextSibling);
+        return !!it;
+    }
+    window.IncHomeTiles = { apply: apply, list: list, set: setList, mode: mode, open: function () { try { showPage('settings'); } catch (e) { /* ignore */ } setTimeout(function () { var sec = document.getElementById('theme-settings-section'), h = sec && sec.querySelector('.acc-head'); if (h && h.getAttribute('aria-expanded') !== 'true') h.click(); setTimeout(function () { place(); try { IncApMenu.open('hometiles'); } catch (e) { /* ignore */ } setTimeout(function () { var b = document.getElementById('ht-box'); if (b) b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 450); }, 350); }, 450); } };
+    function boot() {
+        var n = 0, tm = setInterval(function () { var a = apply(), b = mkBox(), c = place(); if ((a && b && c) || ++n > 160) clearInterval(tm); }, 250);
+        new MutationObserver(function () { tab = null; apply(); paintBox(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        var last = JSON.stringify(S().homeTiles || null);
+        setInterval(function () { badge(); var now = JSON.stringify(S().homeTiles || null); if (now !== last) { last = now; apply(); paintBox(); } }, 1500);   // changed on another device
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
+
+    var st = document.createElement('style'); st.id = 'incator-hometiles-css';
+    st.textContent = [
+        '.mh-tiles .mh-tile.mh-off { display: none !important; }',
+        'html:not([data-theme="regular"]) body #home-page.active .mh-tiles[data-tiles] { grid-template-rows: repeat(var(--mh-rows, 3), minmax(0, 1fr)) !important; }',
+        'html[data-theme="sleek"] body .mh-tiles[data-tiles="nine"] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }',
+        'html[data-theme="sleek"] body .mh-tiles[data-tiles="nine"] .mh-tile b { font-size: .84rem; white-space: nowrap; }',
+        '.mh-tile-icon { position: relative; }',
+        '.mh-tbadge { position: absolute; top: -6px; right: -8px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff !important; -webkit-text-fill-color: #fff !important; font: 700 11px/20px system-ui, sans-serif; font-style: normal; text-align: center; box-shadow: 0 0 0 2px rgba(0,0,0,.15); }',
+        '.mh-tt .mh-tile-icon i, .mh-trv .mh-tile-icon i, .mh-tst .mh-tile-icon i { color: #fff; }',
+        '#ht-box .ht-seg { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(127,127,127,.12); margin: 4px 0 10px; }',
+        '#ht-box .ht-seg button { flex: 1; padding: 8px 6px; border: 0; border-radius: 9px; background: transparent; color: inherit; font: inherit; font-size: .82rem; font-weight: 600; opacity: .7; cursor: pointer; }',
+        '#ht-box .ht-seg button small { font-size: .7rem; opacity: .7; margin-left: 3px; }',
+        '#ht-box .ht-seg button[aria-selected="true"] { opacity: 1; background: rgba(var(--pr), .28); }',
+        'html.lm #ht-box .ht-seg button[aria-selected="true"] { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }',
+        'html[data-theme="sleek"] #ht-box .ht-seg button[aria-selected="true"] { background: var(--sk-fg) !important; color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+        '#ht-box .ht-note { font-size: .76rem; opacity: .7; margin: 0 2px 10px; line-height: 1.4; }',
+        '#ht-box .ht-list { display: flex; flex-direction: column; gap: 6px; }',
+        '#ht-box .ht-row { display: flex; align-items: center; gap: 6px; }',
+        '#ht-box .ht-tg { flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(127,127,127,.22); background: rgba(127,127,127,.06); color: inherit; font: inherit; text-align: left; cursor: pointer; }',
+        '#ht-box .ht-row:not(.on) .ht-tg { opacity: .55; border-style: dashed; }',
+        '#ht-box .ht-ck { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 7px; border: 2px solid rgba(127,127,127,.5); display: flex; align-items: center; justify-content: center; font-size: 11px; color: transparent; }',
+        '#ht-box .ht-row.on .ht-ck { background: rgb(var(--pr2)); border-color: rgb(var(--pr2)); color: #fff; }',
+        '#ht-box .ht-ck i { color: inherit !important; -webkit-text-fill-color: currentColor !important; }',
+        'html[data-theme="sleek"] #ht-box .ht-row.on .ht-ck { background: var(--sk-fg) !important; border-color: var(--sk-fg) !important; color: var(--sk-bg) !important; }',
+        'html[data-theme="regular"] #ht-box .ht-row.on .ht-ck { background: var(--rg-acc) !important; border-color: var(--rg-acc) !important; color: #fff !important; }',
+        '#ht-box .ht-ic { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; }',
+        '#ht-box .ht-ic i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+        'html[data-theme][data-theme] body:not(#rg-x) #ht-box .ht-ic i, html[data-theme][data-theme] body:not(#rg-x) #ht-box .ht-row.on .ht-ck i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+        'html[data-theme="sleek"][data-theme] body:not(#rg-x) #ht-box .ht-row.on .ht-ck i { color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+        '#ht-box .ht-n { font-weight: 600; font-size: .9rem; }',
+        '#ht-box .ht-mv { width: 34px; height: 40px; flex: 0 0 auto; border-radius: 10px; border: 1px solid rgba(127,127,127,.22); background: rgba(127,127,127,.06); color: inherit; cursor: pointer; font-size: 12px; }',
+        '#ht-box .ht-mv:disabled { opacity: .3; cursor: default; }',
+        '#ht-box .ht-reset { margin-top: 10px; border: 0; background: none; color: inherit; opacity: .75; text-decoration: underline; font: inherit; font-size: .8rem; padding: 4px 2px; cursor: pointer; }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
 <script id="incator-ask">
 /* =================================================================================================================
    Ask IncAtor: one place to ask about anything in IncAtor.
@@ -34249,6 +34393,7 @@ window.IncVersion = VERSION;
         { sel: '#ts-range', pg: 'settings', t: 'Text size', k: 'text size font bigger smaller larger read' },
         { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
         { sel: '#gd-auto', pg: 'data', t: 'Make backups fully automatic', k: 'automatic backups stopped reconnect google drive keeps asking backup stopped always backup never stop' },
+        { sel: '#ht-box', pg: 'settings', t: 'Home tiles', k: 'home tiles cards choose which tiles home page shortcuts add trash roofvision settings tile order' },
         { sel: '#rg-tune', pg: 'settings', t: 'IncAtor logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
         { sel: '#gd-log', pg: 'data', t: 'Last 30 days of backups', k: 'backup history list when backed up' },
         { sel: '#gd-card', pg: 'data', t: 'Google Drive Backup', k: 'google drive backup sync sign in' },
@@ -35368,7 +35513,7 @@ window.IncVersion = VERSION;
         var h = 0; for (var j = 0; j < n.length; j++) h = (h * 31 + n.charCodeAt(j)) | 0;
         var keys = Object.keys(C); return C[keys[Math.abs(h) % keys.length]];
     }
-    var HOME = { 'layer-group': 'blue', 'file-alt': 'orange', briefcase: 'pink', 'chart-bar': 'sky', cloud: 'teal', receipt: 'green', 'pen-to-square': 'blue', edit: 'blue', 'file-invoice': 'orange' };
+    var HOME = { 'layer-group': 'blue', 'file-alt': 'orange', briefcase: 'pink', 'chart-bar': 'sky', cloud: 'teal', receipt: 'green', trash: 'red', cog: 'grey', 'house-roof': 'brown', 'pen-to-square': 'blue', edit: 'blue', 'file-invoice': 'orange' };
     function on() { return document.documentElement.getAttribute('data-theme') === 'regular'; }
     var T = 0;
     function paint() {
