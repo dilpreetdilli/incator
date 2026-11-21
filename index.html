@@ -20651,7 +20651,7 @@ window.RcptStore = {
     },
     refresh: renderAll
 };
-window.RcptNav = { scan: function () { showPage('receipts'); setTimeout(function () { try { setView('hub'); } catch (e) { /* ignore */ } openCamera(); }, 260); }, inSub: function () { return UI.view !== 'hub' && document.body.getAttribute('data-pg') === 'receipts'; }, hub: function () { setView('hub'); }, summary: function () { showPage('receipts'); setTimeout(openTax, 120); }, view: function (v) { showPage('receipts'); setTimeout(function () { setView(v || 'all'); }, 120); } };
+window.RcptNav = { open: function (id) { const r = receipts.find(x => String(x.id) === String(id)); if (!r) return false; showPage('receipts'); setTimeout(function () { try { setView('hub'); } catch (e) { /* ignore */ } openEditor(editDraft(r), { existing: r }); }, 320); return true; }, scan: function () { showPage('receipts'); setTimeout(function () { try { setView('hub'); } catch (e) { /* ignore */ } openCamera(); }, 260); }, inSub: function () { return UI.view !== 'hub' && document.body.getAttribute('data-pg') === 'receipts'; }, hub: function () { setView('hub'); }, summary: function () { showPage('receipts'); setTimeout(openTax, 120); }, view: function (v) { showPage('receipts'); setTimeout(function () { setView(v || 'all'); }, 120); } };
 BIZ.rcpt = { openEditor: openEditor, openTax: openTax, readPages: readPages };
 
 /* ------------------------------------------------------------------ boot ------------------------------------------------------------------ */
@@ -33316,7 +33316,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.20 (v66)';
+var VERSION = '2026.11.20 (v67)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33522,15 +33522,18 @@ window.IncVersion = VERSION;
 </script>
 <script id="incator-ask">
 /* =================================================================================================================
-   Ask IncAtor: type a question about your own data ("How much did I make from Pinnacle in October?", "Which jobs
-   aren't paid yet?") and get the answer worked out from your jobs, quotes, projects and receipts.
-   Privacy and accuracy: the AI (the same one SlipVault uses) only sees your question, the names of the fields and
-   your customer / store / category names. It turns the question into a recipe; the adding-up is done right here on
-   this device, from your real data, so the numbers are exact. Quick questions (the chips) work without any AI.
-
-   Weekly summary: every Monday morning (or the day and time you choose) a notification with last week's income,
-   unpaid invoices, jobs not invoiced yet, quotes waiting for an answer and work orders to approve. Your IncAtor
-   server sends it, so it arrives even while IncAtor is closed; it uses your data as of the last time IncAtor was open.
+   Ask IncAtor: one place to ask about anything in IncAtor.
+   - Your data: "How much did I make from Pinnacle in October?", "When did I buy the drip edge?" (SlipVault items),
+     "Which jobs aren't paid?" - every result has an Open button (the job, the receipt, the quote).
+   - How to: "How do I change the background?" - the steps, and a Show me button that opens the right page and
+     section and lights up the exact setting.
+   - Walk me through it: "Help me create a job" - a live, step-by-step guide on the real screen. Each step lights up
+     the field or button and moves on by itself when you have done it.
+   - Help while you work: the small magic button on every page opens Ask IncAtor with help for the page you are on.
+   Privacy and accuracy: the AI (the same one SlipVault uses) only sees your question, the names of IncAtor's pages
+   and settings, and your customer / store / category names. Sums and lists are worked out here, from your real data.
+   Finding settings and the guided walk-throughs work without the AI.
+   Weekly summary: see the end of this file.
    ================================================================================================================= */
 (function () {
     'use strict';
@@ -33539,6 +33542,7 @@ window.IncVersion = VERSION;
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function load(k) { try { var v = JSON.parse((window.appStore || localStorage).getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
     function S() { try { return appSettings || {}; } catch (e) { return {}; } }    // the app's settings (a page-wide variable, not window.appSettings)
+    function saveS() { try { appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ } }
     function cur() { return S().currency || '$'; }
     function money(n) { n = +n || 0; var neg = n < 0; n = Math.abs(n); return (neg ? '-' : '') + cur() + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
@@ -33547,8 +33551,11 @@ window.IncVersion = VERSION;
     function addDays(s, n) { var d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return ymd(d); }
     function nice(s) { if (!s) return ''; var d = new Date(s + 'T12:00:00'); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }); }
     function firstLine(s) { return String(s || '').split(/\n/)[0].trim(); }
+    function page() { return document.body.getAttribute('data-pg') || 'home'; }
+    function go(pg) { try { showPage(pg); } catch (e) { /* ignore */ } }
+    function toast(m, k) { try { showToast(m, k || 'info'); } catch (e) { /* ignore */ } }
 
-    /* ---------- your data, as simple rows ---------- */
+    /* =============================================== your data, as simple rows =============================================== */
     function rows(ds) {
         if (ds === 'jobs') return load('incomeEntries').map(function (e) {
             var wf = (e.woFiles || [])[0] || {}, wm = wf.meta || {};
@@ -33561,14 +33568,18 @@ window.IncVersion = VERSION;
                 status: String(q.status || 'draft').toLowerCase(), total: num(q.total), sent_date: d10(q.sentAt) };
         });
         if (ds === 'projects') return load('incomeProjects').map(function (p) { return { _id: p.id, date: d10(p.startDate) || d10(p.createdAt), name: p.name || '', status: String(p.status || '').toLowerCase(), total: num(p.total) }; });
-        if (ds === 'receipts') return load('incomeReceipts').map(function (r) { return { _id: r.id, date: d10(r.date), store: r.store || '', category: r.category || r.cat || '', subtotal: num(r.subtotal), gst: num(r.gst), total: num(r.total) }; });
+        if (ds === 'receipts') return load('incomeReceipts').map(function (r) {
+            var its = (r.items || r.lines || []).filter(Boolean).map(function (it) { return { name: String(it.name || it.desc || '').trim(), amount: num(it.amount != null ? it.amount : it.price != null ? it.price : it.total), qty: it.qty }; }).filter(function (it) { return it.name; });
+            return { _id: r.id, date: d10(r.date), store: r.store || '', category: r.category || r.cat || '', items: its.map(function (it) { return it.name; }).join(' · '), notes: r.notes || r.desc || '', payment: r.payment || '',
+                subtotal: num(r.subtotal), gst: num(r.gst), total: num(r.total), _items: its };
+        });
         return [];
     }
     var FIELDS = {
         jobs: 'date (date), address (text), customer (text: bill-to name or work order sender), notes (text), wo_number (text), invoice_no (text), amount (money, before GST), gst (money), total (money, with GST), paid (true/false), invoiced (true/false), status ("paid", "unpaid" = invoiced but not paid, "not invoiced"), paid_date (date), invoice_date (date)',
         quotes: 'date (date), number (text), customer (text), address (text), title (text), status (text: "draft", "sent", "accepted", "declined", ...), total (money), sent_date (date)',
         projects: 'date (date, start), name (text), status (text: "active", "completed", ...), total (money)',
-        receipts: 'date (date), store (text), category (text), subtotal (money), gst (money, GST paid), total (money)'
+        receipts: 'date (date), store (text), category (text), items (text: the item names on the receipt, e.g. "drip edge 10ft · roofing nails"), notes (text), payment (text), subtotal (money), gst (money, GST paid), total (money)'
     };
 
     /* ---------- run a recipe ---------- */
@@ -33577,7 +33588,7 @@ window.IncVersion = VERSION;
         switch (f.op) {
             case 'eq': return typeof v === 'number' ? v === num(w) : typeof v === 'boolean' ? v === (w === true || w === 'true') : lo(v) === lo(w);
             case 'neq': return typeof v === 'number' ? v !== num(w) : typeof v === 'boolean' ? v !== (w === true || w === 'true') : lo(v) !== lo(w);
-            case 'contains': return lo(v).indexOf(lo(w)) >= 0;
+            case 'contains': return lo(w).split(/\s+/).filter(Boolean).every(function (part) { return lo(v).indexOf(part) >= 0; });
             case 'not_contains': return lo(v).indexOf(lo(w)) < 0;
             case 'in': return (Array.isArray(w) ? w : [w]).some(function (x) { return lo(v) === lo(x); });
             case 'gt': return typeof v === 'number' ? v > num(w) : String(v) > String(w);
@@ -33618,7 +33629,8 @@ window.IncVersion = VERSION;
         });
         var sb = q.sort_by && all.length && q.sort_by in all[0] ? q.sort_by : (m === 'list' ? df : f), dir = q.sort === 'asc' ? 1 : -1;
         list.sort(function (a, b) { var x = a[sb], y = b[sb]; return (x > y ? 1 : x < y ? -1 : 0) * dir; });
-        var res = { q: q, ds: ds, m: m, f: f, list: list, value: agg(list, m, f), n: list.length, scanned: all.length, money: !!MONEY[f] && m !== 'count' && m !== 'list' };
+        var hl = (q.filters || []).filter(function (x) { return x && x.field === 'items' && x.op === 'contains'; }).map(function (x) { return String(x.value || '').toLowerCase(); })[0] || '';
+        var res = { q: q, ds: ds, m: m, f: f, list: list, value: agg(list, m, f), n: list.length, scanned: all.length, money: !!MONEY[f] && m !== 'count' && m !== 'list', hl: hl };
         if (m === 'min' || m === 'max') { res.pick = list.slice().sort(function (a, b) { return (num(a[f]) - num(b[f])) * (m === 'max' ? -1 : 1); })[0] || null; }
         if (q.group) {
             var by = {};
@@ -33633,6 +33645,7 @@ window.IncVersion = VERSION;
     }
     function fmtVal(r) {
         if (r.groups) { var t = r.groups[0]; return t ? glabel(t.key, r.q.group) + ' (' + (r.gmoney ? money(t.value) : t.value) + ')' : 'nothing'; }
+        if (r.m === 'list' && r.list.length === 1 && r.ds === 'receipts') return nice(r.list[0].date) + ' at ' + (r.list[0].store || 'the store');
         if (r.m === 'count' || r.m === 'list') return String(r.value);
         return r.money ? money(r.value) : (Math.round(r.value * 100) / 100).toLocaleString('en-US');
     }
@@ -33642,131 +33655,487 @@ window.IncVersion = VERSION;
         return k;
     }
 
-    /* ---------- quick questions: no AI needed ---------- */
+    /* ---------- quick questions about your data: no AI needed ---------- */
     function today() { return ymd(new Date()); }
     function monthStart() { var d = new Date(); return ymd(new Date(d.getFullYear(), d.getMonth(), 1)); }
     function yearStart() { return new Date().getFullYear() + '-01-01'; }
-    var QUICK = [
-        { t: 'This month’s income', p: function () { return { queries: [{ dataset: 'jobs', from: monthStart(), to: today(), measure: 'sum', field: 'total', label: 'Income this month (with GST)' }, { dataset: 'jobs', from: monthStart(), to: today(), measure: 'count', label: 'Jobs this month' }], answer: 'This month you made {1} from {2} jobs.' }; } },
-        { t: 'Last week', week: true },
-        { t: 'Unpaid invoices', p: function () { return { queries: [{ dataset: 'jobs', filters: [{ field: 'status', op: 'eq', value: 'unpaid' }], measure: 'list', sort_by: 'date', sort: 'asc', label: 'Invoiced, not paid yet' }, { dataset: 'jobs', filters: [{ field: 'status', op: 'eq', value: 'unpaid' }], measure: 'sum', field: 'total', label: 'Owed to you' }], answer: '{1} invoices are not paid yet, {2} in total.' }; } },
-        { t: 'Not invoiced yet', p: function () { return { queries: [{ dataset: 'jobs', filters: [{ field: 'invoiced', op: 'is_false' }], measure: 'list', sort_by: 'date', sort: 'asc', label: 'Jobs without an invoice' }, { dataset: 'jobs', filters: [{ field: 'invoiced', op: 'is_false' }], measure: 'sum', field: 'total', label: 'Worth' }], answer: '{1} jobs have no invoice yet, worth {2}.' }; } },
-        { t: 'GST this year', p: function () { return { queries: [{ dataset: 'jobs', from: yearStart(), to: today(), measure: 'sum', field: 'gst', label: 'GST collected on jobs' }, { dataset: 'receipts', from: yearStart(), to: today(), measure: 'sum', field: 'gst', label: 'GST paid on receipts' }], answer: 'This year you collected {1} in GST and paid {2} on receipts.' }; } },
-        { t: 'Best months', p: function () { return { queries: [{ dataset: 'jobs', from: yearStart(), to: today(), measure: 'sum', field: 'total', group: 'month', sort: 'desc', label: 'Income by month this year' }], answer: 'Your best month this year was {1}.' }; } },
-        { t: 'Spending by category', p: function () { return { queries: [{ dataset: 'receipts', from: yearStart(), to: today(), measure: 'sum', field: 'total', group: 'category', sort: 'desc', label: 'Receipts by category this year' }], answer: 'You spent the most on {1} this year.' }; } }
-    ];
+    var QUICK = {
+        month: { t: 'This month’s income', p: function () { return { queries: [{ dataset: 'jobs', from: monthStart(), to: today(), measure: 'sum', field: 'total', label: 'Income this month (with GST)' }, { dataset: 'jobs', from: monthStart(), to: today(), measure: 'count', label: 'Jobs this month' }], answer: 'This month you made {1} from {2} jobs.' }; } },
+        week: { t: 'Last week', week: true },
+        unpaid: { t: 'Unpaid invoices', p: function () { return { queries: [{ dataset: 'jobs', filters: [{ field: 'status', op: 'eq', value: 'unpaid' }], measure: 'list', sort_by: 'date', sort: 'asc', label: 'Invoiced, not paid yet' }, { dataset: 'jobs', filters: [{ field: 'status', op: 'eq', value: 'unpaid' }], measure: 'sum', field: 'total', label: 'Owed to you' }], answer: '{1} invoices are not paid yet, {2} in total.' }; } },
+        noinv: { t: 'Not invoiced yet', p: function () { return { queries: [{ dataset: 'jobs', filters: [{ field: 'invoiced', op: 'is_false' }], measure: 'list', sort_by: 'date', sort: 'asc', label: 'Jobs without an invoice' }, { dataset: 'jobs', filters: [{ field: 'invoiced', op: 'is_false' }], measure: 'sum', field: 'total', label: 'Worth' }], answer: '{1} jobs have no invoice yet, worth {2}.' }; } },
+        gst: { t: 'GST this year', p: function () { return { queries: [{ dataset: 'jobs', from: yearStart(), to: today(), measure: 'sum', field: 'gst', label: 'GST collected on jobs' }, { dataset: 'receipts', from: yearStart(), to: today(), measure: 'sum', field: 'gst', label: 'GST paid on receipts' }], answer: 'This year you collected {1} in GST and paid {2} on receipts.' }; } },
+        best: { t: 'Best months', p: function () { return { queries: [{ dataset: 'jobs', from: yearStart(), to: today(), measure: 'sum', field: 'total', group: 'month', sort: 'desc', label: 'Income by month this year' }], answer: 'Your best month this year was {1}.' }; } },
+        spend: { t: 'Spending by category', p: function () { return { queries: [{ dataset: 'receipts', from: yearStart(), to: today(), measure: 'sum', field: 'total', group: 'category', sort: 'desc', label: 'Receipts by category this year' }], answer: 'You spent the most on {1} this year.' }; } },
+        waiting: { t: 'Quotes waiting', p: function () { return { queries: [{ dataset: 'quotes', filters: [{ field: 'status', op: 'eq', value: 'sent' }], measure: 'list', sort_by: 'sent_date', sort: 'asc', label: 'Sent, no answer yet' }, { dataset: 'quotes', filters: [{ field: 'status', op: 'eq', value: 'sent' }], measure: 'sum', field: 'total', label: 'Worth' }], answer: '{1} quotes are waiting for an answer, worth {2}.' }; } }
+    };
 
-    /* ---------- the AI turns a question into a recipe ---------- */
+    /* =============================================== help: every page and setting =============================================== */
+    var PAGES = [
+        { pg: 'home', t: 'Home', k: 'start main' },
+        { pg: 'add', t: 'Create Job', k: 'new job add entry create work order import' },
+        { pg: 'view', t: 'JobNest', k: 'jobs list saved entries search filter invoice paid' },
+        { pg: 'summary', t: 'Analytics', k: 'charts reports income graphs stats statistics' },
+        { pg: 'receipts', t: 'SlipVault', k: 'receipts scan expenses claim slip' },
+        { pg: 'quotes', t: 'Quotes', k: 'quote estimate proposal' },
+        { pg: 'projects', t: 'Projects', k: 'project' },
+        { pg: 'roofcalc', t: 'RoofVision', k: 'roof calculator measure squares materials' },
+        { pg: 'data', t: 'Backup & Data', k: 'backup restore export import google drive delete' },
+        { pg: 'trash', t: 'Trash', k: 'deleted restore bin' },
+        { pg: 'settings', t: 'Settings', k: 'settings options preferences' }
+    ];
+    var PAGE_T = {}; PAGES.forEach(function (p) { PAGE_T[p.pg] = p.t; });
+    // extra words people use for things whose title says it differently
+    var EXTRA = [
+        { sel: '#sky-block', pg: 'settings', t: 'Background', k: 'background wallpaper picture sky scene change background image' },
+        { sel: '#rot-item', pg: 'settings', t: 'A different background each time', k: 'rotate shuffle every time automatically' },
+        { sel: '#lm-block', pg: 'settings', t: 'Light or dark mode', k: 'dark light mode theme night white' },
+        { sel: '#glow-item', pg: 'settings', t: 'Glow colour', k: 'colour color accent theme glow' },
+        { sel: '#ts-range', pg: 'settings', t: 'Text size', k: 'text size font bigger smaller larger read' },
+        { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
+        { sel: '#gd-log', pg: 'data', t: 'Last 30 days of backups', k: 'backup history list when backed up' },
+        { sel: '#gd-card', pg: 'data', t: 'Google Drive Backup', k: 'google drive backup sync sign in' },
+        { sel: '#ins-card', pg: 'data', t: 'Install on your phone', k: 'install home screen app icon add to home' },
+        { sel: '#wo-settings-section', pg: 'settings', t: 'Work Orders and Work Order Gmail', k: 'gmail email work orders connect import automatic auto import server' },
+        { sel: '#notif-settings-section', pg: 'settings', t: 'Notifications', k: 'notifications push alerts weekly summary' },
+        { sel: '#applock-settings-section', pg: 'settings', t: 'App lock', k: 'lock pin face id fingerprint password security' },
+        { sel: '#um-section', pg: 'settings', t: 'User Management', k: 'users access people allow permission' },
+        { sel: '#autodelete-settings-section', pg: 'settings', t: 'Auto Delete', k: 'auto delete clean up old storage space' }
+    ];
+    var INDEX = null;
+    function sectionTitle(el) {
+        var s = el.closest('.acc-section'), h = s && s.querySelector('.acc-head');
+        var t = h && (h.querySelector('h2, h3, .live-calc-title') || h);
+        return t ? t.textContent.replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+    }
+    function groupTitle(el) { var a = el.closest('.ap-item'), b = a && a.querySelector('.ap-t b'); return b ? b.textContent.trim() : ''; }
+    function buildIndex() {
+        var out = [], n = 0, seen = {};
+        ['settings', 'data'].forEach(function (pg) {
+            var root = document.getElementById(pg + '-page'); if (!root) return;
+            root.querySelectorAll('.setting-item').forEach(function (it) {
+                var t = it.querySelector('.setting-title'); if (!t) return;
+                var title = t.textContent.replace(/\s+/g, ' ').trim(); if (!title) return;
+                var id = it.getAttribute('data-hx') || ('h' + (++n)); it.setAttribute('data-hx', id);
+                var d = it.querySelector('.setting-description'), sec = sectionTitle(it), grp = groupTitle(it);
+                var key = sec + '|' + title; if (seen[key]) return; seen[key] = 1;
+                out.push({ id: id, pg: pg, t: title, d: d ? d.textContent.replace(/\s+/g, ' ').trim().slice(0, 140) : '', path: [PAGE_T[pg], sec, grp && grp !== title ? grp : ''].filter(Boolean), sel: '[data-hx="' + id + '"]' });
+            });
+            root.querySelectorAll('.acc-section').forEach(function (s) {
+                var t = sectionTitle(s.querySelector('.acc-head') || s); if (!t) return;
+                var id = s.getAttribute('data-hx') || ('h' + (++n)); s.setAttribute('data-hx', id);
+                if (seen['sec|' + t]) return; seen['sec|' + t] = 1;
+                out.push({ id: id, pg: pg, t: t, d: 'The whole ' + t + ' section', path: [PAGE_T[pg]], sel: '[data-hx="' + id + '"]', sec: true });
+            });
+        });
+        EXTRA.forEach(function (x, i) {
+            var el = document.querySelector(x.sel); if (!el) return;
+            var g = groupTitle(el);
+            out.push({ id: 'x' + i, pg: x.pg, t: x.t, d: '', k: x.k, path: [PAGE_T[x.pg], sectionTitle(el), g && g !== x.t ? g : ''].filter(Boolean), sel: x.sel });
+        });
+        PAGES.forEach(function (p) { out.push({ id: 'p:' + p.pg, pg: p.pg, t: p.t, d: 'The ' + p.t + ' page', k: p.k, path: [], page: true }); });
+        INDEX = out; return out;
+    }
+    function index() { return INDEX || buildIndex(); }
+    function byId(id) { return index().filter(function (x) { return x.id === id; })[0] || null; }
+
+    /* ---------- guided walk-throughs on the real screen ---------- */
+    var TOURS = {
+        'create-job': { t: 'Create a job', k: 'create new job add entry make job enter job', steps: [
+            { pg: 'add', sel: '#add-page [role="tab"][data-wov="manual"]', skipIf: function () { var a = document.getElementById('address'); return !!(a && a.offsetParent); }, text: 'Tap <b>Fill in the form</b> to type the job in yourself. (To bring in a work order PDF instead, use <b>Import work order</b>.)', wait: 'click' },
+            { pg: 'add', sel: '#address', text: 'Type the <b>property address</b>.', wait: 'value' },
+            { pg: 'add', sel: '#date', text: 'Check the <b>date</b> of the job. It starts as today.', wait: 'none' },
+            { pg: 'add', sel: '#wo-number', text: 'If the job has a <b>work order number</b>, type it here. Otherwise tap Next.', wait: 'none', optional: true },
+            { pg: 'add', sel: '#amount', text: 'Type the <b>price before GST</b>. IncAtor adds the GST for you.', wait: 'value' },
+            { pg: 'add', sel: '#extras', text: 'Any <b>extra services</b> (like a chimney flashing)? Add their price here, or tap Next.', wait: 'none', optional: true },
+            { pg: 'add', sel: '#notes', text: 'Add <b>notes</b> if you like (they can go on the invoice too). Or tap Next.', wait: 'none', optional: true },
+            { pg: 'add', sel: '#add-page [onclick="calculateEntry()"]', text: 'Tap <b>Calculate &amp; Preview</b> to see the GST and the total.', wait: 'click' },
+            { sel: '[onclick="saveEntry()"]', text: 'Check the numbers, then tap <b>Save Entry</b>.', wait: 'click' }
+        ], done: 'Your job is saved. Find it any time in <b>JobNest</b>, where you can make its invoice and mark it paid.' },
+        'scan-receipt': { t: 'Scan a receipt', k: 'scan receipt photo camera slipvault add receipt capture', steps: [
+            { pg: 'receipts', sel: '#receipts-page [data-rc="cam"]', text: 'Tap <b>Open camera</b>.', wait: 'click' },
+            { sel: null, text: 'Hold the receipt flat in good light and fill the frame. With <b>Auto Capture</b> on, the photo takes itself; with <b>Auto Light</b> on, the flashlight helps when it is dark. Then tap the tick to finish.', wait: 'none' }
+        ], done: 'Your receipt photo is in SlipVault. With the AI reader on, the store, date, items and GST are filled in for you.' },
+        'send-invoice': { t: 'Make and send an invoice', k: 'invoice send invoice email invoice share invoice print bill customer', steps: [
+            { pg: 'view', sel: '#view-page .entry-more-btn', text: 'Find the job, then tap its <b>⋯ More actions</b> button.', wait: 'click' },
+            { sel: '.entry-menu', text: 'Tap <b>Invoice</b>.', wait: 'click' },
+            { sel: null, text: 'Check the invoice, then tap <b>Share</b> to email or text it (the subject is filled in for you), or <b>Print</b>. Sharing marks the job as invoiced.', wait: 'none' }
+        ], done: 'When the customer pays, tap the <b>$</b> button on the job in JobNest to mark it paid.' },
+        'invoice-many': { t: 'One invoice for several jobs', k: 'invoice several jobs many jobs combine one invoice multiple', steps: [
+            { pg: 'view', sel: '#view-page [onclick="openInvoicePicker()"]', text: 'Tap <b>New Invoice</b>.', wait: 'click' },
+            { sel: null, text: 'Tick the jobs that go on this invoice, then continue to see it, Share it or Print it.', wait: 'none' }
+        ], done: 'All the jobs on it are marked invoiced together.' },
+        'mark-paid': { t: 'Mark a job paid', k: 'paid mark paid payment received got paid', steps: [
+            { pg: 'view', sel: '#view-page .paid-btn', text: 'Find the job and tap its <b>$ Mark as paid</b> button. Tap it again to undo.', wait: 'click' }
+        ], done: 'Paid jobs drop off your unpaid list. Ask me “unpaid invoices” any time.' },
+        'find-job': { t: 'Find a job', k: 'find job search job look up address where is job', steps: [
+            { pg: 'view', sel: '#view-page .si-btn', text: 'Tap the <b>search</b> icon and type part of the address, an invoice number or a note.', wait: 'click' },
+            { sel: null, text: 'Use <b>Filter &amp; Sort</b> to show only unpaid jobs, a date range, and more. Tap anywhere else to close the search; your search stays.', wait: 'none' }
+        ], done: 'Tip: you can also just ask me, like “jobs on Maple Street”.' },
+        'new-quote': { t: 'Create a quote', k: 'quote new quote estimate proposal price customer', steps: [
+            { pg: 'quotes', sel: '#quotes-page [onclick="BIZ.newQuote()"]', text: 'Tap <b>New Quote</b>.', wait: 'click' },
+            { sel: null, text: 'Fill in the customer, the job address and the work (sections and prices). Then save it, and share it as a PDF when it is ready.', wait: 'none' }
+        ], done: 'When the customer accepts, the quote can become a project, and a finished project becomes a job by itself.' },
+        'change-background': { t: 'Change the background', k: 'change background wallpaper picture theme look', steps: [
+            { pg: 'settings', sel: '#sky-block', text: 'Here are the backgrounds. Choose <b>Pick one</b> and tap the one you like, or <b>Automatic</b> to let IncAtor choose.', wait: 'none' },
+            { pg: 'settings', sel: '#rot-item', text: 'Want a <b>different one each time</b> you open IncAtor? Turn this on.', wait: 'none', optional: true }
+        ], done: 'You can change it back any time in Settings › Appearance.' },
+        'restore-backup': { t: 'Restore a backup', k: 'restore backup bring back data lost data get back', steps: [
+            { pg: 'data', sel: '#gd-restore-btn', text: 'Tap <b>Restore Backup</b> to bring back your newest Google Drive backup. It shows you what is in it first.', wait: 'none' },
+            { pg: 'data', sel: '#gdl-head', text: 'Or open <b>Last 30 days of backups</b> and tap <b>Restore</b> next to an older one.', wait: 'none', optional: true }
+        ], done: 'A safety copy of what is on the phone is kept before anything is replaced.' },
+        'ai-key': { t: 'Turn on the AI reader', k: 'ai reader gemini key api turn on ai smart', steps: [
+            { pg: 'settings', find: 'AI receipt reader', text: 'Choose <b>Gemini</b> (free) and paste your key from Google AI Studio. The same key powers Ask IncAtor.', wait: 'none' }
+        ], done: 'Now you can ask me anything in your own words.' },
+        'notifications': { t: 'Turn on notifications', k: 'notifications push turn on alerts notify me', steps: [
+            { pg: 'settings', sel: '#notif-settings-section', text: 'Turn on <b>Enable Push Notifications</b> and allow them when asked. On iPhone, IncAtor must be opened from its Home Screen icon.', wait: 'none' }
+        ], done: 'Use <b>Test Notification</b> to check it works.' }
+    };
+
+    /* ---------- find a setting or page without the AI ---------- */
+    var STOP = { how: 1, do: 1, i: 1, can: 1, the: 1, a: 1, an: 1, to: 1, my: 1, me: 1, where: 1, is: 1, in: 1, of: 1, on: 1, help: 1, with: 1, find: 1, change: 0, setting: 1, settings: 1, want: 1, please: 1, it: 1, for: 1, and: 1, what: 1, does: 1, show: 1, make: 0 };
+    function words(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(function (w) { return w.length > 1 && !STOP[w]; }).map(function (w) { return w.replace(/(ing|es|s)$/, ''); }); }
+    function score(qw, hay, weight) { var hw = words(hay), sc = 0; qw.forEach(function (w) { if (hw.indexOf(w) >= 0) sc += weight; else if (w.length > 3 && hw.some(function (h) { return h.indexOf(w) === 0 || w.indexOf(h) === 0 && h.length > 3; })) sc += weight / 2; }); return sc; }
+    function localHelp(q) {
+        var qw = words(q); if (!qw.length) return { tours: [], items: [] };
+        var tours = Object.keys(TOURS).map(function (id) { var t = TOURS[id]; return { id: id, s: score(qw, t.t, 3) + score(qw, t.k, 2) }; }).filter(function (x) { return x.s >= 3; }).sort(function (a, b) { return b.s - a.s; });
+        var items = index().map(function (x) { return { x: x, s: score(qw, x.t, 3) + score(qw, x.k || '', 2) + score(qw, x.d, 1) + score(qw, x.path.join(' '), 1) + (x.page ? -0.5 : 0) }; }).filter(function (r) { return r.s >= 2.5; }).sort(function (a, b) { return b.s - a.s; });
+        return { tours: tours.slice(0, 2), items: items.slice(0, 4).map(function (r) { return r.x; }), top: Math.max(tours[0] ? tours[0].s : 0, items[0] ? items[0].s : 0) };
+    }
+    var DATA_RE = /\b(how much|how many|when did|which|what did|total|spent|spend|earn|earned|made|make in|income|bought|buy|purchas|unpaid|paid|owe|owed|biggest|largest|smallest|average|receipts? (for|from)|jobs? (for|on|from|in)|last (week|month|year)|this (week|month|year)|gst)\b/i;
+
+    /* ---------- the AI: turns any question into a recipe, a how-to or a walk-through ---------- */
     function topNames(ds, field, n) {
         var c = {}; rows(ds).forEach(function (r) { var v = String(r[field] || '').trim(); if (v) c[v] = (c[v] || 0) + 1; });
         return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).slice(0, n);
     }
+    function catalog() {
+        var lines = [];
+        Object.keys(TOURS).forEach(function (id) { lines.push('tour:' + id + ' = guided walk-through: ' + TOURS[id].t); });
+        index().forEach(function (x) { lines.push(x.id + ' = ' + (x.path.length ? x.path.join(' > ') + ' > ' : '') + x.t + (x.d ? ': ' + x.d.slice(0, 80) : '')); });
+        return lines.join('\n');
+    }
     function prompt(question, prev) {
         var t = new Date();
         return [
-            'You turn a roofing contractor\'s question about his own business records into a JSON recipe. You never see the records; an app runs the recipe exactly.',
-            'Today is ' + t.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' (' + ymd(t) + '). Weeks start on Monday. Money is in ' + cur() + '. "Made", "earned", "income" = jobs total (with GST) unless he says before GST (then amount).',
-            'Datasets and fields:',
+            'You are the helper inside IncAtor, a web app a roofing contractor (Jattana Roofing and Renovations, BC, Canada) uses for jobs, invoices, quotes, projects, receipts (SlipVault), backups and settings. Answer ONLY with JSON.',
+            'Today is ' + t.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' (' + ymd(t) + '). Weeks start on Monday. Money is in ' + cur() + '. The user is on the "' + (PAGE_T[page()] || page()) + '" page.',
+            'Pick ONE type:',
+            '1) "data" - a question about his own records. You never see them; the app runs your recipe exactly. Datasets:',
             '- jobs: ' + FIELDS.jobs,
             '- quotes: ' + FIELDS.quotes,
             '- projects: ' + FIELDS.projects,
-            '- receipts (his business expenses): ' + FIELDS.receipts,
-            'Known job customers: ' + JSON.stringify(topNames('jobs', 'customer', 40)),
-            'Known quote customers: ' + JSON.stringify(topNames('quotes', 'customer', 30)),
-            'Known receipt stores: ' + JSON.stringify(topNames('receipts', 'store', 40)),
-            'Known receipt categories: ' + JSON.stringify(topNames('receipts', 'category', 30)),
-            'Return ONLY JSON: {"queries":[{"dataset":"jobs|quotes|projects|receipts","from":"YYYY-MM-DD or empty","to":"YYYY-MM-DD or empty","date_field":"date or another date field","filters":[{"field":"...","op":"eq|neq|contains|not_contains|in|gt|gte|lt|lte|is_true|is_false|empty|not_empty","value":"..."}],"measure":"count|sum|avg|min|max|list","field":"money field for sum/avg/min/max","group":"empty or month|week|year|day|<a text field>","sort":"desc|asc","sort_by":"field to sort a list by","limit":0,"label":"short label"}],"answer":"one friendly sentence using {1}, {2}... for each query result","clarify":""}',
-            'Rules: up to 3 queries. For a name the user gives, use op "contains" with the shortest distinctive word (e.g. "pinnacle"), matching a known name if one fits; for an address use "contains" on address. "Which/what jobs" questions use measure "list". "Unpaid" = status eq "unpaid". "Biggest/largest" = max, "smallest" = min. Group results the user wants broken down. {n} becomes a formatted number or money amount (for grouped queries: the top group with its value). If the question cannot be answered from these records, set "clarify" to a short helpful reply and "queries" to [].',
-            prev ? 'The previous question was: ' + JSON.stringify(prev.q) + ' with recipe ' + JSON.stringify(prev.plan) + '. The new question may be a follow-up to it.' : '',
+            '- receipts (SlipVault, his business expenses): ' + FIELDS.receipts,
+            'Known job customers: ' + JSON.stringify(topNames('jobs', 'customer', 40)) + '. Known receipt stores: ' + JSON.stringify(topNames('receipts', 'store', 40)) + '. Known receipt categories: ' + JSON.stringify(topNames('receipts', 'category', 30)) + '.',
+            'Recipe: {"type":"data","queries":[{"dataset":"jobs|quotes|projects|receipts","from":"YYYY-MM-DD or empty","to":"YYYY-MM-DD or empty","date_field":"date","filters":[{"field":"...","op":"eq|neq|contains|not_contains|in|gt|gte|lt|lte|is_true|is_false|empty|not_empty","value":"..."}],"measure":"count|sum|avg|min|max|list","field":"money field","group":"empty or month|week|year|day|<text field>","sort":"desc|asc","sort_by":"field","limit":0,"label":"short label"}],"answer":"one friendly sentence using {1}, {2}... for each query result"}',
+            'Data rules: up to 3 queries. "Made/earned/income" = jobs total. For names use op "contains" with the shortest distinctive word. "When did I buy X" = receipts, filter items contains "x" (singular, 1-2 key words), measure "list", sort_by "date", sort "desc". "Which/what jobs" = measure "list". "Unpaid" = status eq "unpaid". {n} becomes a formatted value (a one-receipt list becomes "date at store").',
+            '2) "help" - how to do something, where a setting is, what a feature does. {"type":"help","answer":"short clear steps, one per line, starting each line with a number","targets":["up to 3 ids from the catalog below, most useful first: a tour: id when he wants to do a task, or a setting/page id to show him"]}',
+            '3) "go" - he just wants to open a page. {"type":"go","targets":["p:<page>"],"answer":"short"}',
+            '4) "chat" - anything else about using IncAtor or running the business that needs no records. {"type":"chat","answer":"short helpful reply"}. If it has nothing to do with IncAtor or his business, say politely what you can help with.',
+            'Catalog of IncAtor (id = place):',
+            catalog(),
+            prev ? 'The previous question was: ' + JSON.stringify(prev.q) + (prev.plan ? ' with recipe ' + JSON.stringify(prev.plan) : '') + '. The new question may follow up on it.' : '',
             'Question: ' + JSON.stringify(question)
         ].filter(Boolean).join('\n');
     }
     function parseJson(t) {
         t = String(t || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-        var i = t.indexOf('{'), j = t.lastIndexOf('}'); if (i < 0 || j < i) throw new Error('The AI did not return a recipe.');
+        var i = t.indexOf('{'), j = t.lastIndexOf('}'); if (i < 0 || j < i) throw new Error('The AI did not return an answer I could use.');
         return JSON.parse(t.slice(i, j + 1));
     }
 
-    /* ---------- the Ask sheet ---------- */
-    var sheet = null, history = [], prev = null, busy = false;
+    /* =============================================== show me: open the place and light it up =============================================== */
+    function reveal(el) {                                                    // open every closed section, group and panel around it
+        var chain = [], a = el;
+        while (a && a !== document.body) { chain.unshift(a); a = a.parentElement; }
+        chain.forEach(function (x) {
+            if (x.classList && x.classList.contains('acc-section') && !x.classList.contains('acc-open')) { var h = x.querySelector(':scope > .acc-head'); if (h) h.click(); }
+            if (x.classList && x.classList.contains('ap-item')) { var b = x.querySelector(':scope > .ap-head'); if (b && b.getAttribute('aria-expanded') !== 'true') b.click(); }
+            if (x.tagName === 'DETAILS' && !x.open) x.open = true;
+        });
+    }
+    function visible(el) { if (!el) return false; var r = el.getBoundingClientRect(); return !!el.offsetParent || r.width > 0 && r.height > 0; }
+    function findEl(step) {
+        if (step.sel) return document.querySelector(step.sel);
+        if (step.find) { var hit = index().filter(function (x) { return x.t === step.find; })[0]; return hit ? document.querySelector(hit.sel) : null; }
+        return null;
+    }
+    function showItem(x) {
+        close();
+        if (x.page) { go(x.pg); toast('Here is ' + x.t, 'info'); return; }
+        go(x.pg);
+        setTimeout(function () {
+            var el = document.querySelector(x.sel); if (!el) { toast('I could not find that on this device', 'error'); return; }
+            reveal(el);
+            setTimeout(function () { reveal(el); setTimeout(function () { spot(el, '<b>' + esc(x.t) + '</b>' + (x.path.length ? '<small>' + esc(x.path.join(' › ')) + '</small>' : ''), 'tap'); }, 350); }, 350);
+        }, 450);
+    }
+    var ring = null, tip = null, follow = 0;
+    function spot(el, html, mode) {
+        unspot();
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        ring = document.createElement('div'); ring.className = 'ask-ring'; document.body.appendChild(ring);
+        if (mode === 'tap') { tip = document.createElement('div'); tip.className = 'ask-tip'; tip.innerHTML = html + '<button type="button" aria-label="Close">OK</button>'; document.body.appendChild(tip); tip.querySelector('button').onclick = unspot; }
+        var t0 = Date.now();
+        (function track() {
+            if (!ring) return;
+            var r = el.getBoundingClientRect();
+            ring.style.cssText = 'top:' + (r.top - 6) + 'px;left:' + (r.left - 6) + 'px;width:' + (r.width + 12) + 'px;height:' + (r.height + 12) + 'px;';
+            if (tip) { var below = r.bottom + 120 < window.innerHeight; tip.style.top = (below ? r.bottom + 14 : Math.max(10, r.top - tip.offsetHeight - 14)) + 'px'; }
+            if (mode === 'tap' && Date.now() - t0 > 9000) { unspot(); return; }
+            follow = requestAnimationFrame(track);
+        })();
+    }
+    function unspot() { cancelAnimationFrame(follow); if (ring) ring.remove(); if (tip) tip.remove(); ring = tip = null; }
+
+    /* =============================================== the walk-through engine =============================================== */
+    var tour = null;
+    function startTour(id) {
+        var T = TOURS[id]; if (!T) return;
+        close(); unspot(); endTour(true);
+        tour = { id: id, T: T, i: -1, card: null };
+        tour.card = document.createElement('div'); tour.card.id = 'ask-tour'; tour.card.setAttribute('role', 'dialog'); tour.card.setAttribute('aria-live', 'polite');
+        document.body.appendChild(tour.card);
+        tour.card.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-tour]'); if (!b) return;
+            var a = b.getAttribute('data-tour');
+            if (a === 'next') step(tour.i + 1); else if (a === 'back') step(Math.max(0, tour.i - 1)); else if (a === 'stop' || a === 'done') endTour();
+        });
+        step(0);
+    }
+    function step(i) {
+        if (!tour) return;
+        tour.cleanup && tour.cleanup(); tour.cleanup = null; unspot();
+        var steps = tour.T.steps;
+        while (i < steps.length && steps[i].skipIf && steps[i].skipIf()) i++;
+        tour.i = i;
+        if (i >= steps.length) { paintCard('<b>Done!</b> ' + tour.T.done, true); try { navigator.vibrate && navigator.vibrate(30); } catch (e) { /* ignore */ } return; }
+        var st = steps[i];
+        if (st.pg && page() !== st.pg) go(st.pg);
+        paintCard(st.text, false, st);
+        var tries = 0;
+        (function wait() {
+            if (!tour || tour.i !== i) return;
+            var el = findEl(st);
+            if (el && !visible(el)) reveal(el);
+            if (!el || !visible(el)) { if (st.sel === null && !st.find) return; if (++tries < 24) { setTimeout(wait, 250); return; } paintCard(st.text + '<br><small class="ask-note">I can’t see it on the screen right now. Tap Next when you are ready.</small>', false, st); return; }
+            spot(el, '', 'tour'); place(el);
+            if (st.wait === 'click') {
+                var onClick = function (e) { if (el.contains(e.target)) setTimeout(function () { if (tour && tour.i === i) step(i + 1); }, 450); };
+                document.addEventListener('click', onClick, true);
+                tour.cleanup = function () { document.removeEventListener('click', onClick, true); };
+            } else if (st.wait === 'value') {
+                var onCh = function () { if (String(el.value || '').trim()) { paintCard(st.text + ' <span class="ask-okmark"><i class="fas fa-check"></i></span>', false, st); } };
+                var onDone = function () { if (String(el.value || '').trim()) setTimeout(function () { if (tour && tour.i === i) step(i + 1); }, 250); };
+                el.addEventListener('input', onCh); el.addEventListener('change', onDone);
+                setTimeout(function () { try { el.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 500);
+                tour.cleanup = function () { el.removeEventListener('input', onCh); el.removeEventListener('change', onDone); };
+            }
+        })();
+    }
+    function place(el) {                                                     // the card goes where it does not cover the thing to tap
+        if (!tour || !tour.card) return;
+        var r = el.getBoundingClientRect(), low = r.top + r.height / 2 > window.innerHeight * 0.5;
+        tour.card.classList.toggle('top', low);
+    }
+    function paintCard(text, done, st) {
+        if (!tour) return;
+        var n = tour.T.steps.length, i = Math.min(tour.i, n);
+        tour.card.innerHTML = '<div class="at-hd"><span class="at-ic"><i class="fas fa-magic"></i></span><b>' + esc(tour.T.t) + '</b><span class="at-n">' + (done ? 'Finished' : 'Step ' + (i + 1) + ' of ' + n) + '</span><button type="button" class="at-x" data-tour="stop" aria-label="Stop the guide"><i class="fas fa-times"></i></button></div>' +
+            '<div class="at-bar"><i style="width:' + Math.round((done ? n : i) / n * 100) + '%"></i></div><p class="at-tx">' + text + '</p>' +
+            '<div class="at-bt">' + (done ? '<button type="button" class="at-main" data-tour="done">Done</button>' :
+                (i > 0 ? '<button type="button" data-tour="back">Back</button>' : '') + '<button type="button" class="' + (st && st.wait !== 'none' && !st.optional ? '' : 'at-main') + '" data-tour="next">' + (st && st.optional ? 'Skip / Next' : st && st.wait === 'click' ? 'Next' : 'Next') + '</button>') + '</div>';
+        tour.card.classList.toggle('done', !!done);
+        if (done) tour.card.classList.remove('top');
+    }
+    function endTour(quiet) { if (!tour) return; tour.cleanup && tour.cleanup(); unspot(); if (tour.card) tour.card.remove(); tour = null; if (!quiet) fab(); }
+
+    /* =============================================== the Ask sheet =============================================== */
+    var sheet = null, prev = null, busy = false;
+    var CTX = {
+        home: [['q', 'month'], ['q', 'week'], ['q', 'unpaid'], ['t', 'create-job'], ['h', 'How do I change the background?']],
+        add: [['t', 'create-job'], ['h', 'What does Split by Percentage do?'], ['h', 'How do I import a work order?'], ['q', 'month']],
+        view: [['t', 'find-job'], ['t', 'send-invoice'], ['t', 'mark-paid'], ['t', 'invoice-many'], ['q', 'unpaid'], ['q', 'noinv']],
+        receipts: [['t', 'scan-receipt'], ['p', 'When did I buy '], ['q', 'spend'], ['q', 'gst'], ['t', 'ai-key']],
+        summary: [['q', 'best'], ['q', 'month'], ['q', 'gst']],
+        quotes: [['t', 'new-quote'], ['q', 'waiting']], projects: [['t', 'new-quote'], ['q', 'waiting']],
+        settings: [['t', 'change-background'], ['t', 'notifications'], ['t', 'ai-key'], ['h', 'Where do I change my invoice details?'], ['h', 'Make the text bigger']],
+        data: [['t', 'restore-backup'], ['h', 'Where is my backup history?'], ['h', 'How do I delete everything?']],
+        trash: [['h', 'How long do things stay in the Trash?']], roofcalc: [['h', 'What can RoofVision do?']]
+    };
+    function chips() {
+        var list = (CTX[page()] || CTX.home).slice();
+        ['month', 'unpaid', 'week', 'gst', 'spend', 'best', 'waiting'].forEach(function (k) { if (!list.some(function (c) { return c[0] === 'q' && c[1] === k; })) list.push(['q', k]); });
+        return list.slice(0, 9).map(function (c) {
+            var label = c[0] === 'q' ? QUICK[c[1]].t : c[0] === 't' ? TOURS[c[1]].t : c[0] === 'p' ? c[1].trim() + '…' : c[1];
+            return '<button type="button" class="ask-chip' + (c[0] === 't' ? ' tour' : '') + '" data-chip="' + esc(c[0] + ':' + c[1]) + '">' + (c[0] === 't' ? '<i class="fas fa-magic"></i> ' : '') + esc(label) + '</button>';
+        }).join('');
+    }
     function build() {
         if (sheet) return sheet;
         sheet = document.createElement('div'); sheet.id = 'ask-sheet'; sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', 'Ask IncAtor');
-        sheet.innerHTML = '<div class="ask-box"><header class="ask-hd"><span class="ask-hi"><i class="fas fa-magic"></i></span><div class="ask-ht"><b>Ask IncAtor</b><small>Questions about your jobs, quotes, projects and receipts</small></div><button type="button" class="ask-x" data-ask="close" aria-label="Close"><i class="fas fa-times"></i></button></header>' +
+        sheet.innerHTML = '<div class="ask-box"><header class="ask-hd"><span class="ask-hi"><i class="fas fa-magic"></i></span><div class="ask-ht"><b>Ask IncAtor</b><small id="ask-where">Ask about your data, or how to do anything</small></div><button type="button" class="ask-x" data-ask="close" aria-label="Close"><i class="fas fa-times"></i></button></header>' +
             '<div class="ask-log" id="ask-log"></div><div class="ask-chips" id="ask-chips"></div>' +
-            '<form class="ask-in" id="ask-form"><input id="ask-q" type="text" autocomplete="off" enterkeyhint="send" placeholder="e.g. How much did I make in October?" aria-label="Your question"><button type="submit" aria-label="Ask"><i class="fas fa-chevron-right"></i></button></form></div>';
+            '<form class="ask-in" id="ask-form"><input id="ask-q" type="text" autocomplete="off" enterkeyhint="send" placeholder="Ask anything, or “help me create a job”" aria-label="Your question"><button type="submit" aria-label="Ask"><i class="fas fa-chevron-right"></i></button></form>' +
+            '<label class="ask-fabset"><input type="checkbox" id="ask-fab-on"> Show the <i class="fas fa-magic"></i> help button on every page</label></div>';
         document.body.appendChild(sheet);
-        sheet.querySelector('#ask-chips').innerHTML = QUICK.map(function (c, i) { return '<button type="button" class="ask-chip" data-quick="' + i + '">' + esc(c.t) + '</button>'; }).join('');
         sheet.addEventListener('click', function (e) {
-            var t = e.target.closest('[data-ask], [data-quick], [data-more]'); if (e.target === sheet) { close(); return; } if (!t) return;
+            if (e.target === sheet) { close(); return; }
+            var t = e.target.closest('[data-ask], [data-chip], [data-more], [data-show], [data-tourgo], [data-open], [data-gopg]'); if (!t) return;
             if (t.getAttribute('data-ask') === 'close') close();
-            else if (t.getAttribute('data-ask') === 'ai') { close(); try { showPage('settings'); } catch (er) { /* ignore */ } setTimeout(function () { var x = document.getElementById('receipt-settings-section'); if (x) x.scrollIntoView({ behavior: 'smooth' }); }, 700); }
-            else if (t.hasAttribute('data-quick')) quick(+t.getAttribute('data-quick'));
+            else if (t.getAttribute('data-ask') === 'ai') startTour('ai-key');
+            else if (t.hasAttribute('data-chip')) chip(t.getAttribute('data-chip'));
             else if (t.hasAttribute('data-more')) { var box = t.closest('.ask-rows'); if (box) box.classList.add('all'); t.remove(); }
+            else if (t.hasAttribute('data-show')) { var x = byId(t.getAttribute('data-show')); if (x) showItem(x); }
+            else if (t.hasAttribute('data-tourgo')) startTour(t.getAttribute('data-tourgo'));
+            else if (t.hasAttribute('data-gopg')) { close(); go(t.getAttribute('data-gopg')); }
+            else if (t.hasAttribute('data-open')) openRec(t.getAttribute('data-open'));
         });
         sheet.querySelector('#ask-form').addEventListener('submit', function (e) { e.preventDefault(); var i = sheet.querySelector('#ask-q'), q = i.value.trim(); if (!q || busy) return; i.value = ''; ask(q); });
+        sheet.querySelector('#ask-fab-on').addEventListener('change', function () { S().askFab = this.checked; saveS(); fab(); });
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sheet.classList.contains('open')) close(); });
         return sheet;
     }
+    var greeted = false;
     function open(q) {
-        build(); sheet.classList.add('open'); document.documentElement.classList.add('ask-open');
-        if (!history.length) say('bot', '<p>Ask me anything about your business, like <i>“How much did I make from Pinnacle in October?”</i> or <i>“Which jobs aren’t paid yet?”</i> Or tap a quick question below.</p>' +
-            (window.IncAI && IncAI.ready() ? '' : '<p class="ask-note">Quick questions work right away. For your own questions, turn on the AI reader in <button type="button" class="ask-link" data-ask="ai">Settings &gt; SlipVault</button> (the same Gemini key works).</p>'));
+        build(); unspot(); sheet.classList.add('open'); document.documentElement.classList.add('ask-open'); fab();
+        sheet.querySelector('#ask-chips').innerHTML = chips();
+        sheet.querySelector('#ask-where').textContent = page() === 'home' ? 'Ask about your data, or how to do anything' : 'You are on ' + (PAGE_T[page()] || page()) + ' – ask me anything';
+        sheet.querySelector('#ask-fab-on').checked = S().askFab !== false;
+        if (!greeted) {
+            greeted = true;
+            say('bot', '<p>Hi! I can help with anything in IncAtor:</p><ul class="ask-ul"><li><b>Your numbers</b>: “How much did I make in October?”, “When did I buy roofing nails?”</li><li><b>How to</b>: “How do I change the background?”, “Where are my invoice details?”</li><li><b>Walk me through it</b>: “Help me create a job” and I’ll guide you on the real screen, step by step.</li></ul>' +
+                (window.IncAI && IncAI.ready() ? '' : '<p class="ask-note">Finding settings, the guides and the quick buttons work right away. For questions about your numbers in your own words, <button type="button" class="ask-link" data-ask="ai">turn on the AI reader</button> (the same Gemini key as SlipVault).</p>'));
+        }
         if (q) ask(q); else setTimeout(function () { var i = sheet.querySelector('#ask-q'); if (i && window.innerWidth > 700) i.focus(); }, 300);
     }
-    function close() { if (sheet) sheet.classList.remove('open'); document.documentElement.classList.remove('ask-open'); }
+    function close() { if (sheet) sheet.classList.remove('open'); document.documentElement.classList.remove('ask-open'); fab(); }
     function say(who, html) {
         var log = sheet.querySelector('#ask-log'), d = document.createElement('div'); d.className = 'ask-m ' + who; d.innerHTML = html; log.appendChild(d);
-        history.push(who); setTimeout(function () { log.scrollTop = log.scrollHeight; }, 30); return d;
+        setTimeout(function () { log.scrollTop = log.scrollHeight; }, 30); return d;
     }
-    function rowHtml(ds, r) {
-        if (ds === 'jobs') return '<div class="ask-r"><span><b>' + esc(r.address || '(no address)') + '</b><small>' + esc(nice(r.date)) + (r.customer ? ' · ' + esc(r.customer) : '') + (r.invoice_no ? ' · ' + esc(r.invoice_no) : '') + '</small></span><span class="ask-rv">' + money(r.total) + '<small class="st-' + r.status.replace(/ /g, '') + '">' + esc(r.status) + '</small></span></div>';
-        if (ds === 'quotes') return '<div class="ask-r"><span><b>' + esc(r.customer || r.title || r.number) + '</b><small>' + esc([r.number, nice(r.date), r.address].filter(Boolean).join(' · ')) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span></div>';
-        if (ds === 'projects') return '<div class="ask-r"><span><b>' + esc(r.name) + '</b><small>' + esc(nice(r.date)) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span></div>';
-        return '<div class="ask-r"><span><b>' + esc(r.store || '(store)') + '</b><small>' + esc([nice(r.date), r.category].filter(Boolean).join(' · ')) + '</small></span><span class="ask-rv">' + money(r.total) + (r.gst ? '<small>GST ' + money(r.gst) + '</small>' : '') + '</span></div>';
+    function openRec(k) {
+        var p = k.split(':'), ds = p[0], id = p.slice(1).join(':');
+        close();
+        if (ds === 'jobs') { var n = isFinite(+id) ? +id : id; go('view'); setTimeout(function () { try { viewEntryDetails(n); } catch (e) { toast('That job could not be opened', 'error'); } }, 350); }
+        else if (ds === 'receipts') { if (!(window.RcptNav && RcptNav.open && RcptNav.open(id))) { go('receipts'); toast('That receipt could not be opened', 'error'); } }
+        else if (ds === 'quotes') { try { BIZ.editQuote(isFinite(+id) ? +id : id); } catch (e) { go('quotes'); } }
+        else go(ds === 'projects' ? 'projects' : 'home');
+    }
+    function openBtn(ds, r) { return '<button type="button" class="ask-open" data-open="' + esc(ds + ':' + r._id) + '">Open</button>'; }
+    function rowHtml(ds, r, hl) {
+        if (ds === 'jobs') return '<div class="ask-r"><span><b>' + esc(r.address || '(no address)') + '</b><small>' + esc(nice(r.date)) + (r.customer ? ' · ' + esc(r.customer) : '') + (r.invoice_no ? ' · ' + esc(r.invoice_no) : '') + '</small></span><span class="ask-rv">' + money(r.total) + '<small class="st-' + r.status.replace(/ /g, '') + '">' + esc(r.status) + '</small></span>' + openBtn(ds, r) + '</div>';
+        if (ds === 'quotes') return '<div class="ask-r"><span><b>' + esc(r.customer || r.title || r.number) + '</b><small>' + esc([r.number, nice(r.date), r.address].filter(Boolean).join(' · ')) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span>' + openBtn(ds, r) + '</div>';
+        if (ds === 'projects') return '<div class="ask-r"><span><b>' + esc(r.name) + '</b><small>' + esc(nice(r.date)) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span>' + openBtn(ds, r) + '</div>';
+        var match = hl ? r._items.filter(function (it) { return hl.split(/\s+/).every(function (w) { return it.name.toLowerCase().indexOf(w) >= 0; }); }) : [];
+        return '<div class="ask-r"><span><b>' + esc(r.store || '(store)') + '</b><small>' + esc([nice(r.date), r.category, r.payment].filter(Boolean).join(' · ')) + '</small>' +
+            match.slice(0, 3).map(function (it) { return '<small class="ask-item"><i class="fas fa-check"></i> ' + esc(it.name) + (it.amount ? ' – ' + money(it.amount) : '') + '</small>'; }).join('') +
+            '</span><span class="ask-rv">' + money(r.total) + (r.gst ? '<small>GST ' + money(r.gst) + '</small>' : '') + '</span>' + openBtn(ds, r) + '</div>';
+    }
+    function listRows(r, rowsArr, max) {
+        max = max || 8;
+        return '<div class="ask-rows">' + rowsArr.map(function (x, i) { return rowHtml(r.ds, x, r.hl).replace('class="ask-r"', 'class="ask-r' + (i >= max ? ' more' : '') + '"'); }).join('') + (rowsArr.length > max ? '<button type="button" class="ask-more" data-more="1">Show all ' + rowsArr.length + '</button>' : '') + '</div>';
     }
     function showResult(plan, results) {
         var ans = String(plan.answer || '').replace(/\{(\d)\}/g, function (m, i) { var r = results[+i - 1]; return r ? '<b>' + esc(fmtVal(r)) + '</b>' : m; });
+        if (results.length === 1 && results[0].m === 'list' && !results[0].list.length) ans = 'I couldn’t find any ' + NOUN[results[0].ds][1] + ' that match.' + (results[0].ds === 'receipts' && results[0].hl ? ' Only receipts whose items were read (by the AI reader or typed in) can be searched by item.' : '');
         if (!ans) ans = results.map(function (r) { return esc(r.q.label || '') + ': <b>' + esc(fmtVal(r)) + '</b>'; }).join('<br>');
         var html = '<p class="ask-ans">' + ans + '</p>';
         results.forEach(function (r) {
-            var head = '<div class="ask-qh"><span>' + esc(r.q.label || NOUN[r.ds][1]) + (r.q.from || r.q.to ? ' <small>' + esc([r.q.from ? nice(r.q.from) : 'start', r.q.to ? nice(r.q.to) : 'today'].join(' – ')) + '</small>' : '') + '</span><b>' + esc(r.groups ? r.groups.length + ' groups' : fmtVal(r)) + '</b></div>';
+            var head = '<div class="ask-qh"><span>' + esc(r.q.label || NOUN[r.ds][1]) + (r.q.from || r.q.to ? ' <small>' + esc([r.q.from ? nice(r.q.from) : 'start', r.q.to ? nice(r.q.to) : 'today'].join(' – ')) + '</small>' : '') + '</span><b>' + esc(r.groups ? r.groups.length + ' groups' : r.m === 'list' ? r.list.length + ' ' + NOUN[r.ds][r.list.length === 1 ? 0 : 1] : fmtVal(r)) + '</b></div>';
             var body = '';
             if (r.groups) body = '<div class="ask-rows">' + r.groups.map(function (g, i) { return '<div class="ask-r' + (i >= 8 ? ' more' : '') + '"><span><b>' + esc(glabel(g.key, r.q.group)) + '</b><small>' + g.n + ' ' + NOUN[r.ds][g.n === 1 ? 0 : 1] + '</small></span><span class="ask-rv">' + (r.gmoney ? money(g.value) : g.value) + '</span></div>'; }).join('') + (r.groups.length > 8 ? '<button type="button" class="ask-more" data-more="1">Show all ' + r.groups.length + '</button>' : '') + '</div>';
-            else if (r.m === 'list') body = r.list.length ? '<div class="ask-rows">' + r.list.map(function (x, i) { return rowHtml(r.ds, x).replace('class="ask-r"', 'class="ask-r' + (i >= 8 ? ' more' : '') + '"'); }).join('') + (r.list.length > 8 ? '<button type="button" class="ask-more" data-more="1">Show all ' + r.list.length + '</button>' : '') + '</div>' : '<p class="ask-note">Nothing matches.</p>';
-            else if (r.pick) body = '<div class="ask-rows">' + rowHtml(r.ds, r.pick) + '</div>';
-            html += '<div class="ask-q">' + head + body + '</div>';
+            else if (r.m === 'list') body = r.list.length ? listRows(r, r.list) : '';
+            else if (r.pick) body = listRows(r, [r.pick]);
+            if (head || body) html += '<div class="ask-q">' + head + body + '</div>';
         });
         var scanned = results.reduce(function (t, r) { return t + r.scanned; }, 0);
-        html += '<p class="ask-foot"><i class="fas fa-lock"></i> Worked out on this device from your ' + results.map(function (r) { return NOUN[r.ds][1]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' and ') + ' (' + scanned + ' records). ' + (plan.byAI ? 'The AI only saw your question.' : '') + '</p>';
+        html += '<p class="ask-foot"><i class="fas fa-lock"></i> Worked out on this device from your ' + results.map(function (r) { return NOUN[r.ds][1]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' and ') + ' (' + scanned + ' records).' + (plan.byAI ? ' The AI only saw your question.' : '') + '</p>';
         say('bot', html);
     }
-    function quick(i) {
-        var c = QUICK[i]; if (!c) return;
-        if (c.week) { close(); openWeek(); return; }
-        say('me', '<p>' + esc(c.t) + '</p>');
-        var plan = c.p(); prev = { q: c.t, plan: plan };
-        showResult(plan, plan.queries.map(run));
+    function helpHtml(answer, targets) {
+        var lines = String(answer || '').split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean);
+        var steps = lines.length > 1 && lines.every(function (l) { return /^\d+[.)]/.test(l); });
+        var html = steps ? '<ol class="ask-ol">' + lines.map(function (l) { return '<li>' + esc(l.replace(/^\d+[.)]\s*/, '')) + '</li>'; }).join('') + '</ol>' : lines.map(function (l) { return '<p>' + esc(l) + '</p>'; }).join('');
+        var btns = (targets || []).map(function (id) {
+            id = String(id || '');
+            if (/^tour:/.test(id)) { var T = TOURS[id.slice(5)]; return T ? '<button type="button" class="ask-act main" data-tourgo="' + esc(id.slice(5)) + '"><i class="fas fa-magic"></i> Walk me through it: ' + esc(T.t) + '</button>' : ''; }
+            var x = byId(id); if (!x) return '';
+            if (x.page) return '<button type="button" class="ask-act" data-gopg="' + esc(x.pg) + '"><i class="fas fa-chevron-right"></i> Open ' + esc(x.t) + '</button>';
+            return '<button type="button" class="ask-act" data-show="' + esc(x.id) + '"><i class="fas fa-search"></i> Show me<small>' + esc(x.path.concat([x.t]).join(' › ')) + '</small></button>';
+        }).filter(Boolean);
+        return html + (btns.length ? '<div class="ask-acts">' + btns.join('') + '</div>' : '');
+    }
+    function localAnswer(q) {
+        var h = localHelp(q);
+        if (!h.tours.length && !h.items.length) return false;
+        var targets = h.tours.map(function (t) { return 'tour:' + t.id; }).concat(h.items.map(function (x) { return x.id; })).slice(0, 4);
+        var first = h.tours[0] ? TOURS[h.tours[0].id] : null, x0 = h.items[0];
+        var ans = first ? 'I can walk you through it on the screen, step by step.' : x0 ? (x0.page ? x0.t + ' is a page in IncAtor.' : 'It’s in ' + x0.path.concat([x0.t]).join(' › ') + '.' + (x0.d ? '\n' + x0.d : '')) : '';
+        say('bot', helpHtml(ans, targets));
+        return true;
+    }
+    function chip(v) {
+        var k = v.slice(0, 1), id = v.slice(2);
+        if (k === 'q') {
+            var c = QUICK[id]; if (!c) return;
+            if (c.week) { openWeek(); return; }
+            say('me', '<p>' + esc(c.t) + '</p>');
+            var plan = c.p(); prev = { q: c.t, plan: plan }; showResult(plan, plan.queries.map(run));
+        } else if (k === 't') { startTour(id); }
+        else if (k === 'p') { var i = sheet.querySelector('#ask-q'); i.value = id; i.focus(); try { i.setSelectionRange(id.length, id.length); } catch (e) { /* ignore */ } }
+        else if (k === 'h') ask(id);
     }
     async function ask(q) {
         say('me', '<p>' + esc(q) + '</p>');
-        if (!(window.IncAI && IncAI.ready())) { say('bot', '<p>To answer your own questions I need the AI reader turned on. Go to <button type="button" class="ask-link" data-ask="ai">Settings &gt; SlipVault &gt; AI reader</button> and add your Gemini key (the same one you use for receipts). The quick questions below work without it.</p>'); return; }
+        var ai = window.IncAI && IncAI.ready(), looksData = DATA_RE.test(q), h = localHelp(q);
+        // without the AI, or when the question is plainly about the app: answer from IncAtor's own map
+        if (!ai || (!looksData && h.top >= 5)) {
+            if (!looksData && localAnswer(q)) return;
+            if (!ai) {
+                if (!looksData && localAnswer(q)) return;
+                say('bot', '<p>' + (looksData ? 'To work out questions about your numbers in your own words I need the AI reader turned on.' : 'I didn’t find that in IncAtor. Try other words, or turn on the AI reader so I understand any question.') + '</p><div class="ask-acts"><button type="button" class="ask-act main" data-ask="ai"><i class="fas fa-magic"></i> Show me how to turn on the AI reader</button></div><p class="ask-note">The quick buttons below work without it.</p>');
+                return;
+            }
+        }
         busy = true; var wait = say('bot', '<p class="ask-wait"><i class="fas fa-spinner fa-spin"></i> Working it out...</p>');
         try {
             var plan = parseJson(await IncAI.text(prompt(q, prev)));
-            wait.remove(); history.pop();
-            if (plan.clarify && !(plan.queries || []).length) { say('bot', '<p>' + esc(plan.clarify) + '</p>'); return; }
-            plan.queries = (plan.queries || []).slice(0, 3); plan.byAI = true;
-            if (!plan.queries.length) { say('bot', '<p>I could not turn that into a question about your records. Try asking about jobs, quotes, projects or receipts.</p>'); return; }
-            prev = { q: q, plan: { queries: plan.queries, answer: plan.answer } };
-            showResult(plan, plan.queries.map(run));
+            wait.remove();
+            var type = plan.type || ((plan.queries || []).length ? 'data' : 'chat');
+            if (type === 'data' && (plan.queries || []).length) {
+                plan.queries = plan.queries.slice(0, 3); plan.byAI = true;
+                prev = { q: q, plan: { queries: plan.queries, answer: plan.answer } };
+                showResult(plan, plan.queries.map(run));
+            } else if (type === 'help' || type === 'go') {
+                prev = { q: q };
+                var tg = (plan.targets || []).filter(function (id) { return /^tour:/.test(id) ? TOURS[String(id).slice(5)] : byId(id); });
+                if (!tg.length) tg = h.tours.map(function (t) { return 'tour:' + t.id; }).concat(h.items.map(function (x) { return x.id; })).slice(0, 3);
+                say('bot', helpHtml(plan.answer || '', tg));
+            } else {
+                prev = { q: q };
+                say('bot', helpHtml(plan.answer || plan.clarify || 'I can help with your jobs, invoices, quotes, receipts, backups and settings.', []));
+            }
         } catch (e) {
-            try { wait.remove(); history.pop(); } catch (e2) { /* ignore */ }
-            say('bot', '<p class="ask-bad">Sorry, that did not work: ' + esc(e && e.message || 'unknown problem') + '</p>');
+            try { wait.remove(); } catch (e2) { /* ignore */ }
+            if (!localAnswer(q)) say('bot', '<p class="ask-bad">Sorry, that did not work: ' + esc(e && e.message || 'unknown problem') + '</p>');
         } finally { busy = false; }
     }
 
-    /* ---------- weekly summary ---------- */
+    /* =============================================== the help button on every page =============================================== */
+    var fabEl = null;
+    function fab() {
+        if (!fabEl) {
+            fabEl = document.createElement('button'); fabEl.type = 'button'; fabEl.id = 'ask-fab'; fabEl.setAttribute('aria-label', 'Ask IncAtor for help');
+            fabEl.innerHTML = '<i class="fas fa-magic"></i>'; document.body.appendChild(fabEl);
+            fabEl.addEventListener('click', function () { open(); });
+        }
+        var show = S().askFab !== false && page() !== 'home' && !tour && !(sheet && sheet.classList.contains('open')) && !document.querySelector('.rc-cam');
+        fabEl.classList.toggle('show', show);
+    }
+    setInterval(fab, 700);
+
+    /* =============================================== weekly summary =============================================== */
     function lastWeek() { var t = new Date(); t.setHours(12, 0, 0, 0); var mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7) - 7); var from = ymd(mon); return { from: from, to: addDays(from, 6) }; }
     function weekNumbers(range) {
         var J = rows('jobs'), Q = rows('quotes');
@@ -33780,7 +34149,7 @@ window.IncVersion = VERSION;
         return { range: range, jobs: wk, income: sum(wk), gst: sum(wk, 'gst'), unpaid: unpaid, unpaidSum: sum(unpaid), oldest: oldest, noinv: noinv, noinvSum: sum(noinv), waiting: waiting, waitingSum: sum(waiting), spent: sum(R), receipts: R.length, drafts: drafts };
     }
     function openWeek() {
-        build(); open();
+        if (!sheet || !sheet.classList.contains('open')) open();
         var W = weekNumbers(lastWeek()), days = W.oldest ? Math.round((Date.now() - new Date(W.oldest + 'T12:00:00')) / 864e5) : 0;
         var tile = function (ic, label, val, sub, cls) { return '<div class="wk-t ' + (cls || '') + '"><i class="fas ' + ic + '"></i><small>' + esc(label) + '</small><b>' + val + '</b>' + (sub ? '<em>' + sub + '</em>' : '') + '</div>'; };
         var html = '<p class="ask-ans">Your week: <b>' + esc(nice(W.range.from)) + ' – ' + esc(nice(W.range.to)) + '</b></p><div class="wk-grid">' +
@@ -33790,8 +34159,9 @@ window.IncVersion = VERSION;
             tile('fa-clipboard-list', 'Quotes waiting', W.waiting.length + ' · ' + money(W.waitingSum), 'sent, no answer yet', '') +
             tile('fa-inbox', 'Work orders to approve', String(W.drafts), '', W.drafts ? 'a' : '') +
             tile('fa-receipt', 'Spent (receipts)', money(W.spent), W.receipts + ' receipt' + (W.receipts === 1 ? '' : 's'), '') + '</div>';
-        if (W.unpaid.length) html += '<div class="ask-q"><div class="ask-qh"><span>Unpaid invoices, oldest first</span><b>' + money(W.unpaidSum) + '</b></div><div class="ask-rows">' + W.unpaid.slice().sort(function (a, b) { return (a.invoice_date || a.date) < (b.invoice_date || b.date) ? -1 : 1; }).map(function (r, i) { return rowHtml('jobs', r).replace('class="ask-r"', 'class="ask-r' + (i >= 6 ? ' more' : '') + '"'); }).join('') + (W.unpaid.length > 6 ? '<button type="button" class="ask-more" data-more="1">Show all ' + W.unpaid.length + '</button>' : '') + '</div></div>';
-        if (W.jobs.length) html += '<div class="ask-q"><div class="ask-qh"><span>Last week’s jobs</span><b>' + W.jobs.length + '</b></div><div class="ask-rows">' + W.jobs.map(function (r, i) { return rowHtml('jobs', r).replace('class="ask-r"', 'class="ask-r' + (i >= 6 ? ' more' : '') + '"'); }).join('') + (W.jobs.length > 6 ? '<button type="button" class="ask-more" data-more="1">Show all ' + W.jobs.length + '</button>' : '') + '</div></div>';
+        var R = { ds: 'jobs', hl: '' };
+        if (W.unpaid.length) html += '<div class="ask-q"><div class="ask-qh"><span>Unpaid invoices, oldest first</span><b>' + money(W.unpaidSum) + '</b></div>' + listRows(R, W.unpaid.slice().sort(function (a, b) { return (a.invoice_date || a.date) < (b.invoice_date || b.date) ? -1 : 1; }), 6) + '</div>';
+        if (W.jobs.length) html += '<div class="ask-q"><div class="ask-qh"><span>Last week’s jobs</span><b>' + W.jobs.length + '</b></div>' + listRows(R, W.jobs, 6) + '</div>';
         say('bot', html);
     }
 
@@ -33831,16 +34201,16 @@ window.IncVersion = VERSION;
             '<div class="wm-btns"><button type="button" class="app-btn" id="ws-test"><i class="fas fa-bell mr-2"></i>Send me one now</button><button type="button" class="app-btn" id="ws-open"><i class="fas fa-chart-bar mr-2"></i>See last week</button></div>';
         var types = body.querySelector('.nt-types').closest('.setting-item'); types.parentNode.insertBefore(it, types.nextSibling);
         it.addEventListener('change', function () {
-            try { appSettings.weekSumDay = +it.querySelector('#ws-day').value; appSettings.weekSumHour = +it.querySelector('#ws-hour').value; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ }
-            sync(true); try { showToast('Weekly summary: ' + DAYS[wsDay()] + 's at ' + hourName(wsHour()), 'success'); } catch (e) { /* ignore */ }
+            try { appSettings.weekSumDay = +it.querySelector('#ws-day').value; appSettings.weekSumHour = +it.querySelector('#ws-hour').value; saveS(); } catch (e) { /* ignore */ }
+            sync(true); toast('Weekly summary: ' + DAYS[wsDay()] + 's at ' + hourName(wsHour()), 'success');
         });
         it.querySelector('#ws-open').addEventListener('click', function () { openWeek(); });
         it.querySelector('#ws-test').addEventListener('click', function () {
-            var b = this; if (!canSend()) { try { showToast('Connect your IncAtor server first (Settings > Work Orders)', 'error'); } catch (e) { /* ignore */ } return; }
+            var b = this; if (!canSend()) { toast('Connect your IncAtor server first (Settings > Work Orders)', 'error'); return; }
             b.disabled = true;
             IncMail.api('/summary/data', payload()).then(function () { return IncMail.api('/summary/test', {}); }).then(function (j) {
-                try { showToast(j && j.sent ? 'Sent - check your notifications' : 'Made, but no device is set up for notifications yet', j && j.sent ? 'success' : 'info'); } catch (e) { /* ignore */ }
-            }, function (e) { try { showToast(e.message || 'Could not send it', 'error'); } catch (e2) { /* ignore */ } }).then(function () { b.disabled = false; });
+                toast(j && j.sent ? 'Sent - check your notifications' : 'Made, but no device is set up for notifications yet', j && j.sent ? 'success' : 'info');
+            }, function (e) { toast(e.message || 'Could not send it', 'error'); }).then(function () { b.disabled = false; });
         });
     }
     new MutationObserver(addSetting).observe(document.documentElement, { childList: true, subtree: true });
@@ -33850,7 +34220,7 @@ window.IncVersion = VERSION;
         var mh = document.querySelector('#mobile-home .mh-cta');
         if (mh && !document.getElementById('mh-ask')) mh.insertAdjacentHTML('afterend', '<button type="button" class="ask-bar" id="mh-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything…</span><i class="fas fa-chevron-right"></i></button>');
         var hc = document.querySelector('.home-cards-container');
-        if (hc && !document.getElementById('hd-ask')) hc.insertAdjacentHTML('beforebegin', '<button type="button" class="ask-bar ask-bar-d" id="hd-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything about your jobs, quotes and receipts…</span><i class="fas fa-chevron-right"></i></button>');
+        if (hc && !document.getElementById('hd-ask')) hc.insertAdjacentHTML('beforebegin', '<button type="button" class="ask-bar ask-bar-d" id="hd-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything: your numbers, how to do something, or “help me create a job”…</span><i class="fas fa-chevron-right"></i></button>');
     }
     addEntryPoints(); setTimeout(addEntryPoints, 1500);
     document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-askopen]')) open(); });
@@ -33863,7 +34233,8 @@ window.IncVersion = VERSION;
     window.addEventListener('hashchange', function () { goHash(location.hash); });
     try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'incator-open') goHash(e.data.url); }); } catch (e) { /* ignore */ }
 
-    window.IncAsk = { open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt };
+    window.IncAsk = { open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt,
+        tour: startTour, endTour: endTour, tours: TOURS, index: function () { INDEX = null; return index(); }, find: localHelp, show: function (id) { var x = byId(id); if (x) showItem(x); }, state: function () { return tour ? { id: tour.id, i: tour.i } : null; } };
 
     var st = document.createElement('style'); st.id = 'incator-ask-css';
     st.textContent = [
@@ -33876,30 +34247,52 @@ window.IncVersion = VERSION;
         '@keyframes askUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }',
         '@media (min-width: 701px) { #ask-sheet { align-items: center; } .ask-box { border-radius: 24px; height: min(86vh, 860px); } }',
         '.ask-hd { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }',
-        '.ask-hi { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #a855f7, #ec4899); }',
+        '.ask-hi, .at-ic { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
         '.ask-ht { flex: 1; min-width: 0; } .ask-ht b { display: block; font-size: 1.05rem; } .ask-ht small { display: block; font-size: .74rem; opacity: .65; }',
         '.ask-x { background: rgba(255,255,255,.08); border: 0; color: inherit; width: 36px; height: 36px; border-radius: 50%; }',
         '.ask-log { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; }',
         '.ask-m { max-width: 92%; padding: 10px 13px; border-radius: 16px; font-size: .9rem; line-height: 1.45; }',
-        '.ask-m.me { align-self: flex-end; background: linear-gradient(135deg, #a855f7, #ec4899); border-bottom-right-radius: 6px; }',
+        '.ask-m.me { align-self: flex-end; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); border-bottom-right-radius: 6px; }',
         '.ask-m.bot { align-self: stretch; max-width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-bottom-left-radius: 6px; }',
         '.ask-m p + p { margin-top: 8px; } .ask-ans { font-size: 1rem; } .ask-ans b { color: #f0abfc; }',
+        '.ask-ul, .ask-ol { margin: 6px 0 0 18px; } .ask-ul { list-style: disc; } .ask-ol { list-style: decimal; } .ask-ul li, .ask-ol li { margin: 4px 0; }',
         '.ask-note { font-size: .8rem; opacity: .75; } .ask-bad { color: #fca5a5; } .ask-wait { opacity: .8; }',
         '.ask-link { background: none; border: 0; padding: 0; color: #c084fc; text-decoration: underline; font: inherit; cursor: pointer; }',
+        '.ask-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }',
+        '.ask-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; text-align: left; padding: 11px 13px; border-radius: 14px; border: 1px solid rgba(192,132,252,.45); background: rgba(168,85,247,.12); color: inherit; font-size: .88rem; font-weight: 600; }',
+        '.ask-act small { flex-basis: 100%; font-weight: 400; font-size: .72rem; opacity: .7; } .ask-act.main { color: #fff; border-color: transparent; background: linear-gradient(135deg, #a855f7, #ec4899); }',
         '.ask-q { margin-top: 10px; border-radius: 12px; background: rgba(0,0,0,.18); overflow: hidden; }',
         '.ask-qh { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 9px 11px; font-size: .82rem; } .ask-qh small { opacity: .6; margin-left: 4px; } .ask-qh b { white-space: nowrap; }',
-        '.ask-rows .ask-r { display: flex; justify-content: space-between; gap: 10px; padding: 8px 11px; border-top: 1px solid rgba(255,255,255,.06); font-size: .84rem; }',
+        '.ask-rows .ask-r { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border-top: 1px solid rgba(255,255,255,.06); font-size: .84rem; }',
         '.ask-rows .ask-r.more { display: none; } .ask-rows.all .ask-r.more { display: flex; }',
-        '.ask-r > span:first-child { min-width: 0; } .ask-r b { display: block; font-weight: 600; overflow-wrap: anywhere; } .ask-r small { display: block; font-size: .72rem; opacity: .65; }',
+        '.ask-r > span:first-child { min-width: 0; flex: 1; } .ask-r b { display: block; font-weight: 600; overflow-wrap: anywhere; } .ask-r small { display: block; font-size: .72rem; opacity: .65; }',
+        '.ask-r .ask-item { opacity: .95; color: #f0abfc; } .ask-r .ask-item i { font-size: .6rem; }',
         '.ask-rv { text-align: right; white-space: nowrap; font-weight: 600; } .ask-rv small { font-weight: 500; text-transform: capitalize; }',
+        '.ask-open { flex: 0 0 auto; padding: 6px 11px; border-radius: 999px; border: 1px solid rgba(192,132,252,.5); background: rgba(168,85,247,.14); color: inherit; font-size: .74rem; font-weight: 600; }',
         '.ask-rv .st-unpaid { color: #fca5a5; opacity: 1; } .ask-rv .st-paid { color: #86efac; opacity: 1; } .ask-rv .st-notinvoiced { color: #fcd34d; opacity: 1; }',
         '.ask-more { width: 100%; padding: 9px; background: none; border: 0; border-top: 1px solid rgba(255,255,255,.06); color: #c084fc; font-size: .8rem; }',
         '.ask-foot { margin-top: 10px; font-size: .7rem; opacity: .55; }',
         '.ask-chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px; scrollbar-width: none; } .ask-chips::-webkit-scrollbar { display: none; }',
         '.ask-chip { flex: 0 0 auto; padding: 8px 13px; border-radius: 999px; border: 1px solid rgba(192,132,252,.45); background: rgba(168,85,247,.12); color: inherit; font-size: .8rem; white-space: nowrap; }',
-        '.ask-in { display: flex; gap: 8px; padding: 8px 12px 12px; }',
+        '.ask-chip.tour { background: linear-gradient(135deg, rgba(168,85,247,.35), rgba(236,72,153,.3)); }',
+        '.ask-in { display: flex; gap: 8px; padding: 8px 12px 6px; }',
         '.ask-in input { flex: 1; min-width: 0; padding: 12px 15px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); color: inherit; font-size: 16px; outline: none; }',
         '.ask-in input:focus { border-color: #c084fc; } .ask-in button { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
+        '.ask-fabset { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 2px 12px 10px; font-size: .72rem; opacity: .6; }',
+        '#ask-fab { position: fixed; right: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 8000; width: 46px; height: 46px; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 6px 20px rgba(168,85,247,.45); display: none; align-items: center; justify-content: center; font-size: 1.05rem; }',
+        '#ask-fab.show { display: flex; } @media (min-width: 701px) { #ask-fab { bottom: 24px; right: 24px; width: 52px; height: 52px; } }',
+        '.ask-ring { position: fixed; z-index: 9600; border-radius: 14px; pointer-events: none; border: 3px solid #e879f9; box-shadow: 0 0 0 9999px rgba(5,3,15,.5), 0 0 22px 4px rgba(232,121,249,.75); animation: askPulse 1.4s ease-in-out infinite; transition: top .15s, left .15s, width .15s, height .15s; }',
+        '@keyframes askPulse { 50% { border-color: #f9a8d4; box-shadow: 0 0 0 9999px rgba(5,3,15,.5), 0 0 34px 10px rgba(232,121,249,.55); } }',
+        '.ask-tip { position: fixed; left: 14px; right: 14px; max-width: 460px; margin: 0 auto; z-index: 9601; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 12px 14px; border-radius: 16px; color: #fff; background: rgba(30,20,56,.97); border: 1px solid rgba(232,121,249,.6); box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: .88rem; }',
+        '.ask-tip b { flex: 1; } .ask-tip small { flex-basis: 100%; opacity: .7; font-size: .74rem; order: 3; } .ask-tip button { padding: 6px 14px; border-radius: 999px; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); font-weight: 600; }',
+        '#ask-tour { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 9602; max-width: 480px; margin: 0 auto; padding: 14px; border-radius: 20px; color: #fff; background: rgba(30,20,56,.98); border: 1px solid rgba(232,121,249,.55); box-shadow: 0 14px 40px rgba(0,0,0,.55); animation: askUp .25s ease; }',
+        '#ask-tour.top { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 70px); } @media (min-width: 701px) { #ask-tour { bottom: 28px; } }',
+        '.at-hd { display: flex; align-items: center; gap: 10px; } .at-hd .at-ic { width: 32px; height: 32px; border-radius: 10px; font-size: .85rem; } .at-hd b { flex: 1; font-size: .95rem; }',
+        '.at-n { font-size: .72rem; opacity: .7; } .at-x { background: rgba(255,255,255,.1); border: 0; color: inherit; width: 30px; height: 30px; border-radius: 50%; }',
+        '.at-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); margin: 10px 0; overflow: hidden; } .at-bar i { display: block; height: 100%; background: linear-gradient(90deg, #a855f7, #ec4899); transition: width .3s; }',
+        '.at-tx { font-size: .92rem; line-height: 1.45; } .at-tx b { color: #f0abfc; } .ask-okmark { color: #86efac; margin-left: 4px; }',
+        '.at-bt { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; } .at-bt button { padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: inherit; font-weight: 600; font-size: .85rem; }',
+        '.at-bt .at-main { border-color: transparent; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
         '.wk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }',
         '.wk-t { padding: 11px; border-radius: 14px; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.07); } .wk-t i { opacity: .7; font-size: .85rem; } .wk-t small { display: block; font-size: .72rem; opacity: .7; margin-top: 4px; }',
         '.wk-t b { display: block; font-size: 1.02rem; margin-top: 2px; } .wk-t em { display: block; font-style: normal; font-size: .7rem; opacity: .6; margin-top: 2px; }',
@@ -33907,12 +34300,12 @@ window.IncVersion = VERSION;
         '.ws-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0 4px; } .ws-row label { display: flex; align-items: center; gap: 8px; font-size: .85rem; }',
         '.ws-row select { padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.08); color: inherit; border: 1px solid rgba(255,255,255,.18); }',
         'html.lm .ask-box { background: rgba(255,255,255,.98); color: #1d1733; border-color: rgba(29,23,51,.1); } html.lm .ask-m.bot { background: rgba(29,23,51,.04); border-color: rgba(29,23,51,.08); }',
-        'html.lm .ask-q, html.lm .wk-t { background: rgba(29,23,51,.05); } html.lm .ask-rows .ask-r, html.lm .ask-more { border-color: rgba(29,23,51,.08); } html.lm .ask-ans b { color: #a21caf; }',
+        'html.lm .ask-q, html.lm .wk-t { background: rgba(29,23,51,.05); } html.lm .ask-rows .ask-r, html.lm .ask-more { border-color: rgba(29,23,51,.08); } html.lm .ask-ans b, html.lm .ask-r .ask-item { color: #a21caf; }',
         'html.lm .ask-in input { background: #fff; border-color: rgba(29,23,51,.18); } html.lm .ask-x { background: rgba(29,23,51,.06); } html.lm .ask-hd { border-color: rgba(29,23,51,.08); }',
         'html.lm .wk-t.g b, html.lm .ask-rv .st-paid { color: #15803d; } html.lm .wk-t.r b, html.lm .ask-rv .st-unpaid { color: #b91c1c; } html.lm .wk-t.a b, html.lm .ask-rv .st-notinvoiced { color: #b45309; }',
         'html[data-theme="sleek"] .ask-box { background: var(--sk-bg); color: var(--sk-fg); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-m.bot, html[data-theme="sleek"] .ask-q, html[data-theme="sleek"] .wk-t { background: var(--sk-raise); border-color: var(--sk-line); }',
-        'html[data-theme="sleek"] .ask-m.me, html[data-theme="sleek"] .ask-in button, html[data-theme="sleek"] .ask-hi { background: var(--sk-fg); color: var(--sk-bg); } html[data-theme="sleek"] .ask-ans b { color: inherit; }',
-        'html[data-theme="sleek"] .ask-bar { background: var(--sk-raise); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-chip { background: transparent; border-color: var(--sk-line); }'
+        'html[data-theme="sleek"] .ask-m.me, html[data-theme="sleek"] .ask-in button, html[data-theme="sleek"] .ask-hi, html[data-theme="sleek"] .ask-act.main, html[data-theme="sleek"] #ask-fab { background: var(--sk-fg); color: var(--sk-bg); } html[data-theme="sleek"] .ask-ans b { color: inherit; }',
+        'html[data-theme="sleek"] .ask-bar, html[data-theme="sleek"] .ask-act, html[data-theme="sleek"] .ask-open { background: var(--sk-raise); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-chip { background: transparent; border-color: var(--sk-line); }'
     ].join('\n');
     document.head.appendChild(st);
 })();
