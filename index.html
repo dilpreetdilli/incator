@@ -8168,12 +8168,15 @@ async function runBackup(o) {
         if (!navigator.onLine) throw NetError('offline');
         result = await performBackup({ allowEmpty: !!o.allowEmpty, force: !!o.scheduled, reason: o.manual ? 'manual' : o.scheduled ? 'scheduled' : 'change' });
         Cloud.retryIdx = 0; Cloud.autoMerges = 0; Cloud.pendingSince = 0;
+        failMark(null);
+        try { if (window.IncBackupWarn) IncBackupWarn.ok(); } catch (e2) { /* optional */ }
         setStatus('ok', '');
         setTimeout(photosChanged, 800);
         if (o.manual) toast(result.uploaded ? 'Backed up to Google Drive' : 'Google Drive already has your latest data', 'success');
         try { if (window.IncBackupLog) IncBackupLog.paint(); } catch (e2) { /* optional */ }
     } catch (e) {
         result = { error: e };
+        if (!is(e, 'GuardError')) failMark(is(e, 'NetError') ? 'No internet connection' : is(e, 'AuthError') || is(e, 'WrongAccountError') ? 'Google Drive needs to be reconnected' : is(e, 'ConflictError') ? 'Your devices have different changes' : (e && e.message) || 'unknown error');
         if (is(e, 'NetError') || (is(e, 'ApiError') && e.retry)) {
             setStatus('offline', 'Offline - will retry automatically');
             var wait = CFG.RETRY_MS[Math.min(Cloud.retryIdx++, CFG.RETRY_MS.length - 1)];
@@ -8951,6 +8954,19 @@ function lastAnyBackup() {                                                 // th
     var l = logRead(); if (l.length) t = Math.max(t, new Date(l[0].at).getTime() || 0);
     return t;
 }
+function failKey() { var p = pfx(); return p === null ? null : p + 'backupFail'; }
+function failMark(why) {                                                   // when backups started failing (cleared by the next good backup)
+    var k = failKey(); if (!k) return;
+    try {
+        if (!why) { if (LS.getItem(k)) { LS.removeItem(k); if (window.IncBackupWarn) IncBackupWarn.check(); } return; }
+        var o = JSON.parse(LS.getItem(k) || 'null') || { since: Date.now() };
+        o.why = why; o.n = (o.n || 0) + 1; o.at = Date.now(); LS.setItem(k, JSON.stringify(o));
+    } catch (e) { /* ignore */ }
+}
+function health() {
+    var f = null; try { f = JSON.parse(LS.getItem(failKey()) || 'null'); } catch (e) { f = null; }
+    return { on: !setupMode && !!readSession(), ready: !!Cloud.ready, last: lastAnyBackup(), fail: f, status: Cloud.status || null };
+}
 function timedBackup(why) {
     if (setupMode || !Cloud.ready || Cloud.paused || Cloud.uploading || !navigator.onLine || window.__incSyncReload || !readSession()) return;
     if (Date.now() - lastAnyBackup() < EVERY_MS) return;
@@ -9073,7 +9089,7 @@ window.IncAtorCloud = {
     files: { list: driveFiles, remove: driveDelete, prune: drivePrune, protect: PROTECT, keep: keepFiles },
     backupLog: { list: logRead, refresh: logRefresh, days: LOG_DAYS, everyHours: EVERY_MS / 3600000, last: lastAnyBackup },
     restoreLatest: function () { return restoreFromDrive(null); }, restoreFile: restoreFromDrive,
-    wipe: wipeFlow, wipeNow: wipeAll, cloudReady: function () { return !!Cloud.ready; },
+    wipe: wipeFlow, wipeNow: wipeAll, cloudReady: function () { return !!Cloud.ready; }, health: health,
     token: function () { if (setupMode || !readSession()) return Promise.resolve(null); return withToken(function (t) { return t; }).catch(function () { return null; }); },   // for your IncAtor server: proves who you are
     tokenTap: function () { if (setupMode || !readSession()) return Promise.resolve(null); return getTokenFromTap().catch(function () { return null; }); },   // same, from a tap: Google may need you to confirm it is you
     session: readSession,
@@ -28476,12 +28492,18 @@ function paintButton() {
 var histOpen = false, histDay = null, histAt = 0, histBusy = false;
 function rowHtml(c) {
     var r = c.error ? '<span class="bad">Failed: ' + esc(c.error) + '</span>' : c.found ? '<span class="ok">' + c.found + ' work order' + (c.found === 1 ? '' : 's') + ' found</span>' : '<span>Nothing new' + (c.emails ? ' (' + c.emails + ' email' + (c.emails === 1 ? '' : 's') + ' looked at)' : '') + '</span>';
-    var fl = (c.from || []).filter(function (f) { return f && (f.n || f.e || f.s); });
-    var who = fl.map(function (f, i) {                                   // every email it looked at, each on its own line
-        var top = f.n || f.e || '', sub = [f.n ? f.e : '', f.s ? '\u201c' + f.s + '\u201d' : ''].filter(Boolean).join(' \u00b7 ');
-        return '<span class="wm-fe"><i class="fas fa-envelope"></i><span class="wm-fet"><b>' + (fl.length > 1 ? (i + 1) + '. ' : '') + esc(top) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span></span>';
+    if (!c.error && c.failed) r += '<span class="bad"> \u00b7 ' + c.failed + ' could not be read - trying again by itself</span>';
+    var fl = (c.from || []).filter(function (f) { return f && (f.n || f.e || f.s || f.st); });
+    var ST = { imported: ['ok', 'Work order found'], 'needs-pdf': ['warn', 'Work order - PDF could not be downloaded'], filtered: ['', 'Not a work order'], 'no-pdf': ['', 'No PDF in this email'],
+               duplicate: ['', 'Already imported'], 'before-start': ['', 'Before your start date'], failed: ['bad', 'Could not be read - trying again by itself'], deleted: ['', 'Deleted from Gmail'] };
+    var who = fl.map(function (f, i) {                                   // every email it looked at, each on its own line, with what happened to it
+        var top = f.n || f.e || (f.st === 'failed' ? 'Email' : ''), sub = [f.n ? f.e : '', f.s ? '\u201c' + f.s + '\u201d' : ''].filter(Boolean).join(' \u00b7 ');
+        var st = ST[f.st], pill = st ? '<span class="wm-fst ' + st[0] + '">' + esc(st[1]) + (f.tries > 1 ? ' (try ' + f.tries + ')' : '') + '</span>' : '';
+        return '<span class="wm-fe' + (f.st === 'failed' ? ' wm-ffail' : '') + '"><i class="fas fa-envelope"></i><span class="wm-fet"><b>' + (fl.length > 1 ? (i + 1) + '. ' : '') + esc(top) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + pill +
+            (f.st === 'failed' && f.why ? '<small class="wm-fwhy">' + esc(f.why) + '</small>' : '') + '</span></span>';
     });
-    var more = (c.emails || 0) - fl.length;
+    if (c.retried) who.unshift('<span class="wm-fe wm-fmore"><i class="fas fa-sync-alt"></i><span class="wm-fet">Tried ' + c.retried + ' earlier email' + (c.retried === 1 ? '' : 's') + ' again that could not be read before</span></span>');
+    var more = fl.some(function (f) { return f.st; }) ? 0 : (c.emails || 0) - fl.length;   // checks from before this update listed each sender once
     return '<div class="wm-hr"><time>' + esc(stamp(c.at)) + '</time><em>' + (c.auto ? (c.wake ? 'woke up' : 'auto') : 'by hand') + '</em>' + r +
         (c.wake ? '<span class="wm-from"><i class="fas fa-sun"></i> First check of the day: looked back to ' + esc(stamp(c.wake)) + '</span>' : '') +
         (who.length ? '<span class="wm-from wm-froms">' + who.join('') + (more > 0 ? '<span class="wm-fe wm-fmore"><i class="fas fa-envelope"></i><span class="wm-fet">and ' + more + ' more email' + (more === 1 ? '' : 's') + ' from ' + (fl.length === 1 ? 'this sender' : 'these senders') + '</span></span>' : '') + '</span>' : '') + '</div>';
@@ -28716,6 +28738,10 @@ var css = [
 '.wm-hr .wm-fe { display: flex; align-items: flex-start; gap: 6px; padding: 5px 8px; border-radius: 9px; background: rgba(148,148,170,.1); }',
 '.wm-hr .wm-fe > i { margin-top: 2px; } .wm-hr .wm-fet { min-width: 0; } .wm-hr .wm-fet b { display: block; font-weight: 600; } .wm-hr .wm-fet small { display: block; opacity: .8; }',
 '.wm-hr .wm-fmore { background: transparent; padding-top: 0; font-style: italic; }',
+'.wm-hr .wm-fst { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: .68rem; font-weight: 600; background: rgba(148,148,170,.18); }',
+'.wm-hr .wm-fst.ok { background: rgba(34,197,94,.2); color: #4ade80; } .wm-hr .wm-fst.warn { background: rgba(245,158,11,.2); color: #fbbf24; } .wm-hr .wm-fst.bad { background: rgba(239,68,68,.2); color: #f87171; }',
+'.wm-hr .wm-ffail { background: rgba(239,68,68,.1); } .wm-hr .wm-fwhy { opacity: .7; font-style: italic; }',
+'html.lm .wm-hr .wm-fst.ok { color: #15803d; } html.lm .wm-hr .wm-fst.warn { color: #b45309; } html.lm .wm-hr .wm-fst.bad { color: #b91c1c; }',
 '.wm-hr { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; font-size: .78rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); } .wm-hr time { white-space: nowrap; opacity: .85; } .wm-hr em { font-style: normal; font-size: .68rem; opacity: .55; } .wm-hr .ok { font-weight: 600; } .wm-hr .bad { color: #f87171; }',
 'html.lm .wm-autorow { border-color: rgba(29,23,51,.12); background: rgba(29,23,51,.03); } html.lm .wm-hist, html.lm .wm-hr { border-color: rgba(29,23,51,.08); } html.lm .wm-hr .bad { color: #b91c1c; }',
 '#wm-live { margin-top: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); text-align: left; } .wm-lh { display: flex; align-items: center; gap: 8px; } .wm-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: .84rem; } .wm-ev { margin: 6px 0 4px 18px; font-size: .8rem; color: rgba(255,255,255,.8); }',
@@ -33281,7 +33307,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.19 (v64)';
+var VERSION = '2026.11.20 (v65)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33397,6 +33423,90 @@ window.IncVersion = VERSION;
         '.gdl-gone { flex: 0 0 auto; font-size: .68rem; opacity: .5; padding: 0 4px; }',
         'html.lm .gdl-row { border-color: rgba(29,23,51,.08); }',
         'html[data-theme="sleek"] .gdl { border-color: var(--sk-line); background: transparent; } html[data-theme="sleek"] .gdl-ic { background: var(--sk-raise); color: var(--sk-fg); } html[data-theme="sleek"] .gdl-rs { border-color: var(--sk-line); background: var(--sk-raise); } html[data-theme="sleek"] .gdl-row { border-color: var(--sk-line); }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-backupwarn">
+/* "Backups have stopped" banner. Shows when IncAtor opens (and re-checks every 5 minutes while open) if Google Drive
+   backups keep failing for 30 minutes, or no device has backed up for over a day even after IncAtor tried just now.
+   It goes away by itself as soon as a backup works. */
+(function () {
+    'use strict';
+    var FAIL_MIN = 30, STALE_H = 26, hiddenUntil = 0, startedAt = Date.now();
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function ago(t) { var m = Math.round((Date.now() - t) / 60000); return m < 60 ? m + ' min ago' : m < 2880 ? Math.round(m / 60) + ' hours ago' : Math.round(m / 1440) + ' days ago'; }
+    function state() {
+        var C = window.IncAtorCloud; if (!C || !C.health) return null;
+        var h = C.health(); if (!h.on) return null;
+        var now = Date.now(), f = h.fail, stale = h.last && now - h.last > STALE_H * 3600000;
+        if (f && now - f.since > FAIL_MIN * 60000) return { h: h, why: f.why, since: f.since };
+        if (stale && now - startedAt > 80000) return { h: h, why: h.ready ? (f ? f.why : 'No backup has worked since IncAtor opened') : 'Google Drive is not connected', since: h.last };
+        return null;
+    }
+    function hide() { var b = document.getElementById('bk-warn'); if (b) { b.classList.remove('show'); setTimeout(function () { if (b && !b.classList.contains('show')) b.remove(); }, 400); } }
+    function check() {
+        var st = state();
+        if (!st || Date.now() < hiddenUntil) { hide(); return st; }
+        var b = document.getElementById('bk-warn');
+        if (!b) { b = document.createElement('div'); b.id = 'bk-warn'; b.setAttribute('role', 'alert'); document.body.appendChild(b); }
+        var last = st.h.last ? new Date(st.h.last).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (' + ago(st.h.last) + ')' : 'never';
+        b.innerHTML = '<span class="bkw-ic"><i class="fas fa-exclamation-triangle"></i></span><div class="bkw-tx"><b>Backups have stopped</b><small>Last backup: ' + esc(last) + '</small><small>Reason: ' + esc(st.why) + '</small>' +
+            '<div class="bkw-bt"><button type="button" data-bkw="now"><i class="fas fa-cloud"></i> Back up now</button><button type="button" data-bkw="open">Details</button></div></div>' +
+            '<button type="button" class="bkw-x" data-bkw="x" aria-label="Hide for now"><i class="fas fa-times"></i></button>';
+        requestAnimationFrame(function () { b.classList.add('show'); });
+        return st;
+    }
+    document.addEventListener('click', function (e) {
+        var t = e.target.closest && e.target.closest('[data-bkw]'); if (!t) return;
+        var a = t.getAttribute('data-bkw');
+        if (a === 'x') { hiddenUntil = Date.now() + 3 * 3600000; hide(); }
+        else if (a === 'open') { hide(); hiddenUntil = Date.now() + 600000; try { showPage('data'); } catch (e2) { /* ignore */ } }
+        else if (a === 'now') { t.disabled = true; t.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Backing up...'; try { IncAtorCloud.backupNow(true); } catch (e3) { /* ignore */ } setTimeout(function () { check(); }, 9000); }
+    });
+    /* Tell the IncAtor server how backups are going, so it can send a notification when they stop, even while IncAtor is closed. */
+    function pingState() { try { return JSON.parse(localStorage.getItem('incator:bkPing') || '{}') || {}; } catch (e) { return {}; } }
+    function pingSave(o) { try { localStorage.setItem('incator:bkPing', JSON.stringify(o)); } catch (e) { /* ignore */ } }
+    function devName() { var u = navigator.userAgent || ''; return /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'Computer'; }
+    function canPing() { return !!(window.IncMail && IncMail.api && IncMail.hasPass && IncMail.hasPass()); }
+    function ok() {
+        var ps = pingState(); if (!canPing()) return;
+        if (!ps.failSent && ps.okAt && Date.now() - ps.okAt < 30 * 60000) return;
+        IncMail.api('/backup/ping', { ok: Date.now(), device: devName() }).then(function () { pingSave({ okAt: Date.now() }); }, function () { /* sent next time */ });
+    }
+    function reportFail(st) {
+        var ps = pingState(), since = st.h.fail ? st.h.fail.since : st.since || Date.now();
+        if (!canPing() || ps.failSent === since) return;
+        IncMail.api('/backup/ping', { fail: st.why, since: since, last: st.h.last || null, device: devName() }).then(function () { ps.failSent = since; pingSave(ps); }, function () { /* sent at the next check */ });
+    }
+    var check0 = check;
+    check = function () { var st = check0(); if (st) reportFail(st); return st; };
+    window.IncBackupWarn = { check: function () { return check(); }, state: state, ok: ok };
+    /* Tapping a "Backups have stopped" / "Email check failed" / "Email could not be read" notification opens the right page. */
+    function goHash(h) {
+        h = String(h || '').replace(/^[^#]*/, '');
+        var pg = h === '#data' ? 'data' : (h === '#wo-history' || h === '#gmail') ? 'add' : '';
+        if (!pg) return;
+        setTimeout(function () { try { showPage(pg); } catch (e) { /* ignore */ } try { history.replaceState(null, '', location.href.replace(/#.*$/, '')); } catch (e) { /* ignore */ } }, 900);
+    }
+    goHash(location.hash);
+    window.addEventListener('hashchange', function () { goHash(location.hash); });
+    try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'incator-open') goHash(e.data.url); }); } catch (e) { /* ignore */ }
+    setTimeout(function () { check(); }, 90000);                           // after opening: IncAtor first tries a backup itself
+    setInterval(function () { check(); }, 5 * 60000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { check(); }, 90000); });
+    var st = document.createElement('style'); st.id = 'incator-backupwarn-css';
+    st.textContent = [
+        '#bk-warn { position: fixed; left: 12px; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 74px); z-index: 9000; max-width: 560px; margin: 0 auto; display: flex; gap: 12px; align-items: flex-start;',
+        '  padding: 14px 14px 12px; border-radius: 18px; color: #fff; background: linear-gradient(135deg, rgba(185,28,28,.96), rgba(127,29,29,.96)); border: 1px solid rgba(252,165,165,.5);',
+        '  box-shadow: 0 12px 34px rgba(0,0,0,.45); transform: translateY(-16px); opacity: 0; transition: transform .35s, opacity .35s; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }',
+        '#bk-warn.show { transform: none; opacity: 1; }',
+        '.bkw-ic { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.18); }',
+        '.bkw-tx { flex: 1; min-width: 0; } .bkw-tx b { display: block; font-size: .98rem; } .bkw-tx small { display: block; font-size: .76rem; opacity: .9; margin-top: 1px; overflow-wrap: anywhere; }',
+        '.bkw-bt { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .bkw-bt button { padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,255,255,.55); background: rgba(255,255,255,.14); color: #fff; font-size: .8rem; font-weight: 600; }',
+        '.bkw-bt button:first-child { background: #fff; color: #991b1b; border-color: #fff; }',
+        '.bkw-x { background: none; border: 0; color: #fff; opacity: .8; padding: 2px 4px; font-size: 1rem; }',
+        '@media (min-width: 701px) { #bk-warn { top: 18px; } }'
     ].join('\n');
     document.head.appendChild(st);
 })();
