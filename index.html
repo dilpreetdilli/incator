@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#1a0b3d">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <title>Incator - Income Tracker</title>
-    <script>(function(){try{var d=document.documentElement,t=localStorage.getItem('incator_theme');if(t&&/^(ocean|emerald|sunset|graphite|neon|gold|rose|arctic|terminal|crimson|terra|business|sleek)$/.test(t))d.setAttribute('data-theme',t);var F={"inter": "Inter:wght@400;500;600;700", "roboto": "Roboto:wght@400;500;700", "montserrat": "Montserrat:wght@400;500;600;700", "nunito": "Nunito:wght@400;500;600;700", "lato": "Lato:wght@400;700", "opensans": "Open+Sans:wght@400;500;600;700", "raleway": "Raleway:wght@400;500;600;700", "spacegrotesk": "Space+Grotesk:wght@400;500;600;700", "playfair": "Playfair+Display:wght@400;500;600;700", "merriweather": "Merriweather:wght@400;700", "jetbrains": "JetBrains+Mono:wght@400;500;600;700", "system": ""},f=localStorage.getItem('incator_font');if(f&&F.hasOwnProperty(f)){d.setAttribute('data-font',f);if(F[f]){var l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+F[f]+'&display=swap';document.head.appendChild(l);}}}catch(e){}})();</script>
+    <script>(function(){try{var d=document.documentElement,t=localStorage.getItem('incator_theme');if(t&&/^(ocean|emerald|sunset|graphite|neon|gold|rose|arctic|terminal|crimson|terra|business|sleek|regular)$/.test(t))d.setAttribute('data-theme',t);var F={"inter": "Inter:wght@400;500;600;700", "roboto": "Roboto:wght@400;500;700", "montserrat": "Montserrat:wght@400;500;600;700", "nunito": "Nunito:wght@400;500;600;700", "lato": "Lato:wght@400;700", "opensans": "Open+Sans:wght@400;500;600;700", "raleway": "Raleway:wght@400;500;600;700", "spacegrotesk": "Space+Grotesk:wght@400;500;600;700", "playfair": "Playfair+Display:wght@400;500;600;700", "merriweather": "Merriweather:wght@400;700", "jetbrains": "JetBrains+Mono:wght@400;500;600;700", "system": ""},f=localStorage.getItem('incator_font');if(f&&F.hasOwnProperty(f)){d.setAttribute('data-font',f);if(F[f]){var l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+F[f]+'&display=swap';document.head.appendChild(l);}}}catch(e){}})();</script>
     <link rel="manifest" href="manifest.webmanifest">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -6379,6 +6379,42 @@ setTimeout(wrap, 500);
                                             <input type="text" id="user-name-setting" placeholder="Enter your name" class="magic-input" value="Dilpreet" onchange="updateUserName(this.value)">
                                             <div class="field-glow"></div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <!-- The assistant (the magic chat): its name and its button -->
+                                <div class="setting-item" id="ask-name-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon">
+                                            <i class="fas fa-magic"></i>
+                                        </div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Assistant name</h4>
+                                            <p class="setting-description">What your helper in the chat is called. Leave it empty for "Ask IncAtor".</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <div class="magic-field">
+                                            <div class="field-icon">
+                                                <i class="fas fa-signature"></i>
+                                            </div>
+                                            <input type="text" id="ask-name-setting" placeholder="Ask IncAtor" maxlength="24" class="magic-input" autocomplete="off">
+                                            <div class="field-glow"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="setting-item" id="ask-fab-item">
+                                    <div class="setting-header">
+                                        <div class="setting-icon">
+                                            <i class="fas fa-magic"></i>
+                                        </div>
+                                        <div class="setting-content">
+                                            <h4 class="setting-title">Show the assistant button</h4>
+                                            <p class="setting-description">The magic button in the bar at the bottom (phones) or in the bottom-right corner (computers) that opens the chat.</p>
+                                        </div>
+                                    </div>
+                                    <div class="setting-control">
+                                        <div class="magic-toggle active" id="ask-fab-toggle" role="switch" tabindex="0" aria-checked="true" aria-label="Show the assistant button"><div class="toggle-orb"></div></div>
                                     </div>
                                 </div>
                                 
@@ -23724,7 +23760,7 @@ requestAnimationFrame(frame);
     var TK = 'incator_theme', FK = 'incator_font';
     /* Default theme (violet) and default font (Poppins) are defined once in :root, are not editable,
        and "applying" them only removes the data-theme / data-font attribute. */
-    var THEMES = Object.freeze([{"id": "default", "name": "Default", "desc": "The original violet look", "locked": true, "c": ["#1a0b3d", "#8b5cf6", "#f97316"]}, {"id": "ocean", "name": "Ocean", "desc": "Deep blue, soft glass", "locked": false, "c": ["#0b283d", "#5cb6f6", "#22d3ee"]}, {"id": "emerald", "name": "Emerald", "desc": "Forest green and gold", "locked": false, "c": ["#0c3c26", "#60f2ae", "#facc15"]}, {"id": "sunset", "name": "Sunset", "desc": "Warm orange and rose glow", "locked": false, "c": ["#3d170b", "#f6805c", "#fbbf24"]}, {"id": "graphite", "name": "Graphite", "desc": "Flat, quiet, no animations", "locked": false, "c": ["#222426", "#a0a7b2", "#f59e0b"]}, {"id": "neon", "name": "Neon", "desc": "Black with glowing cyan edges", "locked": false, "c": ["#080614", "#00e5ff", "#a3e635"]}, {"id": "gold", "name": "Gold", "desc": "Black and gold, sharp luxury", "locked": false, "c": ["#161006", "#f2c960", "#facc15"]}, {"id": "rose", "name": "Rose", "desc": "Soft pink, very rounded", "locked": false, "c": ["#3d0b20", "#f65c9c", "#fdba74"]}, {"id": "arctic", "name": "Arctic", "desc": "Icy teal, crisp glass", "locked": false, "c": ["#173143", "#85d9ee", "#7dd3fc"]}, {"id": "terminal", "name": "Terminal", "desc": "Green phosphor, square edges", "locked": false, "c": ["#020c06", "#22c55e", "#a3e635"]}, {"id": "crimson", "name": "Crimson", "desc": "Bold red and gold", "locked": false, "c": ["#390f16", "#fa586e", "#facc15"]}, {"id": "terra", "name": "Terra", "desc": "Earthy, matte, calm", "locked": false, "c": ["#2d2018", "#d7a67b", "#becd64"]}, {"id": "business", "name": "Business", "desc": "Quiet blue, tight corners", "locked": false, "c": ["#172034", "#6f92e3", "#38bdf8"]}, {"id": "sleek", "name": "Sleek", "desc": "Plain and calm: no colours, no cards", "locked": false, "c": ["#0b0b0c", "#f2f2f2", "#7a7a7a"]}]);
+    var THEMES = Object.freeze([{"id": "default", "name": "Default", "desc": "The original violet look", "locked": true, "c": ["#1a0b3d", "#8b5cf6", "#f97316"]}, {"id": "ocean", "name": "Ocean", "desc": "Deep blue, soft glass", "locked": false, "c": ["#0b283d", "#5cb6f6", "#22d3ee"]}, {"id": "emerald", "name": "Emerald", "desc": "Forest green and gold", "locked": false, "c": ["#0c3c26", "#60f2ae", "#facc15"]}, {"id": "sunset", "name": "Sunset", "desc": "Warm orange and rose glow", "locked": false, "c": ["#3d170b", "#f6805c", "#fbbf24"]}, {"id": "graphite", "name": "Graphite", "desc": "Flat, quiet, no animations", "locked": false, "c": ["#222426", "#a0a7b2", "#f59e0b"]}, {"id": "neon", "name": "Neon", "desc": "Black with glowing cyan edges", "locked": false, "c": ["#080614", "#00e5ff", "#a3e635"]}, {"id": "gold", "name": "Gold", "desc": "Black and gold, sharp luxury", "locked": false, "c": ["#161006", "#f2c960", "#facc15"]}, {"id": "rose", "name": "Rose", "desc": "Soft pink, very rounded", "locked": false, "c": ["#3d0b20", "#f65c9c", "#fdba74"]}, {"id": "arctic", "name": "Arctic", "desc": "Icy teal, crisp glass", "locked": false, "c": ["#173143", "#85d9ee", "#7dd3fc"]}, {"id": "terminal", "name": "Terminal", "desc": "Green phosphor, square edges", "locked": false, "c": ["#020c06", "#22c55e", "#a3e635"]}, {"id": "crimson", "name": "Crimson", "desc": "Bold red and gold", "locked": false, "c": ["#390f16", "#fa586e", "#facc15"]}, {"id": "terra", "name": "Terra", "desc": "Earthy, matte, calm", "locked": false, "c": ["#2d2018", "#d7a67b", "#becd64"]}, {"id": "business", "name": "Business", "desc": "Quiet blue, tight corners", "locked": false, "c": ["#172034", "#6f92e3", "#38bdf8"]}, {"id": "sleek", "name": "Sleek", "desc": "Plain and calm: no colours, no cards", "locked": false, "c": ["#0b0b0c", "#f2f2f2", "#7a7a7a"]}, {"id": "regular", "name": "Regular", "desc": "Simple and clean like a regular website, colour icons", "locked": false, "c": ["#f5f6f8", "#2563eb", "#34c759"]}]);
     var FONTS = Object.freeze([{"id": "poppins", "name": "Poppins", "stack": "'Poppins', sans-serif", "q": null, "desc": "Default - rounded and friendly", "locked": true}, {"id": "inter", "name": "Inter", "stack": "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif", "q": "Inter:wght@400;500;600;700", "desc": "Clean and neutral", "locked": false}, {"id": "roboto", "name": "Roboto", "stack": "'Roboto', system-ui, 'Segoe UI', Arial, sans-serif", "q": "Roboto:wght@400;500;700", "desc": "Familiar Android look", "locked": false}, {"id": "montserrat", "name": "Montserrat", "stack": "'Montserrat', 'Segoe UI', Arial, sans-serif", "q": "Montserrat:wght@400;500;600;700", "desc": "Wide and modern", "locked": false}, {"id": "nunito", "name": "Nunito", "stack": "'Nunito', 'Segoe UI', Arial, sans-serif", "q": "Nunito:wght@400;500;600;700", "desc": "Soft rounded", "locked": false}, {"id": "lato", "name": "Lato", "stack": "'Lato', 'Segoe UI', Arial, sans-serif", "q": "Lato:wght@400;700", "desc": "Warm and professional", "locked": false}, {"id": "opensans", "name": "Open Sans", "stack": "'Open Sans', 'Segoe UI', Arial, sans-serif", "q": "Open+Sans:wght@400;500;600;700", "desc": "Easy to read", "locked": false}, {"id": "raleway", "name": "Raleway", "stack": "'Raleway', 'Segoe UI', Arial, sans-serif", "q": "Raleway:wght@400;500;600;700", "desc": "Elegant and light", "locked": false}, {"id": "spacegrotesk", "name": "Space Grotesk", "stack": "'Space Grotesk', 'Segoe UI', Arial, sans-serif", "q": "Space+Grotesk:wght@400;500;600;700", "desc": "Techy", "locked": false}, {"id": "playfair", "name": "Playfair Display", "stack": "'Playfair Display', Georgia, 'Times New Roman', serif", "q": "Playfair+Display:wght@400;500;600;700", "desc": "Classic serif", "locked": false}, {"id": "merriweather", "name": "Merriweather", "stack": "'Merriweather', Georgia, 'Times New Roman', serif", "q": "Merriweather:wght@400;700", "desc": "Sturdy serif", "locked": false}, {"id": "jetbrains", "name": "JetBrains Mono", "stack": "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace", "q": "JetBrains+Mono:wght@400;500;600;700", "desc": "Monospace", "locked": false}, {"id": "system", "name": "System", "stack": "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif", "q": "", "desc": "Your device's own font, fastest", "locked": false}]);
     var TIDS = THEMES.map(function (t) { return t.id; }), FIDS = FONTS.map(function (f) { return f.id; });
     var root = document.documentElement;
@@ -24610,6 +24646,7 @@ function build() {
 /* inline colours written by the app (style="color:#fff") */
 var ORIG = 'data-lm-orig';
 function fixInline(el) {
+    if (el.hasAttribute('data-cg')) return;                                    // the contrast guard looks after this one
     if (el === document.documentElement || el === document.body) return;   // the page itself: its colours are set by the themes, never rewritten here (Safari kept old ones)
     var st = el.getAttribute('style'); if (!st || !/(color|background|border)/.test(st) || el.closest(SKIPEL)) return;
     if (!el.hasAttribute(ORIG)) el.setAttribute(ORIG, st); else if (el.getAttribute('data-lm-done') === st) return;
@@ -24890,8 +24927,9 @@ CSS += '\n' + T + ' .sk-flat { background: transparent !important; background-im
 var KEEP = 'button, input, select, textarea, label, a, i, svg, img, canvas, video, .magic-toggle, .wo-drop, .modal, .modal-content, [role="dialog"], .notification, .ic-pill, .nm-sheet, .entry-menu, .rc-cam, .rc-view, .jp-view, #wo-sheet, .floating-nav, .es-chip, .theme-prev, .theme-card, .bgx, .inc-mini-in';
 var seen = new WeakSet(), scanT = 0;
 function isOn() { return document.documentElement.getAttribute('data-theme') === 'sleek'; }
+function flatOn() { var t = document.documentElement.getAttribute('data-theme'); return t === 'sleek' || t === 'regular'; }   // Regular uses the same flat layout
 function scan() {
-    if (!isOn()) return;
+    if (!flatOn()) return;
     var page = document.querySelector('.page.active:not(#home-page)'); if (!page) return;
     var W = page.clientWidth || innerWidth;
     var all = page.querySelectorAll('div, section, article, li, aside, header, footer, details');
@@ -24913,18 +24951,110 @@ function later() { clearTimeout(scanT); scanT = setTimeout(scan, 160); }
 function unflat() { Array.prototype.forEach.call(document.querySelectorAll('.sk-flat'), function (el) { el.classList.remove('sk-flat', 'sk-line'); }); seen = new WeakSet(); }
 var mo = null;
 function watch() {
-    if (isOn() && !mo) {
+    if (flatOn() && !mo) {
         mo = new MutationObserver(later);
         mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
         later(); setTimeout(scan, 900); setTimeout(scan, 2000);
-    } else if (!isOn() && mo) { mo.disconnect(); mo = null; unflat(); }
+    } else if (!flatOn() && mo) { mo.disconnect(); mo = null; unflat(); }
 }
 function inject() {
     var st = document.getElementById('incator-sleek-css');
     if (!st) { st = document.createElement('style'); st.id = 'incator-sleek-css'; }
-    st.textContent = CSS;
+    st.textContent = CSS + '\n' + regularCss();
     document.head.appendChild(st);                                       // last, so it has the final say
 }
+/* ---------------- Regular theme (Settings > Appearance > Themes > Regular) ----------------
+   Simple and clean, like a regular website: one plain background, no cards, no glow, no animations behind the app.
+   It uses Sleek's flat layout (below, made for Regular) with its own colours: white (Light) or soft charcoal (Dark),
+   blue for actions, and colour icons in rounded squares - like the settings on a phone. Every feature works the same. */
+function regularCss() {
+    var R = 'html[data-theme="regular"]', RX = 'html[data-theme="regular"][data-theme] body:not(#rg-x)';   // RX beats Sleek's page rules
+    var base = CSS.split('\n').filter(function (l) { return !/sk-tune|sk-sl|sk-seg|sk-orb|sk-sw|sk-ends|sk-reset|#sk-dark|#sk-light|data-sk-|\.mh-orb|incator-sleek/.test(l); })
+        .join('\n').split('[data-theme="sleek"]').join('[data-theme="regular"]');
+    var X = [
+    /* ---- the palette ---- */
+    R + ' { --sk-bg: #101216; --sk-raise: #181b21; --sk-fg: #e8eaee; --sk-mut: #9aa1ad; --sk-faint: #6b7280; --sk-line: rgba(255,255,255,.08); --sk-line2: rgba(255,255,255,.15); --sk-soft: rgba(255,255,255,.04); --sk-press: rgba(96,165,250,.12);' +
+        ' --rg-acc: #60a5fa; --rg-acc2: #3b82f6; --rg-on: #0b1220; color-scheme: dark;' +
+        ' --pr: 96, 165, 250; --pr2: 147, 197, 253; --pr3: 59, 130, 246; --pr4: 96, 165, 250; --pr5: 37, 99, 235; --deep: 30, 41, 59; --deep2: 30, 41, 59; --ind: 99, 102, 241; --ind2: 129, 140, 248; --ind3: 99, 102, 241;' +
+        ' --lav: 191, 219, 254; --lav2: 219, 234, 254; --lav3: 219, 234, 254; --lav4: 191, 219, 254; --panel: 24, 27, 33; --bg1: 16, 18, 22; --bg2: 16, 18, 22; --bg3: 16, 18, 22; --bg4: 24, 27, 33; --bgd: 20, 22, 27; --bgdd: 16, 18, 22;' +
+        ' --acc: 96, 165, 250; --acc2: 56, 189, 248; --primary: #60a5fa; --primary-dark: #3b82f6; --secondary: #9aa1ad; --accent: #60a5fa; --dark: #101216; --darker: #0b0c0f; }',
+    'html.lm[data-theme="regular"] { --sk-bg: #f5f6f8; --sk-raise: #ffffff; --sk-fg: #111827; --sk-mut: #6b7280; --sk-faint: #9ca3af; --sk-line: rgba(17,24,39,.08); --sk-line2: rgba(17,24,39,.15); --sk-soft: rgba(17,24,39,.035); --sk-press: rgba(37,99,235,.08);' +
+        ' --rg-acc: #2563eb; --rg-acc2: #1d4ed8; --rg-on: #ffffff; color-scheme: light;' +
+        ' --pr: 37, 99, 235; --pr2: 29, 78, 216; --pr3: 59, 130, 246; --pr4: 37, 99, 235; --pr5: 30, 64, 175; --acc: 37, 99, 235; --acc2: 2, 132, 199; --lav: 30, 58, 138; --lav2: 23, 37, 84; --lav3: 23, 37, 84; --lav4: 30, 58, 138; --ind2: 67, 56, 202;' +
+        ' --panel: 255, 255, 255; --bg1: 245, 246, 248; --bg2: 245, 246, 248; --bg3: 245, 246, 248; --bg4: 255, 255, 255; --bgd: 238, 240, 243; --bgdd: 245, 246, 248; --light: #111827; --primary: #2563eb; --primary-dark: #1d4ed8; --secondary: #4b5563; --accent: #2563eb; --dark: #111827; --darker: #000; }',
+    R + ', ' + R + ' body { background: var(--sk-bg) !important; background-image: none !important; }',
+    /* ---- colour, not grey: pictures, check boxes and drawings keep their colours ---- */
+    RX + ' .entry-date-badge { background: var(--sk-soft) !important; border: 1px solid var(--sk-line) !important; color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; box-shadow: none !important; }',
+    RX + ' .entry-date-badge i, ' + RX + ' .entry-date-badge * { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+    RX + ' .wo-seg button.on, ' + RX + ' .wo-seg button[aria-selected="true"], ' + RX + ' .wo-seg button[aria-pressed="true"], ' + RX + ' [role="tab"][aria-selected="true"] { background: var(--rg-acc) !important; color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; border-color: var(--rg-acc) !important; }',
+    RX + ' .wo-seg button.on *, ' + RX + ' [role="tab"][aria-selected="true"] * { color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; }',
+    RX + ' .page svg, ' + RX + ' .empty-state img, ' + RX + ' .es-art, ' + RX + ' .ie-scene, ' + RX + ' .empty-illus, ' + RX + ' input[type=checkbox], ' + RX + ' input[type=radio], ' + RX + ' input[type=range] { filter: none !important; }',
+    RX + ' input[type=checkbox], ' + RX + ' input[type=radio], ' + RX + ' input[type=range] { accent-color: var(--rg-acc); }',
+    /* ---- colour icons in rounded squares ---- */
+    ['.setting-icon', '.live-calc-icon', '.acc-ic', '.rc-ic', '.rc-hi', '.rc-tic', '.rc-reci', '.mo-ic', '.financial-icon', '.ap-ic', '.ins-ic', '.wo-dic', '.entry-main-icon', '.home-card-icon', '.mh-tile-icon'].map(function (c) { return RX + ' ' + c; }).join(', ') +
+        ' { background: var(--ic-c, var(--rg-acc)) !important; background-image: none !important; border: 0 !important; box-shadow: none !important; color: #fff !important; border-radius: 10px !important; }',
+    ['.setting-icon', '.live-calc-icon', '.acc-ic', '.rc-ic', '.rc-hi', '.rc-tic', '.rc-reci', '.mo-ic', '.financial-icon', '.ap-ic', '.ins-ic', '.wo-dic', '.entry-main-icon', '.home-card-icon', '.mh-tile-icon'].map(function (c) { return RX + ' ' + c + ' i'; }).join(', ') +
+        ' { color: #fff !important; -webkit-text-fill-color: #fff !important; filter: none !important; }',
+    RX + ' .page:not(#home-page) .setting-icon, ' + RX + ' .page:not(#home-page) .live-calc-icon { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; display: flex !important; align-items: center; justify-content: center; }',
+    /* ---- actions in blue ---- */
+    RX + ' .primary-magic, ' + RX + ' .wo-pri, ' + RX + ' .ic-btn.primary, ' + RX + ' .confirmation-btn.primary, ' + RX + ' .rf-main, ' + RX + ' .mh-cta, ' + RX + ' button[type=submit], ' + RX + ' .app-btn.ie-btn, ' + RX + ' .ie-btn, ' + RX + ' .bgpv-use' +
+        ' { background: var(--rg-acc) !important; background-image: none !important; color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; border-color: var(--rg-acc) !important; box-shadow: 0 1px 2px rgba(0,0,0,.12) !important; }',
+    RX + ' .primary-magic *, ' + RX + ' .wo-pri *, ' + RX + ' .ic-btn.primary *, ' + RX + ' .confirmation-btn.primary *, ' + RX + ' .rf-main *, ' + RX + ' .mh-cta *, ' + RX + ' button[type=submit] *, ' + RX + ' .app-btn.ie-btn *, ' + RX + ' .ie-btn *' +
+        ' { color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; }',
+    RX + ' .mh-cta-icon { border-color: var(--rg-on) !important; }',
+    RX + ' .app-btn, ' + RX + ' .magic-btn, ' + RX + ' .secondary-magic, ' + RX + ' .ic-btn:not(.primary), ' + RX + ' .confirmation-btn:not(.primary), ' + RX + ' .entry-action-btn { background: var(--sk-raise) !important; border: 1px solid var(--sk-line2) !important; border-radius: 10px !important; color: var(--sk-fg) !important; }',
+    'html.lm[data-theme="regular"] .app-btn, html.lm[data-theme="regular"] .entry-action-btn { box-shadow: 0 1px 2px rgba(17,24,39,.06) !important; }',
+    RX + ' .app-btn i, ' + RX + ' .entry-action-btn i { color: var(--rg-acc) !important; -webkit-text-fill-color: var(--rg-acc) !important; }',
+    RX + ' .paid-btn.active, ' + RX + ' .invoice-btn.active { background: rgba(34,197,94,.12) !important; border-color: rgba(34,197,94,.5) !important; } ' + RX + ' .paid-btn.active i, ' + RX + ' .invoice-btn.active i { color: #16a34a !important; -webkit-text-fill-color: #16a34a !important; }',
+    RX + ' .delete-btn, ' + RX + ' .delete-btn i { color: #dc2626 !important; -webkit-text-fill-color: #dc2626 !important; }',
+    RX + ' a, ' + RX + ' .rc-link, ' + RX + ' .ask-link { color: var(--rg-acc) !important; -webkit-text-fill-color: var(--rg-acc) !important; }',
+    /* the chosen tab or option, switches */
+    RX + ' .rc-mode.on, ' + RX + ' .bz-tab.on, ' + RX + ' .wv-tabs .on, ' + RX + ' .page [aria-pressed="true"]:not(.theme-card):not(.magic-toggle), ' + RX + ' .page [aria-selected="true"], ' + RX + ' .nm-seg button[aria-pressed="true"]' +
+        ' { background: var(--rg-acc) !important; color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; border-color: var(--rg-acc) !important; }',
+    RX + ' .rc-mode.on *, ' + RX + ' .bz-tab.on *, ' + RX + ' .wv-tabs .on *, ' + RX + ' .page [aria-pressed="true"]:not(.theme-card):not(.magic-toggle) * { color: var(--rg-on) !important; -webkit-text-fill-color: var(--rg-on) !important; }',
+    RX + ' .magic-toggle.active, ' + RX + ' .rc-tg.on .rc-tgs, ' + RX + ' .rc-cam-auto.on .rc-tgs { background: #34c759 !important; } ' + RX + ' .magic-toggle .toggle-orb, ' + RX + ' .magic-toggle:not(.active) .toggle-orb { background: #fff !important; box-shadow: 0 1px 3px rgba(0,0,0,.3) !important; }',
+    RX + ' .magic-toggle:not(.active) { background: var(--sk-line2) !important; }',
+    RX + ' .nav-badge, ' + RX + ' .rc-hn, ' + RX + ' .rc-cp em, ' + RX + ' .nb-count { background: #ef4444 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+    /* fields: white with a thin border */
+    RX + ' input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), ' + RX + ' select, ' + RX + ' textarea, ' + RX + ' .app-input { background: var(--sk-raise) !important; border: 1px solid var(--sk-line2) !important; border-radius: 10px !important; }',
+    RX + ' input:focus, ' + RX + ' select:focus, ' + RX + ' textarea:focus, ' + RX + ' .app-input:focus { border-color: var(--rg-acc) !important; box-shadow: 0 0 0 3px rgba(var(--pr), .18) !important; }',
+    /* ---- numbers: money in green and red where it matters ---- */
+    RX + ' .entry-compact-total, ' + RX + ' .total-amount { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+    /* ---- Home: app icons, no cards ---- */
+    RX + ' .mh-tile, ' + RX + ' .home-card { background: transparent !important; border: 0 !important; box-shadow: none !important; }',
+    RX + ' .mh-tile:active, ' + RX + ' .home-card:hover { background: var(--sk-soft) !important; }',
+    RX + ' #home-page.active .mh-tiles, ' + RX + ' .mh-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; grid-template-rows: auto !important; flex: 0 0 auto !important; align-content: start; gap: 18px 8px !important; margin-top: 18px; }',
+    RX + ' .mh-tile { padding: 10px 4px !important; min-height: 0 !important; height: auto !important; gap: 8px !important; }',
+    RX + ' .mh-tile-icon { width: 58px !important; height: 58px !important; border-radius: 16px !important; box-shadow: 0 4px 10px rgba(0,0,0,.12) !important; }',
+    RX + ' .mh-tile-icon i { font-size: 24px !important; }',
+    RX + ' .home-card-icon { width: 64px !important; height: 64px !important; border-radius: 18px !important; box-shadow: 0 6px 14px rgba(0,0,0,.12) !important; }',
+    RX + ' .mh-tile b, ' + RX + ' .home-card-title { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; font-weight: 600 !important; }',
+    RX + ' .home-card-sub, ' + RX + ' .home-card p { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+    RX + ' #main-header *:not(i), ' + RX + ' .wx-greet { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+    RX + ' .mh-brand { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+    RX + ' .mh-cta { border-radius: 14px !important; }',
+    /* ---- the bar at the bottom: clean, active page in blue ---- */
+    RX + ' .floating-nav { background: var(--sk-raise) !important; border: 1px solid var(--sk-line) !important; box-shadow: 0 6px 24px rgba(0,0,0,.12) !important; }',
+    RX + ' .floating-nav .nav-item, ' + RX + ' .floating-nav .nav-item i { color: var(--sk-mut) !important; -webkit-text-fill-color: var(--sk-mut) !important; }',
+    RX + ' .floating-nav .nav-item.active, ' + RX + ' .floating-nav .nav-item.active i { color: var(--rg-acc) !important; -webkit-text-fill-color: var(--rg-acc) !important; }',
+    RX + ' .floating-nav .nav-ask .na-orb { background: var(--rg-acc) !important; box-shadow: none !important; } ' + RX + ' .floating-nav .nav-ask .na-orb i { color: #fff !important; -webkit-text-fill-color: #fff !important; }',
+    /* ---- the chat ---- */
+    RX + ' #ask-sheet { --c-bg: #0f1115; --c-dot: transparent; --c-head: #181b21; --c-line: rgba(255,255,255,.08); --c-in: #1f232b; --c-out: #2563eb; --c-tx: #e8eaee; --c-out-tx: #fff; --c-mut: #9aa1ad; --c-field: #1f232b; --c-acc: #60a5fa; --c-acc2: #60a5fa; --c-chip: rgba(96,165,250,.1); --c-chipb: rgba(96,165,250,.35); }',
+    'html.lm[data-theme="regular"] #ask-sheet { --c-bg: #f5f6f8; --c-head: #ffffff; --c-line: rgba(17,24,39,.08); --c-in: #ffffff; --c-out: #2563eb; --c-tx: #111827; --c-out-tx: #fff; --c-mut: #6b7280; --c-field: #ffffff; --c-acc: #2563eb; --c-acc2: #2563eb; --c-chip: rgba(37,99,235,.06); --c-chipb: rgba(37,99,235,.3); }',
+    RX + ' .ask-av, ' + RX + ' .ask-send, ' + RX + ' .ask-act.main, ' + RX + ' #ask-fab, ' + RX + ' .at-ic, ' + RX + ' .at-bt .at-main { background: var(--rg-acc) !important; color: #fff !important; box-shadow: none !important; }',
+    RX + ' .ask-m.me .ask-t i { color: #bfdbfe; }',
+    RX + ' .ask-ring { border-color: var(--rg-acc) !important; box-shadow: 0 0 0 9999px rgba(15,17,21,.45), 0 0 18px 2px rgba(var(--pr), .6) !important; }',
+    RX + ' #ask-tour, ' + RX + ' .ask-tip { background: var(--sk-raise) !important; color: var(--sk-fg) !important; border-color: var(--sk-line2) !important; } ' + RX + ' .at-tx b { color: var(--rg-acc) !important; }',
+    /* ---- the theme card ---- */
+    /* closed job cards in the flat themes: the button row of the open card stays hidden (it peeked out on computers) */
+    'html[data-theme="sleek"] .iconic-entry-card:not(.expanded) .entry-footer-actions, html[data-theme="sleek"] .iconic-entry-card:not(.expanded) .entry-card-footer, html[data-theme="regular"] .iconic-entry-card:not(.expanded) .entry-footer-actions, html[data-theme="regular"] .iconic-entry-card:not(.expanded) .entry-card-footer { display: none !important; }',
+    'html[data-theme="sleek"] #view-page .iconic-entry-card:not(.expanded), html[data-theme="regular"] #view-page .iconic-entry-card:not(.expanded) { height: auto !important; min-height: 0 !important; }',
+    RX + ' .ask-bar { background: var(--sk-raise) !important; border: 1px solid var(--sk-line2) !important; color: var(--sk-mut) !important; box-shadow: 0 1px 2px rgba(17,24,39,.05); } ' + RX + ' .ask-bar > i:first-child { color: var(--rg-acc) !important; }',
+    '.theme-card[data-theme-id="regular"] .theme-prev { background: #f5f6f8 !important; border-color: rgba(0,0,0,.12) !important; }'
+    ].join('\n');
+    return base + '\n' + X;
+}
+
 inject();
 document.addEventListener('DOMContentLoaded', inject);
 window.addEventListener('load', function () { setTimeout(inject, 0); watch(); });
@@ -25081,10 +25211,10 @@ function solidText() {
     });
     var sig = sels.join('|'); if (sig === solidSig) return; solidSig = sig;
     var st = document.getElementById('incator-sleek-solid'); if (!st) { st = document.createElement('style'); st.id = 'incator-sleek-solid'; document.head.appendChild(st); }
-    st.textContent = sels.map(function (x) { return 'html[data-theme="sleek"][data-theme] body ' + x + ' { background-image: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; animation: none !important; }'; }).join('\n');
+    st.textContent = sels.map(function (x) { return 'html[data-theme="sleek"][data-theme] body ' + x + ', html[data-theme="regular"][data-theme] body ' + x + ' { background-image: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; -webkit-text-fill-color: var(--sk-fg) !important; color: var(--sk-fg) !important; animation: none !important; }'; }).join('\n');
 }
 window.addEventListener('load', function () { setTimeout(solidText, 1500); setTimeout(solidText, 6000); });
-try { new MutationObserver(function () { if (isOn()) solidText(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
+try { new MutationObserver(function () { if (flatOn()) solidText(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* ignore */ }
 window.IncSleek = { on: isOn, scan: scan, paint: function () { painted = null; paintVars(); }, palette: palette, solid: solidText };
 })();
 
@@ -33318,7 +33448,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.20 (v68)';
+var VERSION = '2026.11.21 (v69)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33822,7 +33952,7 @@ window.IncVersion = VERSION;
         return [
             'You are the helper inside IncAtor, a web app a roofing contractor (Jattana Roofing and Renovations, BC, Canada) uses for jobs, invoices, quotes, projects, receipts (SlipVault), backups and settings. Answer ONLY with JSON.',
             'Today is ' + t.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' (' + ymd(t) + '). Weeks start on Monday. Money is in ' + cur() + '. The user is on the "' + (PAGE_T[page()] || page()) + '" page.',
-            'Pick ONE type:',
+            'You are called "' + NAME() + '". Be brief and direct: give exactly what he asked for, not a menu of options. Pick ONE type:',
             '1) "data" - a question about his own records. You never see them; the app runs your recipe exactly. Datasets:',
             '- jobs: ' + FIELDS.jobs,
             '- quotes: ' + FIELDS.quotes,
@@ -33833,7 +33963,8 @@ window.IncVersion = VERSION;
             'Data rules: up to 3 queries. "Made/earned/income" = jobs total. For names use op "contains" with the shortest distinctive word. "When did I buy X" = receipts, filter items contains "x" (singular, 1-2 key words), measure "list", sort_by "date", sort "desc". "Which/what jobs" = measure "list". "Unpaid" = status eq "unpaid". {n} becomes a formatted value (a one-receipt list becomes "date at store").',
             '2) "help" - how to do something, where a setting is, what a feature does. {"type":"help","answer":"short clear steps, one per line, starting each line with a number","targets":["up to 3 ids from the catalog below, most useful first: a tour: id when he wants to do a task, or a setting/page id to show him"]}',
             '3) "go" - he just wants to open a page. {"type":"go","targets":["p:<page>"],"answer":"short"}',
-            '4) "chat" - anything else about using IncAtor or running the business that needs no records. {"type":"chat","answer":"short helpful reply"}. If it has nothing to do with IncAtor or his business, say politely what you can help with.',
+            '4) "action" - he wants something DONE to jobs in JobNest (mark paid/unpaid/invoiced, open the invoice, edit, delete, open, photos) or JobNest shown a certain way. {"type":"action","action":"mark_paid|mark_unpaid|mark_invoiced|invoice|edit|delete|open|photos|jobnest_filter|jobnest_search","target":{"text":"words that identify the job (address, invoice or work order number)","filters":[jobs filters as above, for groups like all unpaid jobs from Pinnacle],"use_previous":true when he says it/them/these about the jobs in the last answer},"jobnest":{"status":"all|pending|invoiced|unpaid|paid","year":"all or YYYY","from":"YYYY-MM-DD","to":"YYYY-MM-DD","sort":"date-desc|date-asc|total-desc|total-asc|address-asc|address-desc","search":"text"},"answer":"short"}',
+            '5) "chat" - anything else about using IncAtor or running the business that needs no records. {"type":"chat","answer":"short helpful reply"}. If it has nothing to do with IncAtor or his business, say politely what you can help with.',
             'Catalog of IncAtor (id = place):',
             catalog(),
             prev ? 'The previous question was: ' + JSON.stringify(prev.q) + (prev.plan ? ' with recipe ' + JSON.stringify(prev.plan) : '') + '. The new question may follow up on it.' : '',
@@ -33952,81 +34083,130 @@ window.IncVersion = VERSION;
     }
     function endTour(quiet) { if (!tour) return; tour.cleanup && tour.cleanup(); unspot(); if (tour.card) tour.card.remove(); tour = null; if (!quiet) fab(); }
 
-    /* =============================================== the Ask sheet =============================================== */
-    var sheet = null, prev = null, busy = false;
+    /* =============================================== the chat =============================================== */
+    var sheet = null, prev = null, busy = false, lastJobs = null;
+    function NAME() { var n = String(S().askName || '').trim(); return n || 'Ask IncAtor'; }
+    function WHO() { var n = NAME().replace(/^ask\s+/i, '').trim(); return n || NAME(); }
+    function isPhone() { return window.innerWidth <= 700; }
+    function isOpen() { return !!(sheet && sheet.classList.contains('open')); }
+    function hhmm() { return new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
     var CTX = {
-        home: [['q', 'month'], ['q', 'week'], ['q', 'unpaid'], ['t', 'create-job'], ['h', 'How do I change the background?']],
-        add: [['t', 'create-job'], ['h', 'What does Split by Percentage do?'], ['h', 'How do I import a work order?'], ['q', 'month']],
-        view: [['t', 'find-job'], ['t', 'send-invoice'], ['t', 'mark-paid'], ['t', 'invoice-many'], ['q', 'unpaid'], ['q', 'noinv']],
-        receipts: [['t', 'scan-receipt'], ['p', 'When did I buy '], ['q', 'spend'], ['q', 'gst'], ['t', 'ai-key']],
+        home: [['q', 'month'], ['q', 'unpaid'], ['q', 'week'], ['t', 'create-job']],
+        add: [['t', 'create-job'], ['h', 'How do I import a work order?'], ['q', 'month']],
+        view: [['q', 'unpaid'], ['a', 'Show unpaid jobs in JobNest'], ['t', 'send-invoice'], ['t', 'find-job'], ['q', 'noinv']],
+        receipts: [['t', 'scan-receipt'], ['p', 'When did I buy '], ['q', 'spend'], ['q', 'gst']],
         summary: [['q', 'best'], ['q', 'month'], ['q', 'gst']],
         quotes: [['t', 'new-quote'], ['q', 'waiting']], projects: [['t', 'new-quote'], ['q', 'waiting']],
-        settings: [['t', 'change-background'], ['t', 'notifications'], ['t', 'ai-key'], ['h', 'Where do I change my invoice details?'], ['h', 'Make the text bigger']],
-        data: [['t', 'restore-backup'], ['h', 'Where is my backup history?'], ['h', 'How do I delete everything?']],
+        settings: [['t', 'change-background'], ['h', 'Make the text bigger'], ['t', 'notifications'], ['t', 'ai-key']],
+        data: [['t', 'restore-backup'], ['h', 'Where is my backup history?']],
         trash: [['h', 'How long do things stay in the Trash?']], roofcalc: [['h', 'What can RoofVision do?']]
     };
     function chips() {
-        var list = (CTX[page()] || CTX.home).slice();
-        ['month', 'unpaid', 'week', 'gst', 'spend', 'best', 'waiting'].forEach(function (k) { if (!list.some(function (c) { return c[0] === 'q' && c[1] === k; })) list.push(['q', k]); });
-        return list.slice(0, 9).map(function (c) {
+        var list = (CTX[page()] || CTX.home).slice(0, 5);
+        return list.map(function (c) {
             var label = c[0] === 'q' ? QUICK[c[1]].t : c[0] === 't' ? TOURS[c[1]].t : c[0] === 'p' ? c[1].trim() + '…' : c[1];
             return '<button type="button" class="ask-chip' + (c[0] === 't' ? ' tour' : '') + '" data-chip="' + esc(c[0] + ':' + c[1]) + '">' + (c[0] === 't' ? '<i class="fas fa-magic"></i> ' : '') + esc(label) + '</button>';
         }).join('');
     }
+    function paintNames() {
+        var n = NAME();
+        if (sheet) { sheet.setAttribute('aria-label', n); var b = sheet.querySelector('#ask-name'); if (b) b.textContent = n; var i = sheet.querySelector('#ask-q'); if (i) i.placeholder = 'Message ' + WHO(); }
+        var nb = document.querySelector('.floating-nav .nav-ask'); if (nb) { nb.setAttribute('data-tooltip', n); nb.setAttribute('aria-label', n); }
+        if (fabEl) { fabEl.setAttribute('aria-label', n); fabEl.title = n; }
+        var hd = document.getElementById('hd-ask'); if (hd) { var sp = hd.querySelector('span'); if (sp) sp.textContent = n + ': ask about your numbers, how to do something, or “help me create a job”…'; }
+    }
     function build() {
         if (sheet) return sheet;
-        sheet = document.createElement('div'); sheet.id = 'ask-sheet'; sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', 'Ask IncAtor');
-        sheet.innerHTML = '<div class="ask-box"><header class="ask-hd"><span class="ask-hi"><i class="fas fa-magic"></i></span><div class="ask-ht"><b>Ask IncAtor</b><small id="ask-where">Ask about your data, or how to do anything</small></div><button type="button" class="ask-x" data-ask="close" aria-label="Close"><i class="fas fa-times"></i></button></header>' +
+        sheet = document.createElement('div'); sheet.id = 'ask-sheet'; sheet.setAttribute('role', 'dialog');
+        sheet.innerHTML = '<div class="ask-box"><header class="ask-hd">' +
+            '<button type="button" class="ask-back" data-ask="close" aria-label="Close chat"><i class="fas fa-chevron-left"></i></button>' +
+            '<span class="ask-av"><i class="fas fa-magic"></i></span><div class="ask-ht"><b id="ask-name"></b><small id="ask-where"><i class="ask-dot"></i>online</small></div>' +
+            '<button type="button" class="ask-hb" data-ask="clear" aria-label="New chat" title="New chat"><i class="fas fa-edit"></i></button>' +
+            '<button type="button" class="ask-hb ask-x" data-ask="close" aria-label="Close" title="Close"><i class="fas fa-times"></i></button></header>' +
             '<div class="ask-log" id="ask-log"></div><div class="ask-chips" id="ask-chips"></div>' +
-            '<form class="ask-in" id="ask-form"><input id="ask-q" type="text" autocomplete="off" enterkeyhint="send" placeholder="Ask anything, or “help me create a job”" aria-label="Your question"><button type="submit" aria-label="Ask"><i class="fas fa-chevron-right"></i></button></form>' +
-            '<label class="ask-fabset"><input type="checkbox" id="ask-fab-on"> Show the <i class="fas fa-magic"></i> help button</label></div>';
+            '<form class="ask-in" id="ask-form"><input id="ask-q" type="text" autocomplete="off" enterkeyhint="send" aria-label="Your message"><button type="submit" class="ask-send" aria-label="Send"><i class="fas fa-chevron-right"></i></button></form></div>';
         document.body.appendChild(sheet);
         sheet.addEventListener('click', function (e) {
-            if (e.target === sheet) { close(); return; }
-            var t = e.target.closest('[data-ask], [data-chip], [data-more], [data-show], [data-tourgo], [data-open], [data-gopg]'); if (!t) return;
-            if (t.getAttribute('data-ask') === 'close') close();
-            else if (t.getAttribute('data-ask') === 'ai') startTour('ai-key');
+            if (e.target === sheet) { if (isPhone()) close(); return; }
+            var t = e.target.closest('[data-ask], [data-chip], [data-more], [data-show], [data-tourgo], [data-open], [data-gopg], [data-jact], [data-confirm], [data-undo]'); if (!t) return;
+            var a = t.getAttribute('data-ask');
+            if (a === 'close') close();
+            else if (a === 'clear') { sheet.querySelector('#ask-log').innerHTML = ''; prev = null; lastJobs = null; greeted = false; greet(); }
+            else if (a === 'ai') startTour('ai-key');
             else if (t.hasAttribute('data-chip')) chip(t.getAttribute('data-chip'));
-            else if (t.hasAttribute('data-more')) { var box = t.closest('.ask-rows'); if (box) box.classList.add('all'); t.remove(); }
+            else if (t.hasAttribute('data-more')) { var box = t.closest('.ask-rows, .ask-alt'); if (box) box.classList.add('all'); t.remove(); }
             else if (t.hasAttribute('data-show')) { var x = byId(t.getAttribute('data-show')); if (x) showItem(x); }
             else if (t.hasAttribute('data-tourgo')) startTour(t.getAttribute('data-tourgo'));
-            else if (t.hasAttribute('data-gopg')) { close(); go(t.getAttribute('data-gopg')); }
+            else if (t.hasAttribute('data-gopg')) { if (isPhone()) close(); go(t.getAttribute('data-gopg')); }
             else if (t.hasAttribute('data-open')) openRec(t.getAttribute('data-open'));
+            else if (t.hasAttribute('data-jact')) { var p = t.getAttribute('data-jact').split(':'); doJob(p[0], [p.slice(1).join(':')]); }
+            else if (t.hasAttribute('data-confirm')) { var k = t.getAttribute('data-confirm'), pend = PEND[k]; delete PEND[k]; var card = t.closest('.ask-m'); if (card) card.querySelectorAll('[data-confirm]').forEach(function (b) { b.disabled = true; }); if (pend && t.getAttribute('data-yes') === '1') pend(); else if (pend) say('bot', '<p>OK, I left them as they are.</p>'); }
+            else if (t.hasAttribute('data-undo')) { var u = UNDO[t.getAttribute('data-undo')]; delete UNDO[t.getAttribute('data-undo')]; t.disabled = true; if (u) u(); }
         });
         sheet.querySelector('#ask-form').addEventListener('submit', function (e) { e.preventDefault(); var i = sheet.querySelector('#ask-q'), q = i.value.trim(); if (!q || busy) return; i.value = ''; ask(q); });
-        sheet.querySelector('#ask-fab-on').addEventListener('change', function () { S().askFab = this.checked; saveS(); fab(); });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sheet.classList.contains('open')) close(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen()) close(); });
+        swipe();
+        paintNames();
         return sheet;
     }
-    var greeted = false;
-    function open(q) {
-        build(); unspot(); sheet.classList.add('open'); document.documentElement.classList.add('ask-open'); fab();
-        sheet.querySelector('#ask-chips').innerHTML = chips();
-        sheet.querySelector('#ask-where').textContent = page() === 'home' ? 'Ask about your data, or how to do anything' : 'You are on ' + (PAGE_T[page()] || page()) + ' – ask me anything';
-        sheet.querySelector('#ask-fab-on').checked = S().askFab !== false;
-        if (!greeted) {
-            greeted = true;
-            say('bot', '<p>Hi! I can help with anything in IncAtor:</p><ul class="ask-ul"><li><b>Your numbers</b>: “How much did I make in October?”, “When did I buy roofing nails?”</li><li><b>How to</b>: “How do I change the background?”, “Where are my invoice details?”</li><li><b>Walk me through it</b>: “Help me create a job” and I’ll guide you on the real screen, step by step.</li></ul>' +
-                (window.IncAI && IncAI.ready() ? '' : '<p class="ask-note">Finding settings, the guides and the quick buttons work right away. For questions about your numbers in your own words, <button type="button" class="ask-link" data-ask="ai">turn on the AI reader</button> (the same Gemini key as SlipVault).</p>'));
+    /* phones: drag the chat to the right to go back (like WhatsApp); the app's own swipe-back also closes it */
+    function swipe() {
+        var box = sheet.querySelector('.ask-box'), x0 = 0, y0 = 0, dx = 0, on = false, dead = false;
+        box.addEventListener('touchstart', function (e) {
+            if (!isPhone() || e.touches.length !== 1) return;
+            var t = e.target; dead = !!(t.closest && t.closest('.ask-chips, .ask-rows, input, textarea, select'));
+            x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; on = false;
+        }, { passive: true });
+        box.addEventListener('touchmove', function (e) {
+            if (!isPhone() || dead || e.touches.length !== 1) return;
+            var mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+            if (!on) { if (mx > 14 && Math.abs(mx) > Math.abs(my) * 1.4) on = true; else return; }
+            dx = Math.max(0, mx); box.style.transition = 'none'; box.style.transform = 'translateX(' + dx + 'px)';
+            sheet.style.setProperty('--ask-shade', String(Math.max(0, 0.45 - dx / 900)));
+        }, { passive: true });
+        function end() {
+            if (!on) return; on = false; box.style.transition = '';
+            if (dx > Math.min(120, window.innerWidth * 0.28)) { box.style.transform = 'translateX(100%)'; setTimeout(function () { if (isOpen()) close(); box.style.transform = ''; }, 200); }
+            else box.style.transform = '';
+            sheet.style.removeProperty('--ask-shade');
         }
-        if (q) ask(q); else setTimeout(function () { var i = sheet.querySelector('#ask-q'); if (i && window.innerWidth > 700) i.focus(); }, 300);
+        box.addEventListener('touchend', end); box.addEventListener('touchcancel', end);
     }
-    function close() { if (sheet) sheet.classList.remove('open'); document.documentElement.classList.remove('ask-open'); fab(); }
+    var greeted = false;
+    function greet() {
+        if (greeted) return; greeted = true;
+        var nm = String(S().userName || '').split(' ')[0];
+        say('bot', '<p>Hi' + (nm ? ' ' + esc(nm) : '') + ' 👋 How can I help?</p>' +
+            (window.IncAI && IncAI.ready() ? '' : '<p class="ask-note">Tip: <button type="button" class="ask-link" data-ask="ai">turn on the AI reader</button> and I’ll understand any question in your own words.</p>'));
+    }
+    function open(q) {
+        build(); unspot(); paintNames();
+        sheet.classList.add('open'); document.documentElement.classList.add('ask-open'); document.documentElement.classList.toggle('ask-open-phone', isPhone());
+        sheet.querySelector('#ask-chips').innerHTML = chips();
+        sheet.querySelector('#ask-where').innerHTML = '<i class="ask-dot"></i>' + (page() === 'home' ? 'online' : 'online · on ' + esc(PAGE_T[page()] || page()));
+        fab(); greet();
+        if (q) ask(q); else setTimeout(function () { var i = sheet.querySelector('#ask-q'); if (i && !isPhone()) i.focus(); }, 250);
+    }
+    function close() { if (sheet) sheet.classList.remove('open'); document.documentElement.classList.remove('ask-open', 'ask-open-phone'); fab(); }
     function say(who, html) {
-        var log = sheet.querySelector('#ask-log'), d = document.createElement('div'); d.className = 'ask-m ' + who; d.innerHTML = html; log.appendChild(d);
+        var log = sheet.querySelector('#ask-log'), d = document.createElement('div'); d.className = 'ask-m ' + who;
+        d.innerHTML = html + '<span class="ask-t">' + hhmm() + (who === 'me' ? ' <i class="fas fa-check"></i>' : '') + '</span>';
+        log.appendChild(d);
         setTimeout(function () { log.scrollTop = log.scrollHeight; }, 30); return d;
     }
+    function typing() { var log = sheet.querySelector('#ask-log'), d = document.createElement('div'); d.className = 'ask-m bot ask-typing'; d.innerHTML = '<span></span><span></span><span></span>'; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+    function hideForPhone() { if (isPhone()) close(); }
     function openRec(k) {
         var p = k.split(':'), ds = p[0], id = p.slice(1).join(':');
-        close();
+        hideForPhone();
         if (ds === 'jobs') { var n = isFinite(+id) ? +id : id; go('view'); setTimeout(function () { try { viewEntryDetails(n); } catch (e) { toast('That job could not be opened', 'error'); } }, 350); }
         else if (ds === 'receipts') { if (!(window.RcptNav && RcptNav.open && RcptNav.open(id))) { go('receipts'); toast('That receipt could not be opened', 'error'); } }
         else if (ds === 'quotes') { try { BIZ.editQuote(isFinite(+id) ? +id : id); } catch (e) { go('quotes'); } }
         else go(ds === 'projects' ? 'projects' : 'home');
     }
     function openBtn(ds, r) { return '<button type="button" class="ask-open" data-open="' + esc(ds + ':' + r._id) + '">Open</button>'; }
-    function rowHtml(ds, r, hl) {
-        if (ds === 'jobs') return '<div class="ask-r"><span><b>' + esc(r.address || '(no address)') + '</b><small>' + esc(nice(r.date)) + (r.customer ? ' · ' + esc(r.customer) : '') + (r.invoice_no ? ' · ' + esc(r.invoice_no) : '') + '</small></span><span class="ask-rv">' + money(r.total) + '<small class="st-' + r.status.replace(/ /g, '') + '">' + esc(r.status) + '</small></span>' + openBtn(ds, r) + '</div>';
+    function rowHtml(ds, r, hl, extra) {
+        if (ds === 'jobs') return '<div class="ask-r"><span><b>' + esc(r.address || '(no address)') + '</b><small>' + esc(nice(r.date)) + (r.customer ? ' · ' + esc(r.customer) : '') + (r.invoice_no ? ' · ' + esc(r.invoice_no) : '') + '</small></span><span class="ask-rv">' + money(r.total) + '<small class="st-' + r.status.replace(/ /g, '') + '">' + esc(r.status) + '</small></span>' + (extra ? extra(r) : openBtn(ds, r)) + '</div>';
         if (ds === 'quotes') return '<div class="ask-r"><span><b>' + esc(r.customer || r.title || r.number) + '</b><small>' + esc([r.number, nice(r.date), r.address].filter(Boolean).join(' · ')) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span>' + openBtn(ds, r) + '</div>';
         if (ds === 'projects') return '<div class="ask-r"><span><b>' + esc(r.name) + '</b><small>' + esc(nice(r.date)) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span>' + openBtn(ds, r) + '</div>';
         var match = hl ? r._items.filter(function (it) { return hl.split(/\s+/).every(function (w) { return it.name.toLowerCase().indexOf(w) >= 0; }); }) : [];
@@ -34034,9 +34214,9 @@ window.IncVersion = VERSION;
             match.slice(0, 3).map(function (it) { return '<small class="ask-item"><i class="fas fa-check"></i> ' + esc(it.name) + (it.amount ? ' – ' + money(it.amount) : '') + '</small>'; }).join('') +
             '</span><span class="ask-rv">' + money(r.total) + (r.gst ? '<small>GST ' + money(r.gst) + '</small>' : '') + '</span>' + openBtn(ds, r) + '</div>';
     }
-    function listRows(r, rowsArr, max) {
-        max = max || 8;
-        return '<div class="ask-rows">' + rowsArr.map(function (x, i) { return rowHtml(r.ds, x, r.hl).replace('class="ask-r"', 'class="ask-r' + (i >= max ? ' more' : '') + '"'); }).join('') + (rowsArr.length > max ? '<button type="button" class="ask-more" data-more="1">Show all ' + rowsArr.length + '</button>' : '') + '</div>';
+    function listRows(r, rowsArr, max, extra) {
+        max = max || 6;
+        return '<div class="ask-rows">' + rowsArr.map(function (x, i) { return rowHtml(r.ds, x, r.hl, extra).replace('class="ask-r"', 'class="ask-r' + (i >= max ? ' more' : '') + '"'); }).join('') + (rowsArr.length > max ? '<button type="button" class="ask-more" data-more="1">Show all ' + rowsArr.length + '</button>' : '') + '</div>';
     }
     function showResult(plan, results) {
         var ans = String(plan.answer || '').replace(/\{(\d)\}/g, function (m, i) { var r = results[+i - 1]; return r ? '<b>' + esc(fmtVal(r)) + '</b>' : m; });
@@ -34044,38 +34224,194 @@ window.IncVersion = VERSION;
         if (!ans) ans = results.map(function (r) { return esc(r.q.label || '') + ': <b>' + esc(fmtVal(r)) + '</b>'; }).join('<br>');
         var html = '<p class="ask-ans">' + ans + '</p>';
         results.forEach(function (r) {
-            var head = '<div class="ask-qh"><span>' + esc(r.q.label || NOUN[r.ds][1]) + (r.q.from || r.q.to ? ' <small>' + esc([r.q.from ? nice(r.q.from) : 'start', r.q.to ? nice(r.q.to) : 'today'].join(' – ')) + '</small>' : '') + '</span><b>' + esc(r.groups ? r.groups.length + ' groups' : r.m === 'list' ? r.list.length + ' ' + NOUN[r.ds][r.list.length === 1 ? 0 : 1] : fmtVal(r)) + '</b></div>';
             var body = '';
-            if (r.groups) body = '<div class="ask-rows">' + r.groups.map(function (g, i) { return '<div class="ask-r' + (i >= 8 ? ' more' : '') + '"><span><b>' + esc(glabel(g.key, r.q.group)) + '</b><small>' + g.n + ' ' + NOUN[r.ds][g.n === 1 ? 0 : 1] + '</small></span><span class="ask-rv">' + (r.gmoney ? money(g.value) : g.value) + '</span></div>'; }).join('') + (r.groups.length > 8 ? '<button type="button" class="ask-more" data-more="1">Show all ' + r.groups.length + '</button>' : '') + '</div>';
+            if (r.groups) body = '<div class="ask-rows">' + r.groups.map(function (g, i) { return '<div class="ask-r' + (i >= 6 ? ' more' : '') + '"><span><b>' + esc(glabel(g.key, r.q.group)) + '</b><small>' + g.n + ' ' + NOUN[r.ds][g.n === 1 ? 0 : 1] + '</small></span><span class="ask-rv">' + (r.gmoney ? money(g.value) : g.value) + '</span></div>'; }).join('') + (r.groups.length > 6 ? '<button type="button" class="ask-more" data-more="1">Show all ' + r.groups.length + '</button>' : '') + '</div>';
             else if (r.m === 'list') body = r.list.length ? listRows(r, r.list) : '';
             else if (r.pick) body = listRows(r, [r.pick]);
-            if (head || body) html += '<div class="ask-q">' + head + body + '</div>';
+            if (body) html += '<div class="ask-q">' + body + '</div>';
         });
+        // what you can do next with these jobs
+        var jl = results.filter(function (r) { return r.ds === 'jobs' && r.m === 'list' && r.list.length; })[0];
+        if (jl) {
+            lastJobs = jl.list.map(function (r) { return r._id; });
+            var unpaid = jl.list.filter(function (r) { return !r.paid; }).length, st = (jl.q.filters || []).filter(function (f) { return f.field === 'status' || f.field === 'invoiced' || f.field === 'paid'; })[0];
+            var nx = [];
+            if (unpaid) nx.push('<button type="button" class="ask-chip" data-chip="a:mark them paid">Mark ' + (jl.list.length === 1 ? 'it' : unpaid === jl.list.length ? 'all ' + unpaid : 'the ' + unpaid + ' unpaid') + ' paid</button>');
+            if (st) nx.push('<button type="button" class="ask-chip" data-chip="a:show ' + esc(st.field === 'invoiced' ? 'not invoiced' : String(st.value || 'unpaid')) + ' jobs in JobNest">Show in JobNest</button>');
+            if (nx.length) html += '<div class="ask-next">' + nx.join('') + '</div>';
+        }
         var scanned = results.reduce(function (t, r) { return t + r.scanned; }, 0);
         html += '<p class="ask-foot"><i class="fas fa-lock"></i> Worked out on this device from your ' + results.map(function (r) { return NOUN[r.ds][1]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' and ') + ' (' + scanned + ' records).' + (plan.byAI ? ' The AI only saw your question.' : '') + '</p>';
         say('bot', html);
     }
-    function helpHtml(answer, targets) {
+    function pathSteps(x) {                                                 // "how do I...": the steps to get there
+        var p = x.path.slice(), s = [];
+        if (p[0]) s.push('Open ' + p[0] + (p[0] === 'Settings' || p[0] === 'Backup & Data' ? (isPhone() ? ' (⋯ More in the bar at the bottom)' : '') : ''));
+        p.slice(1).forEach(function (v) { s.push('Open ' + v); });
+        s.push(x.sec ? 'It is all in there' : 'Find “' + x.t + '”' + (x.d ? ': ' + x.d.replace(/\.$/, '') : ''));
+        return s.map(function (v, i) { return (i + 1) + '. ' + v; }).join('\n');
+    }
+    function btnFor(id, main) {
+        id = String(id || '');
+        if (/^tour:/.test(id)) { var T = TOURS[id.slice(5)]; return T ? '<button type="button" class="ask-act' + (main ? ' main' : '') + '" data-tourgo="' + esc(id.slice(5)) + '"><i class="fas fa-magic"></i> Walk me through it</button>' : ''; }
+        var x = byId(id); if (!x) return '';
+        if (x.page) return '<button type="button" class="ask-act' + (main ? ' main' : '') + '" data-gopg="' + esc(x.pg) + '"><i class="fas fa-chevron-right"></i> Open ' + esc(x.t) + '</button>';
+        return '<button type="button" class="ask-act' + (main ? ' main' : '') + '" data-show="' + esc(x.id) + '"><i class="fas fa-search"></i> Show me</button>';
+    }
+    function helpHtml(answer, targets, alts) {
         var lines = String(answer || '').split(/\n+/).map(function (l) { return l.trim(); }).filter(Boolean);
         var steps = lines.length > 1 && lines.every(function (l) { return /^\d+[.)]/.test(l); });
         var html = steps ? '<ol class="ask-ol">' + lines.map(function (l) { return '<li>' + esc(l.replace(/^\d+[.)]\s*/, '')) + '</li>'; }).join('') + '</ol>' : lines.map(function (l) { return '<p>' + esc(l) + '</p>'; }).join('');
-        var btns = (targets || []).map(function (id) {
-            id = String(id || '');
-            if (/^tour:/.test(id)) { var T = TOURS[id.slice(5)]; return T ? '<button type="button" class="ask-act main" data-tourgo="' + esc(id.slice(5)) + '"><i class="fas fa-magic"></i> Walk me through it: ' + esc(T.t) + '</button>' : ''; }
-            var x = byId(id); if (!x) return '';
-            if (x.page) return '<button type="button" class="ask-act" data-gopg="' + esc(x.pg) + '"><i class="fas fa-chevron-right"></i> Open ' + esc(x.t) + '</button>';
-            return '<button type="button" class="ask-act" data-show="' + esc(x.id) + '"><i class="fas fa-search"></i> Show me<small>' + esc(x.path.concat([x.t]).join(' › ')) + '</small></button>';
-        }).filter(Boolean);
-        return html + (btns.length ? '<div class="ask-acts">' + btns.join('') + '</div>' : '');
+        var b = (targets || []).slice(0, 2).map(function (id, i) { return btnFor(id, i === 0); }).filter(Boolean);
+        if (b.length) html += '<div class="ask-acts">' + b.join('') + '</div>';
+        alts = (alts || []).filter(function (id) { return (targets || []).indexOf(id) < 0; }).slice(0, 3);
+        if (alts.length) html += '<div class="ask-alt"><button type="button" class="ask-more" data-more="1">Not this? Other matches</button>' + alts.map(function (id) {
+            var x = /^tour:/.test(id) ? { t: TOURS[id.slice(5)].t, path: ['Guide'] } : byId(id); if (!x) return '';
+            return '<div class="ask-alt-i"><span>' + esc(x.path.concat([x.t]).join(' › ')) + '</span>' + btnFor(id, false) + '</div>';
+        }).join('') + '</div>';
+        return html;
     }
-    function localAnswer(q) {
+    var NAV_RE = /^(?:please\s+)?(?:open|go to|goto|take me to|bring up|jump to|show me|where(?:'s| is| are| do i find| can i find)?|find)\b/i;
+    var DO_RE = /\b(?:help me|walk me|guide me|show me how|teach me|step by step)\b/i;
+    function pageNamed(q) {                                                // "open SlipVault", "go to JobNest": a page named in the question
+        var qw = words(q);
+        return PAGES.filter(function (p) { var pw = words(p.t); return pw.length && pw.every(function (w) { return qw.indexOf(w) >= 0; }); })[0] || null;
+    }
+    function quickNamed(q) {                                               // the quick questions, typed instead of tapped (no AI needed)
+        var s = q.toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+        var M = { month: /^(this month s? income|income this month|this month)$/, week: /^(last week|my week|weekly summary|week summary)$/, unpaid: /^(unpaid invoices?|unpaid|unpaid jobs|who owes me|what am i owed)$/,
+                  noinv: /^(not invoiced( yet)?|jobs not invoiced|uninvoiced( jobs)?)$/, gst: /^(gst( this year)?|gst collected)$/, best: /^(best months?|my best month)$/, spend: /^(spending( by category)?|expenses by category)$/, waiting: /^(quotes waiting|waiting quotes|open quotes)$/ };
+        for (var k in M) if (M[k].test(s)) return k;
+        return null;
+    }
+    function localAnswer(q, quiet) {
+        var pn = NAV_RE.test(q) || words(q).length <= 2 ? pageNamed(q) : null;
+        if (pn && !DO_RE.test(q)) { say('bot', '<p>Opening <b>' + esc(pn.t) + '</b>.</p>'); setTimeout(function () { hideForPhone(); go(pn.pg); }, 450); return true; }
         var h = localHelp(q);
         if (!h.tours.length && !h.items.length) return false;
-        var targets = h.tours.map(function (t) { return 'tour:' + t.id; }).concat(h.items.map(function (x) { return x.id; })).slice(0, 4);
-        var first = h.tours[0] ? TOURS[h.tours[0].id] : null, x0 = h.items[0];
-        var ans = first ? 'I can walk you through it on the screen, step by step.' : x0 ? (x0.page ? x0.t + ' is a page in IncAtor.' : 'It’s in ' + x0.path.concat([x0.t]).join(' › ') + '.' + (x0.d ? '\n' + x0.d : '')) : '';
-        say('bot', helpHtml(ans, targets));
+        var tours = h.tours.map(function (t) { return 'tour:' + t.id; }), items = h.items.map(function (x) { return x.id; });
+        var t0 = h.tours[0], x0 = h.items[0], tScore = t0 ? t0.s : 0, xScore = h.items.length ? h.top : 0;
+        // "help me / walk me through ...": start the guide straight away
+        if (t0 && DO_RE.test(q) && tScore >= 4) {
+            say('bot', '<p>Sure! I’ll guide you on the screen, one step at a time.</p>');
+            setTimeout(function () { startTour(t0.id); }, 700); return true;
+        }
+        // "open / where is / show me X": take you there right away
+        if (x0 && NAV_RE.test(q) && !DO_RE.test(q)) {
+            if (x0.page) { say('bot', '<p>Opening <b>' + esc(x0.t) + '</b>.</p>'); setTimeout(function () { hideForPhone(); go(x0.pg); }, 450); return true; }
+            say('bot', '<p>Here it is: <b>' + esc(x0.path.concat([x0.t]).join(' › ')) + '</b>.</p>' + helpHtml('', [], tours.concat(items.slice(1))));
+            setTimeout(function () { showItem(x0); }, 450); return true;
+        }
+        // "how do I ...": the steps, with one button that does it
+        if (t0 && tScore >= xScore) { say('bot', helpHtml(TOURS[t0.id].t + ': I can walk you through it on the screen, step by step.', [tours[0]], tours.slice(1).concat(items))); return true; }
+        if (x0.page) { say('bot', helpHtml(x0.t + ' is a page in IncAtor.', [x0.id], tours.concat(items.slice(1)))); return true; }
+        say('bot', helpHtml(pathSteps(x0), [x0.id], tours.concat(items.slice(1))));
         return true;
+    }
+
+    /* =============================================== doing things in JobNest =============================================== */
+    var PEND = {}, UNDO = {}, seq = 0;
+    var JSTOP = { the: 1, job: 1, jobs: 1, at: 1, for: 1, on: 1, a: 1, an: 1, entry: 1, to: 1, of: 1, my: 1, please: 1, as: 1 };
+    function matchJobs(text) {
+        text = String(text || '').trim().toLowerCase().replace(/[.!?]+$/, '');
+        if (/^(it|that|this|that job|this job|them|these|those|all of them|all|they|the jobs|these jobs|those jobs)$/.test(text)) return lastJobs ? rows('jobs').filter(function (r) { return lastJobs.indexOf(r._id) >= 0; }) : [];
+        var w = text.split(/[^a-z0-9#-]+/).filter(function (x) { return x && !JSTOP[x]; }); if (!w.length) return [];
+        return rows('jobs').filter(function (r) {
+            var hay = (r.address + ' ' + r.customer + ' ' + r.invoice_no + ' ' + r.wo_number + ' ' + r._id).toLowerCase();
+            return w.every(function (x) { return hay.indexOf(x.replace(/^#/, '')) >= 0; });
+        });
+    }
+    function entryOf(id) { try { return (entries || []).filter(function (e) { return String(e.id) === String(id); })[0] || null; } catch (e) { return null; } }
+    function refreshJobs() {
+        try { appStore.setItem('incomeEntries', JSON.stringify(entries)); } catch (e) { /* ignore */ }
+        try { if (typeof rerenderEntriesKeepSelection === 'function') rerenderEntriesKeepSelection(); else if (typeof updateEntriesList === 'function') updateEntriesList(); } catch (e) { /* ignore */ }
+    }
+    var ACT = {
+        mark_paid: { verb: 'paid', bulk: true, test: function (e) { return !e.paid; }, set: function (e) { if (typeof setPaid === 'function') setPaid(e, true); else { e.paid = true; e.invoiced = true; } } },
+        mark_unpaid: { verb: 'unpaid', bulk: true, test: function (e) { return !!e.paid; }, set: function (e) { if (typeof setPaid === 'function') setPaid(e, false); else e.paid = false; } },
+        mark_invoiced: { verb: 'invoiced', bulk: true, test: function (e) { return !e.invoiced; }, set: function (e) { if (typeof setInvoiced === 'function') setInvoiced(e, true); else e.invoiced = true; } }
+    };
+    function doJob(action, ids) {
+        var list = ids.map(entryOf).filter(Boolean); if (!list.length) { say('bot', '<p>I couldn’t find that job any more.</p>'); return; }
+        var e = list[0], addr = esc(e.address || 'that job');
+        if (ACT[action]) {
+            var A = ACT[action], todo = list.filter(A.test);
+            if (!todo.length) { say('bot', '<p>' + (list.length === 1 ? addr + ' is' : 'They are') + ' already ' + A.verb + '.</p>'); return; }
+            var snap = todo.map(function (x) { return { e: x, paid: x.paid, invoiced: x.invoiced, paidDate: x.paidDate }; });
+            todo.forEach(A.set); refreshJobs();
+            var k = 'u' + (++seq);
+            UNDO[k] = function () { snap.forEach(function (s) { s.e.paid = s.paid; s.e.invoiced = s.invoiced; if (s.paidDate) s.e.paidDate = s.paidDate; else delete s.e.paidDate; }); refreshJobs(); say('bot', '<p>Undone.</p>'); };
+            say('bot', '<p>Done ✅ ' + (todo.length === 1 ? '<b>' + esc(todo[0].address || 'The job') + '</b> is' : '<b>' + todo.length + ' jobs</b> are') + ' now marked ' + A.verb + '.</p><div class="ask-acts row"><button type="button" class="ask-act" data-undo="' + k + '"><i class="fas fa-undo"></i> Undo</button></div>');
+            return;
+        }
+        if (list.length > 1) { say('bot', '<p>Which one?</p>' + listRows({ ds: 'jobs' }, list.map(function (x) { return rows('jobs').filter(function (r) { return String(r._id) === String(x.id); })[0]; }).filter(Boolean), 6, function (r) { return '<button type="button" class="ask-open" data-jact="' + action + ':' + r._id + '">' + esc(LABEL[action] || 'Open') + '</button>'; })); return; }
+        var id = e.id;
+        if (action === 'invoice') { say('bot', '<p>Opening the invoice for <b>' + addr + '</b>.</p>'); hideForPhone(); go('view'); setTimeout(function () { try { openInvoice(id); } catch (er) { toast('The invoice could not be opened', 'error'); } }, 350); }
+        else if (action === 'edit') { say('bot', '<p>Opening <b>' + addr + '</b> to edit.</p>'); hideForPhone(); go('view'); setTimeout(function () { try { editEntry(id); } catch (er) { /* ignore */ } }, 350); }
+        else if (action === 'delete') { say('bot', '<p>Deleting <b>' + addr + '</b>: please confirm on the screen. It goes to the Trash first, so it can be brought back.</p>'); hideForPhone(); go('view'); setTimeout(function () { try { deleteEntry(id); } catch (er) { /* ignore */ } }, 350); }
+        else if (action === 'photos') { hideForPhone(); try { IncJobPhotos.open('e:' + id); } catch (er) { toast('Photos could not be opened', 'error'); } }
+        else { say('bot', '<p>Here is <b>' + addr + '</b>.</p>'); openRec('jobs:' + id); }
+    }
+    var LABEL = { invoice: 'Invoice', edit: 'Edit', delete: 'Delete', photos: 'Photos', open: 'Open' };
+    function jobAction(action, list, label) {
+        if (!list.length) { say('bot', '<p>I couldn’t find a job matching “' + esc(label || '') + '”. Try part of the address, the invoice number or the work order number.</p>'); return; }
+        lastJobs = list.map(function (r) { return r._id; });
+        var A = ACT[action];
+        if (A && list.length > 1) {
+            var todo = list.filter(function (r) { var e = entryOf(r._id); return e && A.test(e); });
+            if (!todo.length) { say('bot', '<p>They are already ' + A.verb + '.</p>'); return; }
+            var k = 'c' + (++seq); PEND[k] = function () { doJob(action, todo.map(function (r) { return r._id; })); };
+            say('bot', '<p>Mark these <b>' + todo.length + ' jobs</b> ' + A.verb + '?</p>' + listRows({ ds: 'jobs' }, todo, 5) +
+                '<div class="ask-acts row"><button type="button" class="ask-act main" data-confirm="' + k + '" data-yes="1">Yes, mark ' + todo.length + ' ' + A.verb + '</button><button type="button" class="ask-act" data-confirm="' + k + '">Cancel</button></div>');
+            return;
+        }
+        doJob(action, list.map(function (r) { return r._id; }));
+    }
+    function jobnest(f) {                                                   // set JobNest's own filter, the same as Filter & Sort
+        f = f || {};
+        hideForPhone(); go('view');
+        setTimeout(function () {
+            try {
+                var y = document.getElementById('view-year-filter'), st = document.getElementById('view-invoice-filter'), fr = document.getElementById('view-date-from'), to = document.getElementById('view-date-to'), so = document.getElementById('view-sort');
+                if (st) st.value = f.status || 'all';
+                if (y) { var want = f.year || (f.status && f.status !== 'all' ? 'all' : ''); if (want && [].some.call(y.options, function (o) { return o.value === String(want); })) y.value = String(want); }
+                if (fr) fr.value = f.from || ''; if (to) to.value = f.to || '';
+                if (so && f.sort && [].some.call(so.options, function (o) { return o.value === f.sort; })) so.value = f.sort;
+                if (typeof applyFilterModal === 'function') applyFilterModal();
+                var si = document.getElementById('search-input');
+                if (si) { si.value = f.search || ''; if (typeof searchEntries === 'function') searchEntries(); }
+            } catch (e) { /* ignore */ }
+        }, 450);
+    }
+    var STATUS_W = { unpaid: 'unpaid', 'not paid': 'unpaid', owing: 'unpaid', paid: 'paid', invoiced: 'invoiced', 'not invoiced': 'pending', uninvoiced: 'pending', pending: 'pending', all: 'all' };
+    function localAction(q) {                                               // things you can ask without the AI
+        var s = q.trim().replace(/[.!?]+$/, ''), m;
+        if ((m = /^(?:please\s+)?(?:mark|set|make)\s+(.+?)\s+(?:as\s+)?(paid|unpaid|not paid|invoiced)$/i.exec(s))) {
+            var act = /^(unpaid|not paid)$/i.test(m[2]) ? 'mark_unpaid' : /invoiced/i.test(m[2]) ? 'mark_invoiced' : 'mark_paid';
+            jobAction(act, matchJobs(m[1]), m[1]); return true;
+        }
+        if ((m = /^(?:make|create|send|print|share|open|do)\s+(?:an?\s+|the\s+)?invoice\s+(?:for|to|of|on)\s+(.+)$/i.exec(s)) || (m = /^invoice\s+(.+)$/i.exec(s))) { jobAction('invoice', matchJobs(m[1]), m[1]); return true; }
+        if ((m = /^(?:delete|remove|trash)\s+(?:the\s+)?(?:job\s+)?(?:at\s+|for\s+|on\s+)?(.+)$/i.exec(s))) { var d = matchJobs(m[1]); if (d.length) { jobAction('delete', d, m[1]); return true; } }
+        if ((m = /^(?:edit|change|update|fix)\s+(?:the\s+)?(?:job\s+)?(?:at\s+|for\s+|on\s+)?(.+)$/i.exec(s))) { var ed = matchJobs(m[1]); if (ed.length) { jobAction('edit', ed, m[1]); return true; } }
+        if ((m = /^(?:photos?|pictures?)\s+(?:of|for|from|at)\s+(.+)$/i.exec(s))) { var ph = matchJobs(m[1]); if (ph.length) { jobAction('photos', ph, m[1]); return true; } }
+        if ((m = /^(?:show|filter|list|open)\s+(?:me\s+)?(?:all\s+)?(?:my\s+|the\s+)?(unpaid|not paid|paid|invoiced|not invoiced|uninvoiced|all)\s*(?:jobs|invoices|entries)?(?:\s+in\s+jobnest)?$/i.exec(s))) {
+            var stt = STATUS_W[m[1].toLowerCase()];
+            say('bot', '<p>Showing ' + (stt === 'all' ? 'all jobs' : esc(m[1].toLowerCase()) + ' jobs') + ' in JobNest.</p>'); jobnest({ status: stt }); return true;
+        }
+        if ((m = /^(?:search|find|look for)\s+(?:jobnest\s+)?(?:for\s+)?(.+?)(?:\s+in\s+jobnest)?$/i.exec(s)) && (/jobnest/i.test(s) || matchJobs(m[1]).length)) {
+            say('bot', '<p>Searching JobNest for “' + esc(m[1]) + '”.</p>'); jobnest({ search: m[1] }); return true;
+        }
+        if ((m = /^(?:open|show|view)\s+(?:the\s+)?(?:job\s+)?(?:at\s+|for\s+|on\s+)?(.+)$/i.exec(s))) { var op = matchJobs(m[1]); if (op.length && !/^(it|that|them|these|those)$/i.test(m[1])) { jobAction('open', op, m[1]); return true; } }
+        return false;
+    }
+    function aiAction(plan, q) {
+        var a = String(plan.action || ''), t = plan.target || {}, list = [];
+        if (a === 'jobnest_filter' || a === 'jobnest_search') { say('bot', '<p>' + esc(plan.answer || 'Here it is in JobNest.') + '</p>'); jobnest(plan.jobnest || {}); return; }
+        if (t.use_previous && lastJobs) list = rows('jobs').filter(function (r) { return lastJobs.indexOf(r._id) >= 0; });
+        else if ((t.filters || []).length) list = run({ dataset: 'jobs', filters: t.filters, measure: 'list', from: t.from, to: t.to }).list;
+        else if (t.text) list = matchJobs(t.text);
+        if (['mark_paid', 'mark_unpaid', 'mark_invoiced', 'invoice', 'edit', 'delete', 'open', 'photos'].indexOf(a) < 0) { say('bot', helpHtml(plan.answer || 'I’m not sure how to do that yet.', [])); return; }
+        jobAction(a, list, t.text || q);
     }
     function chip(v) {
         var k = v.slice(0, 1), id = v.slice(2);
@@ -34086,21 +34422,22 @@ window.IncVersion = VERSION;
             var plan = c.p(); prev = { q: c.t, plan: plan }; showResult(plan, plan.queries.map(run));
         } else if (k === 't') { startTour(id); }
         else if (k === 'p') { var i = sheet.querySelector('#ask-q'); i.value = id; i.focus(); try { i.setSelectionRange(id.length, id.length); } catch (e) { /* ignore */ } }
-        else if (k === 'h') ask(id);
+        else if (k === 'h' || k === 'a') ask(id);
     }
     async function ask(q) {
         say('me', '<p>' + esc(q) + '</p>');
+        if (localAction(q)) return;                                         // "mark 12 Oak St paid", "invoice 9 Elm", "show unpaid jobs in JobNest"...
+        var qk = quickNamed(q);
+        if (qk) { var QC = QUICK[qk]; if (QC.week) { openWeek(); return; } var qp = QC.p(); prev = { q: q, plan: qp }; showResult(qp, qp.queries.map(run)); return; }
         var ai = window.IncAI && IncAI.ready(), looksData = DATA_RE.test(q), h = localHelp(q);
-        // without the AI, or when the question is plainly about the app: answer from IncAtor's own map
         if (!ai || (!looksData && h.top >= 5)) {
             if (!looksData && localAnswer(q)) return;
             if (!ai) {
-                if (!looksData && localAnswer(q)) return;
-                say('bot', '<p>' + (looksData ? 'To work out questions about your numbers in your own words I need the AI reader turned on.' : 'I didn’t find that in IncAtor. Try other words, or turn on the AI reader so I understand any question.') + '</p><div class="ask-acts"><button type="button" class="ask-act main" data-ask="ai"><i class="fas fa-magic"></i> Show me how to turn on the AI reader</button></div><p class="ask-note">The quick buttons below work without it.</p>');
+                say('bot', '<p>' + (looksData ? 'To work out questions about your numbers in your own words I need the AI reader turned on.' : 'I didn’t find that in IncAtor. Try other words, or turn on the AI reader so I understand any question.') + '</p><div class="ask-acts"><button type="button" class="ask-act main" data-ask="ai"><i class="fas fa-magic"></i> Show me how</button></div>');
                 return;
             }
         }
-        busy = true; var wait = say('bot', '<p class="ask-wait"><i class="fas fa-spinner fa-spin"></i> Working it out...</p>');
+        busy = true; var wait = typing();
         try {
             var plan = parseJson(await IncAI.text(prompt(q, prev)));
             wait.remove();
@@ -34109,11 +34446,15 @@ window.IncVersion = VERSION;
                 plan.queries = plan.queries.slice(0, 3); plan.byAI = true;
                 prev = { q: q, plan: { queries: plan.queries, answer: plan.answer } };
                 showResult(plan, plan.queries.map(run));
-            } else if (type === 'help' || type === 'go') {
+            } else if (type === 'action') { prev = { q: q }; aiAction(plan, q); }
+            else if (type === 'go' || type === 'help') {
                 prev = { q: q };
                 var tg = (plan.targets || []).filter(function (id) { return /^tour:/.test(id) ? TOURS[String(id).slice(5)] : byId(id); });
                 if (!tg.length) tg = h.tours.map(function (t) { return 'tour:' + t.id; }).concat(h.items.map(function (x) { return x.id; })).slice(0, 3);
-                say('bot', helpHtml(plan.answer || '', tg));
+                var first = tg[0], fx = first && !/^tour:/.test(first) ? byId(first) : null;
+                if (type === 'go' && fx) { say('bot', '<p>' + esc(plan.answer || 'Opening ' + fx.t + '.') + '</p>'); setTimeout(function () { if (fx.page) { hideForPhone(); go(fx.pg); } else showItem(fx); }, 450); }
+                else if (first && /^tour:/.test(first) && DO_RE.test(q)) { say('bot', '<p>' + esc(plan.answer && plan.answer.length < 160 ? plan.answer : 'Sure! I’ll guide you on the screen.') + '</p>'); setTimeout(function () { startTour(first.slice(5)); }, 700); }
+                else say('bot', helpHtml(plan.answer || '', tg.slice(0, 1), tg.slice(1)));
             } else {
                 prev = { q: q };
                 say('bot', helpHtml(plan.answer || plan.clarify || 'I can help with your jobs, invoices, quotes, receipts, backups and settings.', []));
@@ -34124,35 +34465,51 @@ window.IncVersion = VERSION;
         } finally { busy = false; }
     }
 
-    /* =============================================== the help button on every page =============================================== */
+    /* =============================================== the button that opens the chat =============================================== */
     var fabEl = null;
     function fab() {
         if (!fabEl) {
-            fabEl = document.createElement('button'); fabEl.type = 'button'; fabEl.id = 'ask-fab'; fabEl.setAttribute('aria-label', 'Ask IncAtor for help');
-            fabEl.innerHTML = '<i class="fas fa-magic"></i>'; document.body.appendChild(fabEl);
-            fabEl.addEventListener('click', function () { open(); });
+            fabEl = document.createElement('button'); fabEl.type = 'button'; fabEl.id = 'ask-fab';
+            fabEl.innerHTML = '<i class="fas fa-magic"></i><i class="fas fa-times"></i>'; document.body.appendChild(fabEl);
+            fabEl.addEventListener('click', function () { if (isOpen()) close(); else open(); });
+            paintNames();
         }
         var on = S().askFab !== false;
-        var show = on && page() !== 'home' && !tour && !(sheet && sheet.classList.contains('open')) && !document.querySelector('.rc-cam');
-        fabEl.classList.toggle('show', show);
+        var show = on && !isPhone() && !tour && !document.querySelector('.rc-cam');
+        fabEl.classList.toggle('show', show); fabEl.classList.toggle('is-open', isOpen());
         // phones: the magic button lives in the navigation bar, just before More
         var nav = document.querySelector('.floating-nav'), nb = nav && nav.querySelector('.nav-ask');
         if (nav && !nb) {
-            nb = document.createElement('div'); nb.className = 'nav-item nav-ask'; nb.setAttribute('data-tooltip', 'Ask IncAtor'); nb.setAttribute('role', 'button'); nb.setAttribute('tabindex', '0'); nb.setAttribute('aria-label', 'Ask IncAtor for help');
+            nb = document.createElement('div'); nb.className = 'nav-item nav-ask'; nb.setAttribute('role', 'button'); nb.setAttribute('tabindex', '0');
             nb.innerHTML = '<span class="na-orb"><i class="fas fa-magic"></i></span>';
-            nb.addEventListener('click', function (e) { e.stopPropagation(); try { if (window.IncNavMore && IncNavMore.close) IncNavMore.close(); } catch (er) { /* ignore */ } open(); });
+            nb.addEventListener('click', function (e) { e.stopPropagation(); try { if (window.IncNavMore && IncNavMore.close) IncNavMore.close(); } catch (er) { /* ignore */ } if (isOpen()) close(); else open(); });
             nb.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
             var more = nav.querySelector('.nav-more'), spec = nav.querySelector('.lg-spec');
             nav.insertBefore(nb, more || spec || null);
-            nb.dataset.on = '';
+            nb.dataset.on = ''; paintNames();
         }
         if (nb && nb.dataset.on !== String(on)) {
             nb.dataset.on = String(on); nb.classList.toggle('ask-off', !on);
             try { window.dispatchEvent(new Event('resize')); } catch (e) { /* ignore */ }   // the bar re-sizes its buttons
         }
-        if (nb) nb.classList.toggle('ask-live', !!(sheet && sheet.classList.contains('open')) || !!tour);
+        if (nb) nb.classList.toggle('ask-live', isOpen() || !!tour);
     }
     setInterval(fab, 700);
+
+    /* ---------- Settings > User Preferences: the assistant's name and its button ---------- */
+    function prefs() {
+        var inp = document.getElementById('ask-name-setting'), tg = document.getElementById('ask-fab-toggle');
+        if (!inp || inp.dataset.wired) return !!inp;
+        inp.dataset.wired = '1'; inp.value = String(S().askName || '');
+        inp.addEventListener('input', function () { S().askName = inp.value.trim().slice(0, 24); paintNames(); });
+        inp.addEventListener('change', function () { S().askName = inp.value.trim().slice(0, 24); saveS(); paintNames(); INDEX = null; toast('Your assistant is now called ' + NAME(), 'success'); });
+        var paintT = function () { var on = S().askFab !== false; tg.classList.toggle('active', on); tg.setAttribute('aria-checked', String(on)); };
+        paintT();
+        tg.addEventListener('click', function () { S().askFab = !(S().askFab !== false); saveS(); paintT(); fab(); });
+        tg.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg.click(); } });
+        return true;
+    }
+    (function wirePrefs() { var n = 0, t = setInterval(function () { if (prefs() || ++n > 60) clearInterval(t); }, 300); })();
 
     /* =============================================== weekly summary =============================================== */
     function lastWeek() { var t = new Date(); t.setHours(12, 0, 0, 0); var mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7) - 7); var from = ymd(mon); return { from: from, to: addDays(from, 6) }; }
@@ -34236,10 +34593,9 @@ window.IncVersion = VERSION;
 
     /* ---------- where to find it ---------- */
     function addEntryPoints() {
-        var mh = document.querySelector('#mobile-home .mh-cta');
-        if (mh && !document.getElementById('mh-ask')) mh.insertAdjacentHTML('afterend', '<button type="button" class="ask-bar" id="mh-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything…</span><i class="fas fa-chevron-right"></i></button>');
+        var old = document.getElementById('mh-ask'); if (old) old.remove();   // phones: the chat lives in the nav bar, not on Home
         var hc = document.querySelector('.home-cards-container');
-        if (hc && !document.getElementById('hd-ask')) hc.insertAdjacentHTML('beforebegin', '<button type="button" class="ask-bar ask-bar-d" id="hd-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything: your numbers, how to do something, or “help me create a job”…</span><i class="fas fa-chevron-right"></i></button>');
+        if (hc && !document.getElementById('hd-ask')) { hc.insertAdjacentHTML('beforebegin', '<button type="button" class="ask-bar ask-bar-d" id="hd-ask" data-askopen="1"><i class="fas fa-magic"></i><span></span><i class="fas fa-chevron-right"></i></button>'); paintNames(); }
     }
     addEntryPoints(); setTimeout(addEntryPoints, 1500);
     document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-askopen]')) open(); });
@@ -34252,7 +34608,7 @@ window.IncVersion = VERSION;
     window.addEventListener('hashchange', function () { goHash(location.hash); });
     try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'incator-open') goHash(e.data.url); }); } catch (e) { /* ignore */ }
 
-    window.IncAsk = { open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt,
+    window.IncAsk = { name: NAME, act: function (q) { open(); return localAction(q); }, jobnest: jobnest, isOpen: isOpen, open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt,
         tour: startTour, endTour: endTour, tours: TOURS, index: function () { INDEX = null; return index(); }, find: localHelp, show: function (id) { var x = byId(id); if (x) showItem(x); }, state: function () { return tour ? { id: tour.id, i: tour.i } : null; } };
 
     var st = document.createElement('style'); st.id = 'incator-ask-css';
@@ -34260,46 +34616,79 @@ window.IncVersion = VERSION;
         '.ask-bar { display: flex; align-items: center; gap: 10px; width: 100%; margin: 14px 0 4px; padding: 13px 16px; border-radius: 16px; border: 1px solid rgba(168,85,247,.4); background: linear-gradient(135deg, rgba(168,85,247,.16), rgba(236,72,153,.12)); color: inherit; text-align: left; font-size: .95rem; cursor: pointer; }',
         '.ask-bar span { flex: 1; opacity: .85; } .ask-bar > i:first-child { color: #c084fc; } .ask-bar > i:last-child { opacity: .5; font-size: .8rem; }',
         '.ask-bar-d { max-width: 1100px; margin: 0 auto 18px; } @media (max-width: 700px) { .ask-bar-d { display: none; } }',
-        '#ask-sheet { position: fixed; inset: 0; z-index: 9500; display: none; align-items: flex-end; justify-content: center; background: rgba(5,3,15,.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }',
-        '#ask-sheet.open { display: flex; } html.ask-open { overflow: hidden; }',
-        '.ask-box { width: 100%; max-width: 720px; height: min(92vh, 900px); display: flex; flex-direction: column; border-radius: 24px 24px 0 0; background: rgba(22,16,44,.97); color: #fff; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 -10px 40px rgba(0,0,0,.5); padding-bottom: env(safe-area-inset-bottom, 0px); animation: askUp .3s ease; }',
-        '@keyframes askUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }',
-        '@media (min-width: 701px) { #ask-sheet { align-items: center; } .ask-box { border-radius: 24px; height: min(86vh, 860px); } }',
-        '.ask-hd { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }',
-        '.ask-hi, .at-ic { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
-        '.ask-ht { flex: 1; min-width: 0; } .ask-ht b { display: block; font-size: 1.05rem; } .ask-ht small { display: block; font-size: .74rem; opacity: .65; }',
-        '.ask-x { background: rgba(255,255,255,.08); border: 0; color: inherit; width: 36px; height: 36px; border-radius: 50%; }',
-        '.ask-log { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; }',
-        '.ask-m { max-width: 92%; padding: 10px 13px; border-radius: 16px; font-size: .9rem; line-height: 1.45; }',
-        '.ask-m.me { align-self: flex-end; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); border-bottom-right-radius: 6px; }',
-        '.ask-m.bot { align-self: stretch; max-width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-bottom-left-radius: 6px; }',
-        '.ask-m p + p { margin-top: 8px; } .ask-ans { font-size: 1rem; } .ask-ans b { color: #f0abfc; }',
-        '.ask-ul, .ask-ol { margin: 6px 0 0 18px; } .ask-ul { list-style: disc; } .ask-ol { list-style: decimal; } .ask-ul li, .ask-ol li { margin: 4px 0; }',
-        '.ask-note { font-size: .8rem; opacity: .75; } .ask-bad { color: #fca5a5; } .ask-wait { opacity: .8; }',
-        '.ask-link { background: none; border: 0; padding: 0; color: #c084fc; text-decoration: underline; font: inherit; cursor: pointer; }',
-        '.ask-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }',
-        '.ask-act { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; text-align: left; padding: 11px 13px; border-radius: 14px; border: 1px solid rgba(192,132,252,.45); background: rgba(168,85,247,.12); color: inherit; font-size: .88rem; font-weight: 600; }',
-        '.ask-act small { flex-basis: 100%; font-weight: 400; font-size: .72rem; opacity: .7; } .ask-act.main { color: #fff; border-color: transparent; background: linear-gradient(135deg, #a855f7, #ec4899); }',
-        '.ask-q { margin-top: 10px; border-radius: 12px; background: rgba(0,0,0,.18); overflow: hidden; }',
-        '.ask-qh { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 9px 11px; font-size: .82rem; } .ask-qh small { opacity: .6; margin-left: 4px; } .ask-qh b { white-space: nowrap; }',
-        '.ask-rows .ask-r { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border-top: 1px solid rgba(255,255,255,.06); font-size: .84rem; }',
+        /* ---- the chat: colours ---- */
+        '#ask-sheet { --c-bg: #120c24; --c-dot: rgba(255,255,255,.04); --c-head: #1d1538; --c-line: rgba(255,255,255,.08); --c-in: #261d44; --c-out: #6d28d9; --c-tx: #f4f1ff; --c-out-tx: #fff; --c-mut: rgba(244,241,255,.6); --c-field: #2a2149; --c-acc: #c084fc; --c-acc2: #ec4899; --c-chip: rgba(168,85,247,.16); --c-chipb: rgba(192,132,252,.45); color: var(--c-tx); }',
+        'html.lm #ask-sheet { --c-bg: #f1edf9; --c-dot: rgba(60,40,120,.06); --c-head: #ffffff; --c-line: rgba(29,23,51,.09); --c-in: #ffffff; --c-out: #e6dcff; --c-tx: #1d1733; --c-out-tx: #1d1733; --c-mut: rgba(29,23,51,.55); --c-field: #ffffff; --c-acc: #7c3aed; --c-acc2: #db2777; --c-chip: rgba(124,58,237,.08); --c-chipb: rgba(124,58,237,.35); }',
+        'html[data-theme="sleek"] #ask-sheet { --c-bg: var(--sk-bg); --c-dot: transparent; --c-head: var(--sk-raise); --c-line: var(--sk-line); --c-in: var(--sk-raise); --c-out: var(--sk-fg); --c-tx: var(--sk-fg); --c-out-tx: var(--sk-bg); --c-mut: var(--sk-mut); --c-field: var(--sk-soft); --c-acc: var(--sk-fg); --c-acc2: var(--sk-fg); --c-chip: transparent; --c-chipb: var(--sk-line2); }',
+        /* ---- phones: full screen, like a WhatsApp chat ---- */
+        '#ask-sheet { position: fixed; inset: 0; z-index: 2147470000; display: none; background: rgba(0,0,0,var(--ask-shade, 0)); }',
+        '#ask-sheet.open { display: block; } html.ask-open-phone, html.ask-open-phone body { overflow: hidden; }',
+        '.ask-box { position: absolute; inset: 0; display: flex; flex-direction: column; background-color: var(--c-bg); background-image: radial-gradient(var(--c-dot) 1.2px, transparent 1.3px), radial-gradient(var(--c-dot) 1.2px, transparent 1.3px); background-size: 22px 22px; background-position: 0 0, 11px 11px; color: var(--c-tx); animation: askIn .26s cubic-bezier(.2,.8,.2,1); transition: transform .2s ease; will-change: transform; }',
+        '@keyframes askIn { from { transform: translateX(100%); } to { transform: none; } }',
+        '.ask-hd { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 8px 6px; background: var(--c-head); border-bottom: 1px solid var(--c-line); box-shadow: 0 1px 6px rgba(0,0,0,.12); }',
+        '.ask-back { width: 36px; height: 40px; border: 0; background: none; color: var(--c-acc); font-size: 1.15rem; display: flex; align-items: center; justify-content: center; }',
+        '.ask-av { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 2px 8px rgba(168,85,247,.4); }',
+        '.ask-ht { flex: 1; min-width: 0; } .ask-ht b { display: block; font-size: 1.02rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ask-ht small { display: flex; align-items: center; gap: 5px; font-size: .74rem; color: var(--c-mut); white-space: nowrap; overflow: hidden; }',
+        '.ask-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: inline-block; flex: 0 0 auto; }',
+        '.ask-hb { width: 36px; height: 36px; border-radius: 50%; border: 0; background: transparent; color: var(--c-mut); display: flex; align-items: center; justify-content: center; font-size: .95rem; }',
+        '.ask-hb:hover { background: var(--c-chip); color: var(--c-tx); } .ask-x { display: none; }',
+        '.ask-log { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 12px 10px 8px; display: flex; flex-direction: column; gap: 6px; }',
+        /* bubbles */
+        '.ask-m { position: relative; max-width: 84%; padding: 7px 11px 19px; border-radius: 12px; font-size: .93rem; line-height: 1.42; box-shadow: 0 1px .6px rgba(0,0,0,.14); overflow-wrap: anywhere; animation: askPop .18s ease-out; }',
+        '@keyframes askPop { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }',
+        '.ask-m.me { align-self: flex-end; background: var(--c-out); color: var(--c-out-tx); border-top-right-radius: 3px; margin-right: 7px; }',
+        '.ask-m.bot { align-self: flex-start; background: var(--c-in); color: var(--c-tx); border-top-left-radius: 3px; margin-left: 7px; }',
+        '.ask-m.me::before, .ask-m.bot::before { content: ""; position: absolute; top: 0; width: 0; height: 0; border-style: solid; }',
+        '.ask-m.me::before { right: -7px; border-width: 0 0 9px 8px; border-color: transparent transparent transparent var(--c-out); }',
+        '.ask-m.bot::before { left: -7px; border-width: 0 8px 9px 0; border-color: transparent var(--c-in) transparent transparent; }',
+        '.ask-m.bot:has(.ask-q), .ask-m.bot:has(.wk-grid), .ask-m.bot:has(.ask-rows) { max-width: 94%; width: 94%; }',
+        '.ask-t { position: absolute; right: 9px; bottom: 4px; font-size: .64rem; color: var(--c-mut); white-space: nowrap; } .ask-m.me .ask-t { color: inherit; opacity: .6; } .ask-t i { font-size: .6rem; margin-left: 2px; color: #38bdf8; opacity: 1; }',
+        'html.lm .ask-t i { color: #0284c7; }',
+        '.ask-typing { padding: 12px 14px; display: flex; gap: 4px; } .ask-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--c-mut); animation: askDot 1.1s infinite ease-in-out; } .ask-typing span:nth-child(2) { animation-delay: .15s; } .ask-typing span:nth-child(3) { animation-delay: .3s; } .ask-typing .ask-t { display: none; }',
+        '@keyframes askDot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }',
+        '.ask-m p + p { margin-top: 6px; } .ask-ans { font-size: .95rem; } .ask-ans b { color: var(--c-acc); }',
+        '.ask-ul, .ask-ol { margin: 4px 0 0 18px; } .ask-ul { list-style: disc; } .ask-ol { list-style: decimal; } .ask-ul li, .ask-ol li { margin: 3px 0; }',
+        '.ask-note { font-size: .8rem; color: var(--c-mut); } .ask-bad { color: #f87171; }',
+        '.ask-link { background: none; border: 0; padding: 0; color: var(--c-acc); text-decoration: underline; font: inherit; cursor: pointer; }',
+        '.ask-acts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; } .ask-acts.row { flex-direction: row; flex-wrap: wrap; }',
+        '.ask-act { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--c-chipb); background: var(--c-chip); color: var(--c-tx); font-size: .86rem; font-weight: 600; cursor: pointer; }',
+        '.ask-act.main { color: #fff; border-color: transparent; background: linear-gradient(135deg, #a855f7, #ec4899); } .ask-act:disabled { opacity: .5; }',
+        'html[data-theme="sleek"] .ask-act.main { background: var(--sk-fg); color: var(--sk-bg); }',
+        '.ask-next { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }',
+        '.ask-alt { margin-top: 6px; } .ask-alt .ask-more { border: 0; padding: 4px 0; text-align: left; } .ask-alt-i { display: none; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--c-line); font-size: .8rem; } .ask-alt.all .ask-alt-i { display: flex; } .ask-alt-i .ask-act { padding: 5px 10px; font-size: .74rem; }',
+        '.ask-q { margin-top: 8px; border-radius: 10px; background: rgba(0,0,0,.14); overflow: hidden; } html.lm .ask-q { background: rgba(29,23,51,.045); } html[data-theme="sleek"] .ask-q { background: var(--sk-soft); }',
+        '.ask-rows .ask-r { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--c-line); font-size: .84rem; } .ask-rows .ask-r:first-child { border-top: 0; }',
         '.ask-rows .ask-r.more { display: none; } .ask-rows.all .ask-r.more { display: flex; }',
-        '.ask-r > span:first-child { min-width: 0; flex: 1; } .ask-r b { display: block; font-weight: 600; overflow-wrap: anywhere; } .ask-r small { display: block; font-size: .72rem; opacity: .65; }',
-        '.ask-r .ask-item { opacity: .95; color: #f0abfc; } .ask-r .ask-item i { font-size: .6rem; }',
+        '.ask-r > span:first-child { min-width: 0; flex: 1; } .ask-r b { display: block; font-weight: 600; overflow-wrap: anywhere; } .ask-r small { display: block; font-size: .72rem; color: var(--c-mut); }',
+        '.ask-r .ask-item { color: var(--c-acc); } .ask-r .ask-item i { font-size: .6rem; }',
         '.ask-rv { text-align: right; white-space: nowrap; font-weight: 600; } .ask-rv small { font-weight: 500; text-transform: capitalize; }',
-        '.ask-open { flex: 0 0 auto; padding: 6px 11px; border-radius: 999px; border: 1px solid rgba(192,132,252,.5); background: rgba(168,85,247,.14); color: inherit; font-size: .74rem; font-weight: 600; }',
-        '.ask-rv .st-unpaid { color: #fca5a5; opacity: 1; } .ask-rv .st-paid { color: #86efac; opacity: 1; } .ask-rv .st-notinvoiced { color: #fcd34d; opacity: 1; }',
-        '.ask-more { width: 100%; padding: 9px; background: none; border: 0; border-top: 1px solid rgba(255,255,255,.06); color: #c084fc; font-size: .8rem; }',
-        '.ask-foot { margin-top: 10px; font-size: .7rem; opacity: .55; }',
-        '.ask-chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px; scrollbar-width: none; } .ask-chips::-webkit-scrollbar { display: none; }',
-        '.ask-chip { flex: 0 0 auto; padding: 8px 13px; border-radius: 999px; border: 1px solid rgba(192,132,252,.45); background: rgba(168,85,247,.12); color: inherit; font-size: .8rem; white-space: nowrap; }',
-        '.ask-chip.tour { background: linear-gradient(135deg, rgba(168,85,247,.35), rgba(236,72,153,.3)); }',
-        '.ask-in { display: flex; gap: 8px; padding: 8px 12px 6px; }',
-        '.ask-in input { flex: 1; min-width: 0; padding: 12px 15px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); color: inherit; font-size: 16px; outline: none; }',
-        '.ask-in input:focus { border-color: #c084fc; } .ask-in button { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
-        '.ask-fabset { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 2px 12px 10px; font-size: .72rem; opacity: .6; }',
-        '#ask-fab { position: fixed; right: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 8000; width: 46px; height: 46px; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 6px 20px rgba(168,85,247,.45); display: none; align-items: center; justify-content: center; font-size: 1.05rem; }',
-        '#ask-fab.show { display: flex; } @media (min-width: 701px) { #ask-fab { bottom: 24px; right: 24px; width: 52px; height: 52px; } }',
+        '.ask-open { flex: 0 0 auto; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--c-chipb); background: var(--c-chip); color: var(--c-tx); font-size: .74rem; font-weight: 600; }',
+        '.ask-rv .st-unpaid { color: #f87171; } .ask-rv .st-paid { color: #4ade80; } .ask-rv .st-notinvoiced { color: #fbbf24; }',
+        'html.lm .ask-rv .st-paid { color: #15803d; } html.lm .ask-rv .st-unpaid { color: #b91c1c; } html.lm .ask-rv .st-notinvoiced { color: #b45309; }',
+        '.ask-more { width: 100%; padding: 8px; background: none; border: 0; border-top: 1px solid var(--c-line); color: var(--c-acc); font-size: .8rem; font-weight: 600; }',
+        '.ask-foot { margin-top: 8px; font-size: .68rem; color: var(--c-mut); }',
+        /* quick replies and the message bar */
+        '.ask-chips { display: flex; gap: 7px; overflow-x: auto; padding: 6px 10px 4px; scrollbar-width: none; } .ask-chips::-webkit-scrollbar { display: none; } .ask-chips:empty { display: none; }',
+        '.ask-chip { flex: 0 0 auto; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--c-chipb); background: var(--c-head); color: var(--c-tx); font-size: .8rem; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,.08); }',
+        '.ask-chip.tour i { color: var(--c-acc2); }',
+        '.ask-in { display: flex; align-items: center; gap: 8px; padding: 6px 8px calc(env(safe-area-inset-bottom, 0px) + 8px); }',
+        '.ask-in input { flex: 1; min-width: 0; height: 46px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--c-line); background: var(--c-field); color: var(--c-tx); font-size: 16px; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,.1); }',
+        '.ask-in input::placeholder { color: var(--c-mut); } .ask-in input:focus { border-color: var(--c-acc); }',
+        '.ask-send { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(168,85,247,.45); }',
+        'html[data-theme="sleek"] .ask-send, html[data-theme="sleek"] .ask-av { background: var(--sk-fg); color: var(--sk-bg); box-shadow: none; }',
+        /* ---- computers: a chat window in the bottom-right corner ---- */
+        '@media (min-width: 701px) {',
+        '  #ask-sheet { inset: auto 24px 92px auto; width: 392px; height: min(640px, calc(100vh - 124px)); z-index: 9500; background: none !important; pointer-events: none; }',
+        '  .ask-box { border-radius: 20px; overflow: hidden; pointer-events: auto; border: 1px solid var(--c-line); box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 4px 14px rgba(0,0,0,.2); animation: askWin .22s cubic-bezier(.2,.8,.2,1); transform-origin: bottom right; }',
+        '  html.lm .ask-box { box-shadow: 0 24px 60px rgba(40,20,90,.22), 0 4px 14px rgba(40,20,90,.12); }',
+        '  .ask-hd { padding: 12px 10px 12px 14px; } .ask-back { display: none; } .ask-x { display: flex; }',
+        '  .ask-in { padding-bottom: 10px; }',
+        '}',
+        '@keyframes askWin { from { transform: translateY(16px) scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }',
+        /* the round button bottom-right (computers) */
+        '#ask-fab { position: fixed; right: 24px; bottom: 24px; z-index: 9501; width: 56px; height: 56px; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 8px 24px rgba(168,85,247,.5); display: none; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; transition: transform .2s; }',
+        '#ask-fab.show { display: flex; } #ask-fab:hover { transform: scale(1.06); } #ask-fab .fa-times { display: none; } #ask-fab.is-open .fa-times { display: inline-block; } #ask-fab.is-open .fa-magic { display: none; }',
+        'html[data-theme="sleek"] #ask-fab { background: var(--sk-fg); color: var(--sk-bg); box-shadow: 0 6px 18px rgba(0,0,0,.25); }',
         '@media (max-width: 700px) { #ask-fab, #ask-fab.show { display: none !important; } }',
         '.floating-nav .nav-item.nav-ask { color: #fff; } .floating-nav .nav-item.nav-ask.ask-off { display: none !important; }',
         '.floating-nav .nav-ask .na-orb { width: 78%; height: 78%; max-width: 40px; max-height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 4px 14px rgba(168,85,247,.5); transition: box-shadow .25s, transform .25s; }',
@@ -34319,21 +34708,255 @@ window.IncVersion = VERSION;
         '.at-tx { font-size: .92rem; line-height: 1.45; } .at-tx b { color: #f0abfc; } .ask-okmark { color: #86efac; margin-left: 4px; }',
         '.at-bt { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; } .at-bt button { padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: inherit; font-weight: 600; font-size: .85rem; }',
         '.at-bt .at-main { border-color: transparent; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
+        '.at-ic { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
+        'html.lm .wk-t { background: rgba(29,23,51,.05); border-color: rgba(29,23,51,.08); } html.lm .wk-t.g b { color: #15803d; } html.lm .wk-t.r b { color: #b91c1c; } html.lm .wk-t.a b { color: #b45309; }',
+        'html[data-theme="sleek"] .wk-t { background: var(--sk-raise); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-bar { background: var(--sk-raise); border-color: var(--sk-line); }',
         '.wk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }',
         '.wk-t { padding: 11px; border-radius: 14px; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.07); } .wk-t i { opacity: .7; font-size: .85rem; } .wk-t small { display: block; font-size: .72rem; opacity: .7; margin-top: 4px; }',
         '.wk-t b { display: block; font-size: 1.02rem; margin-top: 2px; } .wk-t em { display: block; font-style: normal; font-size: .7rem; opacity: .6; margin-top: 2px; }',
         '.wk-t.g b { color: #86efac; } .wk-t.r b { color: #fca5a5; } .wk-t.a b { color: #fcd34d; }',
         '.ws-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0 4px; } .ws-row label { display: flex; align-items: center; gap: 8px; font-size: .85rem; }',
         '.ws-row select { padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.08); color: inherit; border: 1px solid rgba(255,255,255,.18); }',
-        'html.lm .ask-box { background: rgba(255,255,255,.98); color: #1d1733; border-color: rgba(29,23,51,.1); } html.lm .ask-m.bot { background: rgba(29,23,51,.04); border-color: rgba(29,23,51,.08); }',
-        'html.lm .ask-q, html.lm .wk-t { background: rgba(29,23,51,.05); } html.lm .ask-rows .ask-r, html.lm .ask-more { border-color: rgba(29,23,51,.08); } html.lm .ask-ans b, html.lm .ask-r .ask-item { color: #a21caf; }',
-        'html.lm .ask-in input { background: #fff; border-color: rgba(29,23,51,.18); } html.lm .ask-x { background: rgba(29,23,51,.06); } html.lm .ask-hd { border-color: rgba(29,23,51,.08); }',
-        'html.lm .wk-t.g b, html.lm .ask-rv .st-paid { color: #15803d; } html.lm .wk-t.r b, html.lm .ask-rv .st-unpaid { color: #b91c1c; } html.lm .wk-t.a b, html.lm .ask-rv .st-notinvoiced { color: #b45309; }',
-        'html[data-theme="sleek"] .ask-box { background: var(--sk-bg); color: var(--sk-fg); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-m.bot, html[data-theme="sleek"] .ask-q, html[data-theme="sleek"] .wk-t { background: var(--sk-raise); border-color: var(--sk-line); }',
-        'html[data-theme="sleek"] .ask-m.me, html[data-theme="sleek"] .ask-in button, html[data-theme="sleek"] .ask-hi, html[data-theme="sleek"] .ask-act.main, html[data-theme="sleek"] #ask-fab { background: var(--sk-fg); color: var(--sk-bg); } html[data-theme="sleek"] .ask-ans b { color: inherit; }',
-        'html[data-theme="sleek"] .ask-bar, html[data-theme="sleek"] .ask-act, html[data-theme="sleek"] .ask-open { background: var(--sk-raise); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-chip { background: transparent; border-color: var(--sk-line); }'
     ].join('\n');
     document.head.appendChild(st);
+})();
+</script>
+<script id="incator-contrast">
+/* Light appearance with any theme: every text and icon stays easy to read.
+   Themes made for dark backgrounds use bright colours (cyan, gold, green, grey...) for titles, icons and buttons.
+   On a light background those can almost disappear. This guard looks at what is on the screen, measures each text and
+   icon against what is really behind it, and when it is too faint gives it a deeper shade of the same colour (or white /
+   near-black when that reads better). Nothing changes in dark appearance, and it all goes back when you leave Light. */
+(function () {
+    'use strict';
+    var ON = false, T = 0, busy = false;
+    var MARK = 'data-cg', ORIG = 'data-cg-orig';
+    var SKIP = '#inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
+    var SCOPE = '.page.active, .floating-nav, #mobile-home, .modal.show, .modal.active, .modal-content, .ic-dialog-layer, .notification, .entry-menu, .nm-sheet, .inc-mini-in, #ask-sheet, #ask-tour, #bk-warn, .popup-overlay.active, .popup-content';
+    function parse(c) { var m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; var p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
+    function lum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
+    function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function blend(t, b) { var a = t[3]; return [t[0] * a + b[0] * (1 - a), t[1] * a + b[1] * (1 - a), t[2] * a + b[2] * (1 - a), 1]; }
+    function hsl(c) {
+        var r = c[0] / 255, g = c[1] / 255, b = c[2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), h = 0, s = 0, l = (mx + mn) / 2;
+        if (mx !== mn) { var d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+        return [h, s, l];
+    }
+    function rgbOf(h, s, l) {
+        function f(p, q, t) { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; }
+        if (!s) return [l * 255, l * 255, l * 255, 1];
+        var q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+        return [f(p, q, h + 1 / 3) * 255, f(p, q, h) * 255, f(p, q, h - 1 / 3) * 255, 1];
+    }
+    function css(c) { return 'rgb(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ')'; }
+    function base() { var b = parse(getComputedStyle(document.body).backgroundColor); return b && b[3] > 0.9 ? b : [244, 241, 255, 1]; }
+    function bgOf(el) {                                                    // the colour really behind this element
+        var stack = [], e = el, B = base();
+        while (e && e !== document.body && e !== document.documentElement) {
+            var cs = getComputedStyle(e), bi = cs.backgroundImage;
+            if (bi && bi !== 'none') {
+                if (/url\(/.test(bi)) return null;                         // a photo: unknown
+                var m = bi.match(/rgba?\([^)]+\)/g);
+                if (m) { var cl = m.map(parse), n = cl.length, avg = cl.reduce(function (a, c) { return [a[0] + c[0] / n, a[1] + c[1] / n, a[2] + c[2] / n, a[3] + c[3] / n]; }, [0, 0, 0, 0]); stack.push(avg); if (avg[3] > 0.9) break; }
+            }
+            var c = parse(cs.backgroundColor); if (c && c[3] > 0) { stack.push(c); if (c[3] >= 0.95) break; }
+            e = e.parentElement;
+        }
+        var col = B; for (var i = stack.length - 1; i >= 0; i--) col = blend(stack[i], col); return col;
+    }
+    function pick(fg, bg, need) {
+        var dark = lum(bg) > 0.3, h = hsl(fg), out = [];
+        if (dark) { for (var l = 0.42; l >= 0.14; l -= 0.04) out.push(rgbOf(h[0], Math.min(1, Math.max(h[1], 0.5)), l)); out.push([29, 23, 51, 1]); }
+        else { for (var L = 0.8; L <= 0.97; L += 0.04) out.push(rgbOf(h[0], Math.min(1, h[1]), L)); out.push([255, 255, 255, 1]); }
+        for (var i = 0; i < out.length; i++) if (ratio(out[i], bg) >= need) return out[i];
+        return out[out.length - 1];
+    }
+    function recheck(el) {                                                // something changed (a tab turned on, a hover): still right?
+        var o = parse(el.getAttribute('data-cg-fg')), bg = bgOf(el.tagName === 'I' ? el.parentElement : el); if (!o || !bg) return;
+        var cs = getComputedStyle(el), need = el.tagName === 'I' ? 2.6 : (parseFloat(cs.fontSize) >= 18 && +cs.fontWeight >= 600 ? 3 : 3.6);
+        if (ratio(blend(o, bg), bg) >= need) { var st = el.getAttribute(ORIG); if (st) el.setAttribute('style', st); else el.removeAttribute('style'); el.removeAttribute(MARK); el.removeAttribute(ORIG); el.removeAttribute('data-cg-fg'); return; }
+        var now = parse(cs.color); if (now && ratio(now, bg) >= need) return;
+        var nc = pick(o, bg, need + 0.6);
+        el.style.setProperty('color', css(nc), 'important'); el.style.setProperty('-webkit-text-fill-color', css(nc), 'important');
+    }
+    function check(el) {
+        if (el.hasAttribute(MARK)) { recheck(el); return; }
+        if (el.closest(SKIP)) return;
+        var icon = el.tagName === 'I';
+        if (!icon) { var own = false; for (var n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 3 && n.textContent.trim().length > 0) { own = true; break; } if (!own) return; }
+        var r = el.getBoundingClientRect(); if (r.width < 3 || r.height < 3) return;
+        var cs = getComputedStyle(el); if (cs.visibility === 'hidden' || +cs.opacity < 0.25 || cs.display === 'none') return;
+        var fill = cs.webkitTextFillColor, fgS = cs.color;
+        if (fill && /rgba\(0, 0, 0, 0\)/.test(fill)) return;               // colour-gradient text: handled by the theme's own light rules
+        if (fill && fill !== fgS) fgS = fill;
+        var fg = parse(fgS); if (!fg || fg[3] < 0.2) return;
+        var bg = bgOf(icon ? el.parentElement : el); if (!bg) return;
+        var f = blend(fg, bg), rt = ratio(f, bg), need = icon ? 2.6 : (parseFloat(cs.fontSize) >= 18 && +cs.fontWeight >= 600 ? 3 : 3.6);
+        if (rt >= need) return;
+        var nc = pick(fg, bg, need + 0.6);
+        el.setAttribute(ORIG, el.getAttribute('style') || '');
+        el.setAttribute('data-cg-fg', css(fg).replace('rgb(', 'rgba(').replace(')', ', ' + fg[3] + ')'));
+        el.setAttribute(MARK, '1');
+        el.style.setProperty('color', css(nc), 'important');
+        el.style.setProperty('-webkit-text-fill-color', css(nc), 'important');
+    }
+    function scan() {
+        T = 0; if (!ON || busy) return; busy = true;
+        try {
+            var roots = document.querySelectorAll(SCOPE), seen = 0;
+            for (var i = 0; i < roots.length && seen < 6000; i++) {
+                if (!roots[i].offsetParent && getComputedStyle(roots[i]).position !== 'fixed') continue;
+                var all = roots[i].querySelectorAll('*');
+                for (var j = 0; j < all.length && seen < 6000; j++) { seen++; try { check(all[j]); } catch (e) { /* ignore */ } }
+            }
+        } finally { busy = false; }
+    }
+    function later(ms) { if (!ON || T) return; T = setTimeout(function () { if (window.requestIdleCallback) requestIdleCallback(scan, { timeout: 500 }); else scan(); }, ms || 250); }   // animated themes are never idle: do it within half a second anyway
+    function undo() {
+        Array.prototype.forEach.call(document.querySelectorAll('[' + MARK + ']'), function (el) { var o = el.getAttribute(ORIG); if (o) el.setAttribute('style', o); else el.removeAttribute('style'); el.removeAttribute(MARK); el.removeAttribute(ORIG); el.removeAttribute('data-cg-fg'); });
+    }
+    function apply() {
+        var want = document.documentElement.classList.contains('lm');
+        undo();                                                             // the theme may have changed: measure again from the start
+        ON = want; clearTimeout(T); T = 0;
+        if (ON) { later(350); setTimeout(function () { later(10); }, 1400); }
+    }
+    var mo = new MutationObserver(function (ms) {
+        if (!ON) return;
+        for (var i = 0; i < ms.length; i++) { var t = ms[i].target; if (t.nodeType === 1 && t.hasAttribute && t.hasAttribute(MARK) && ms[i].type === 'attributes') continue; later(300); return; }
+    });
+    function boot() {
+        mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'data-pg', 'hidden', 'aria-expanded'] });
+        new MutationObserver(function () { apply(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+        window.addEventListener('incmode', apply); window.addEventListener('incglow', apply);
+        apply();
+    }
+    // html class changes all the time (e.g. while scrolling) - only react when the light class or the theme really changed
+    var lastKey = '';
+    apply = (function (inner) { return function () { var k = document.documentElement.classList.contains('lm') + '|' + document.documentElement.getAttribute('data-theme') + '|' + (document.documentElement.getAttribute('data-glow') || ''); if (k === lastKey && arguments[0] !== true) { later(200); return; } lastKey = k; inner(); }; })(apply);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    window.IncContrast = { scan: function () { scan(); }, redo: function () { apply(true); }, on: function () { return ON; } };
+})();
+</script>
+<script id="incator-jobnest-phone">
+/* JobNest on a phone: the year and the number of entries sit on the left of a smaller "Select all", on their own row
+   under Search, Filter & Sort and New Invoice. The money chips (Subtotal, GST, Total, Owing) are not shown on phones. */
+(function () {
+    'use strict';
+    function paint() {
+        var bar = document.querySelector('#view-page .filter-bar'); if (!bar) return false;
+        if (!bar.querySelector('.jn-br')) { var br = document.createElement('span'); br.className = 'jn-br'; br.setAttribute('aria-hidden', 'true'); bar.appendChild(br); }
+        var cnt = bar.querySelector('#jn-count');
+        if (!cnt) { cnt = document.createElement('span'); cnt.id = 'jn-count'; bar.appendChild(cnt); }
+        var line = document.getElementById('view-summary-line'), chip = line && line.querySelector('.es-chip');
+        var txt = chip ? chip.textContent.replace(/\s+/g, ' ').trim() : '';
+        if (!/entr|job/i.test(txt)) { var n = document.querySelectorAll('#entries-container .iconic-entry-card').length; txt = n ? n + ' entr' + (n === 1 ? 'y' : 'ies') : ''; }
+        var yr = document.getElementById('view-filter-summary');
+        cnt.textContent = txt ? ((yr && yr.textContent.trim()) ? '· ' : '') + txt : '';
+        return true;
+    }
+    var t = 0;
+    function later() { clearTimeout(t); t = setTimeout(paint, 60); }
+    function boot() {
+        if (!paint()) { setTimeout(boot, 400); return; }
+        var mo = new MutationObserver(later);
+        var line = document.getElementById('view-summary-line'), yr = document.getElementById('view-filter-summary'), ec = document.getElementById('entries-container');
+        [line, yr, ec].forEach(function (x) { if (x) mo.observe(x, { childList: true, subtree: true, characterData: true }); });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    var st = document.createElement('style'); st.id = 'incator-jobnest-phone-css';
+    st.textContent = [
+        '.jn-br, #jn-count { display: none; }',
+        '@media (max-width: 700px) {',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar { display: flex !important; flex-wrap: wrap !important; align-items: center !important; gap: 8px !important; grid-template-columns: none !important; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > .si-btn { order: 1; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #view-filter-btn, html:not(.jn-x) #view-page .filter-bar.filter-bar > #new-invoice-btn { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #view-filter-btn { order: 2; } html:not(.jn-x) #view-page .filter-bar.filter-bar > #new-invoice-btn { order: 3; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > .jn-br { display: block !important; order: 4; flex: 0 0 100% !important; width: 100% !important; height: 0; margin: -4px 0 0; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #view-filter-summary { display: inline-block !important; order: 5; flex: 0 0 auto !important; width: auto !important; grid-column: auto !important; font-size: .8rem !important; font-weight: 600; opacity: .85; margin: 0 !important; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #jn-count { display: inline-block !important; order: 6; flex: 1 1 auto !important; width: auto !important; margin: 0 0 0 -2px !important; font-size: .8rem; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #select-all-btn, html:not(.jn-x) #view-page .filter-bar.filter-bar > #sel-actions-btn { order: 7; flex: 0 0 auto !important; width: auto !important; grid-column: auto !important; min-height: 0 !important; height: 30px !important; padding: 4px 11px !important; font-size: .72rem !important; border-radius: 999px !important; display: inline-flex; align-items: center; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #sel-actions-btn { order: 8; }',
+        '  html:not(.jn-x) #view-page .filter-bar.filter-bar > #select-all-btn i, html:not(.jn-x) #view-page .filter-bar.filter-bar > #sel-actions-btn i { font-size: 11px !important; margin-right: 5px !important; }',
+        '  html:not(.jn-x) #view-page #view-summary-line { display: none !important; }',
+        '  html.si-on #view-page .filter-bar.si-row-open > .si-float { top: 0 !important; transform: none !important; }',
+        '}'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-regular">
+/* Regular theme: colour icons by what they mean (money green, delete red, invoices blue...), the phone's top bar in the
+   page colour, and the first time you pick Regular it switches to Light (it is made to look like a regular website;
+   Dark works too, change it any time in Settings > Appearance > Light or dark). */
+(function () {
+    'use strict';
+    var BOX = '.setting-icon, .live-calc-icon, .acc-ic, .rc-ic, .rc-hi, .rc-tic, .rc-reci, .mo-ic, .financial-icon, .ap-ic, .ins-ic, .wo-dic, .entry-main-icon, .home-card-icon, .mh-tile-icon';
+    var C = { green: '#16a34a', blue: '#2563eb', orange: '#e8710a', red: '#dc2626', purple: '#9333ea', indigo: '#4f46e5', teal: '#0891b2', pink: '#e11d48', grey: '#6b7280', sky: '#0284c7', brown: '#92643a', mint: '#0d9488' };   // deep enough for white icons
+    var MAP = [
+        [/dollar|coins|money|calculator|percent|piggy|wallet|check-circle|chart-line|hand-holding/, 'green'],
+        [/receipt/, 'mint'],
+        [/trash|bell|exclamation|calendar|heart|times|ban|minus-circle|stop/, 'red'],
+        [/magic|palette|paint|image|wand|gem|star|font|text|eye/, 'purple'],
+        [/lock|shield|key|fingerprint|user-shield|user-lock/, 'indigo'],
+        [/envelope|inbox|phone|mobile|comment|at|paper|share|link/, 'teal'],
+        [/briefcase|project|hammer|tools|toolbox|hard-hat/, 'pink'],
+        [/user/, 'blue'],
+        [/cog|sliders|wrench|info|question|ellipsis|bars|list-ul/, 'grey'],
+        [/chart-bar|chart-pie|chart-area|analytics|signal|tachometer/, 'sky'],
+        [/cloud|download|upload|sync|database|server|save|history|undo/, 'sky'],
+        [/clipboard/, 'orange'],
+        [/box|archive|folder/, 'brown'],
+        [/sun|moon|lightbulb|bolt|fire|flag|camera|bullseye|clock|hourglass/, 'orange'],
+        [/file|layer|edit|pen|print|user|search|home|house|map|building|plus/, 'blue']
+    ];
+    function colorFor(cls) {
+        var m = /fa-([a-z0-9-]+)/.exec(cls || ''); if (!m) return C.blue;
+        var n = m[1]; if (n === 'file-alt' && 0) return C.orange;
+        for (var i = 0; i < MAP.length; i++) if (MAP[i][0].test(n)) return C[MAP[i][1]];
+        var h = 0; for (var j = 0; j < n.length; j++) h = (h * 31 + n.charCodeAt(j)) | 0;
+        var keys = Object.keys(C); return C[keys[Math.abs(h) % keys.length]];
+    }
+    var HOME = { 'layer-group': 'blue', 'file-alt': 'orange', briefcase: 'pink', 'chart-bar': 'sky', cloud: 'teal', receipt: 'green', 'pen-to-square': 'blue', edit: 'blue', 'file-invoice': 'orange' };
+    function on() { return document.documentElement.getAttribute('data-theme') === 'regular'; }
+    var T = 0;
+    function paint() {
+        T = 0; if (!on()) return;
+        Array.prototype.forEach.call(document.querySelectorAll(BOX), function (el) {
+            var i = el.querySelector('i'); if (!i) return;
+            var k = i.className; if (el.getAttribute('data-rgc') === k) return;
+            var home = el.classList.contains('mh-tile-icon') || el.classList.contains('home-card-icon'), m = /fa-([a-z0-9-]+)/.exec(k);
+            var c = home && m && HOME[m[1]] ? C[HOME[m[1]]] : colorFor(k);
+            el.style.setProperty('--ic-c', c); el.setAttribute('data-rgc', k); el.setAttribute('data-cg-skip', '1');
+        });
+    }
+    function later() { if (!T && on()) T = setTimeout(paint, 250); }
+    function off() { Array.prototype.forEach.call(document.querySelectorAll('[data-rgc]'), function (el) { el.removeAttribute('data-rgc'); el.removeAttribute('data-cg-skip'); el.style.removeProperty('--ic-c'); }); }
+    function bar() {
+        if (!on()) return;
+        var mc = document.querySelector('meta[name="theme-color"]'); if (!mc) return;
+        var bg = getComputedStyle(document.documentElement).getPropertyValue('--sk-bg').trim(); if (bg) mc.setAttribute('content', bg);
+    }
+    function boot() {
+        new MutationObserver(later).observe(document.body, { childList: true, subtree: true });
+        new MutationObserver(function () { if (on()) { paint(); try { if (window.IncContrast) IncContrast.redo(); } catch (e) { /* ignore */ } } else off(); later(); setTimeout(bar, 80); setTimeout(bar, 400); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+        window.addEventListener('incmode', function () { setTimeout(bar, 80); });
+        paint(); bar();
+        // the first time you choose Regular: Light, which is what it is made for
+        var was = document.documentElement.getAttribute('data-theme');
+        new MutationObserver(function () {
+            var now = document.documentElement.getAttribute('data-theme'); if (now === was) return; was = now;
+            try {
+                if (now === 'regular' && window.IncMode && IncMode.mode() === 'dark' && !appSettings.regularLightOnce) {
+                    appSettings.regularLightOnce = true; try { appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ }
+                    IncMode.mode('light');
+                    setTimeout(function () { try { showToast('Regular uses Light mode. You can switch back in Appearance > Light or dark.', 'info'); } catch (e) { /* ignore */ } }, 900);
+                }
+            } catch (e) { /* ignore */ }
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    window.IncRegular = { on: on, paint: paint, colorFor: colorFor };
 })();
 </script>
 </body>
