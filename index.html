@@ -19049,6 +19049,15 @@ async function claudeRun(key, content, maxTokens) {
     }
     throw last;
 }
+window.IncAI = {                                                   // the same AI (and key) as the SlipVault reader, for Ask IncAtor
+    ready: () => aiProvider() !== 'off' && !!aiKey(),
+    name: () => (AI_PROVIDERS[aiProvider()] || {}).name || 'AI',
+    text: async (prompt) => {
+        const p = aiProvider(), key = aiKey(); if (p === 'off' || !key) throw aiErr('off', 'The AI is off. Turn it on in Settings > SlipVault > AI reader.');
+        const out = p === 'gemini' ? await geminiRun(key, [{ text: prompt }]) : await claudeRun(key, [{ type: 'text', text: prompt }], 1800);
+        return out.text;
+    }
+};
 async function aiRead(pages, pm) {
     const p = aiProvider(), key = aiKey(); if (p === 'off' || !key) throw aiErr('off', 'The AI reader is off.');
     pm && pm.set('Preparing the photo...', 12, '');
@@ -33307,7 +33316,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.20 (v65)';
+var VERSION = '2026.11.20 (v66)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33507,6 +33516,403 @@ window.IncVersion = VERSION;
         '.bkw-bt button:first-child { background: #fff; color: #991b1b; border-color: #fff; }',
         '.bkw-x { background: none; border: 0; color: #fff; opacity: .8; padding: 2px 4px; font-size: 1rem; }',
         '@media (min-width: 701px) { #bk-warn { top: 18px; } }'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-ask">
+/* =================================================================================================================
+   Ask IncAtor: type a question about your own data ("How much did I make from Pinnacle in October?", "Which jobs
+   aren't paid yet?") and get the answer worked out from your jobs, quotes, projects and receipts.
+   Privacy and accuracy: the AI (the same one SlipVault uses) only sees your question, the names of the fields and
+   your customer / store / category names. It turns the question into a recipe; the adding-up is done right here on
+   this device, from your real data, so the numbers are exact. Quick questions (the chips) work without any AI.
+
+   Weekly summary: every Monday morning (or the day and time you choose) a notification with last week's income,
+   unpaid invoices, jobs not invoiced yet, quotes waiting for an answer and work orders to approve. Your IncAtor
+   server sends it, so it arrives even while IncAtor is closed; it uses your data as of the last time IncAtor was open.
+   ================================================================================================================= */
+(function () {
+    'use strict';
+    var MONEY = { amount: 1, gst: 1, total: 1, subtotal: 1 };
+    var NOUN = { jobs: ['job', 'jobs'], quotes: ['quote', 'quotes'], projects: ['project', 'projects'], receipts: ['receipt', 'receipts'] };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function load(k) { try { var v = JSON.parse((window.appStore || localStorage).getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+    function S() { try { return appSettings || {}; } catch (e) { return {}; } }    // the app's settings (a page-wide variable, not window.appSettings)
+    function cur() { return S().currency || '$'; }
+    function money(n) { n = +n || 0; var neg = n < 0; n = Math.abs(n); return (neg ? '-' : '') + cur() + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+    function d10(v) { var s = String(v || ''); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : ''; }
+    function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function addDays(s, n) { var d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return ymd(d); }
+    function nice(s) { if (!s) return ''; var d = new Date(s + 'T12:00:00'); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }); }
+    function firstLine(s) { return String(s || '').split(/\n/)[0].trim(); }
+
+    /* ---------- your data, as simple rows ---------- */
+    function rows(ds) {
+        if (ds === 'jobs') return load('incomeEntries').map(function (e) {
+            var wf = (e.woFiles || [])[0] || {}, wm = wf.meta || {};
+            return { _id: e.id, date: d10(e.date), address: e.address || '', customer: firstLine(e.invoiceBillTo) || wf.from || wm.from || '', notes: e.notes || '', wo_number: e.woNumber || '',
+                invoice_no: e.invoiceNo || '', amount: num(e.baseAmount != null ? e.baseAmount : e.amount), gst: num(e.gst), total: num(e.total), paid: !!e.paid, invoiced: !!e.invoiced,
+                status: e.paid ? 'paid' : e.invoiced ? 'unpaid' : 'not invoiced', paid_date: d10(e.paidDate), invoice_date: d10(e.invoiceDate) };
+        });
+        if (ds === 'quotes') return load('incomeQuotes').map(function (q) {
+            return { _id: q.id, date: d10(q.date) || d10(q.createdAt), number: q.number || '', customer: q.customerName || '', address: q.jobAddress || q.customerAddress || '', title: q.title || '',
+                status: String(q.status || 'draft').toLowerCase(), total: num(q.total), sent_date: d10(q.sentAt) };
+        });
+        if (ds === 'projects') return load('incomeProjects').map(function (p) { return { _id: p.id, date: d10(p.startDate) || d10(p.createdAt), name: p.name || '', status: String(p.status || '').toLowerCase(), total: num(p.total) }; });
+        if (ds === 'receipts') return load('incomeReceipts').map(function (r) { return { _id: r.id, date: d10(r.date), store: r.store || '', category: r.category || r.cat || '', subtotal: num(r.subtotal), gst: num(r.gst), total: num(r.total) }; });
+        return [];
+    }
+    var FIELDS = {
+        jobs: 'date (date), address (text), customer (text: bill-to name or work order sender), notes (text), wo_number (text), invoice_no (text), amount (money, before GST), gst (money), total (money, with GST), paid (true/false), invoiced (true/false), status ("paid", "unpaid" = invoiced but not paid, "not invoiced"), paid_date (date), invoice_date (date)',
+        quotes: 'date (date), number (text), customer (text), address (text), title (text), status (text: "draft", "sent", "accepted", "declined", ...), total (money), sent_date (date)',
+        projects: 'date (date, start), name (text), status (text: "active", "completed", ...), total (money)',
+        receipts: 'date (date), store (text), category (text), subtotal (money), gst (money, GST paid), total (money)'
+    };
+
+    /* ---------- run a recipe ---------- */
+    function test(r, f) {
+        var v = r[f.field], w = f.value, lo = function (x) { return String(x == null ? '' : x).toLowerCase(); };
+        switch (f.op) {
+            case 'eq': return typeof v === 'number' ? v === num(w) : typeof v === 'boolean' ? v === (w === true || w === 'true') : lo(v) === lo(w);
+            case 'neq': return typeof v === 'number' ? v !== num(w) : typeof v === 'boolean' ? v !== (w === true || w === 'true') : lo(v) !== lo(w);
+            case 'contains': return lo(v).indexOf(lo(w)) >= 0;
+            case 'not_contains': return lo(v).indexOf(lo(w)) < 0;
+            case 'in': return (Array.isArray(w) ? w : [w]).some(function (x) { return lo(v) === lo(x); });
+            case 'gt': return typeof v === 'number' ? v > num(w) : String(v) > String(w);
+            case 'gte': return typeof v === 'number' ? v >= num(w) : String(v) >= String(w);
+            case 'lt': return typeof v === 'number' ? v < num(w) : String(v) < String(w);
+            case 'lte': return typeof v === 'number' ? v <= num(w) : String(v) <= String(w);
+            case 'is_true': return v === true;
+            case 'is_false': return v === false;
+            case 'empty': return v === '' || v == null;
+            case 'not_empty': return !(v === '' || v == null);
+        }
+        return true;
+    }
+    function gkey(r, g) {
+        if (g === 'month') return (r.date || '').slice(0, 7);
+        if (g === 'year') return (r.date || '').slice(0, 4);
+        if (g === 'day') return r.date || '';
+        if (g === 'week') { if (!r.date) return ''; var d = new Date(r.date + 'T12:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); }
+        var v = r[g]; return typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v == null ? '' : v).trim() || '(none)';
+    }
+    function agg(list, m, f) {
+        var vals = list.map(function (r) { return num(r[f]); });
+        if (m === 'count' || m === 'list') return list.length;
+        if (m === 'sum') return vals.reduce(function (a, b) { return a + b; }, 0);
+        if (m === 'avg') return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
+        if (m === 'min') return vals.length ? Math.min.apply(null, vals) : 0;
+        if (m === 'max') return vals.length ? Math.max.apply(null, vals) : 0;
+        return list.length;
+    }
+    function run(q) {
+        var ds = NOUN[q.dataset] ? q.dataset : 'jobs', all = rows(ds), df = q.date_field && all.length && q.date_field in all[0] ? q.date_field : 'date';
+        var m = ['count', 'sum', 'avg', 'min', 'max', 'list'].indexOf(q.measure) >= 0 ? q.measure : 'count';
+        var f = q.field && all.length && q.field in all[0] ? q.field : 'total';
+        var list = all.filter(function (r) {
+            if (q.from && (!r[df] || r[df] < q.from)) return false;
+            if (q.to && (!r[df] || r[df] > q.to)) return false;
+            return (q.filters || []).every(function (x) { return !x || !x.field || !(x.field in r) || test(r, x); });
+        });
+        var sb = q.sort_by && all.length && q.sort_by in all[0] ? q.sort_by : (m === 'list' ? df : f), dir = q.sort === 'asc' ? 1 : -1;
+        list.sort(function (a, b) { var x = a[sb], y = b[sb]; return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+        var res = { q: q, ds: ds, m: m, f: f, list: list, value: agg(list, m, f), n: list.length, scanned: all.length, money: !!MONEY[f] && m !== 'count' && m !== 'list' };
+        if (m === 'min' || m === 'max') { res.pick = list.slice().sort(function (a, b) { return (num(a[f]) - num(b[f])) * (m === 'max' ? -1 : 1); })[0] || null; }
+        if (q.group) {
+            var by = {};
+            list.forEach(function (r) { var k = gkey(r, q.group); (by[k] = by[k] || []).push(r); });
+            res.groups = Object.keys(by).map(function (k) { return { key: k, n: by[k].length, value: agg(by[k], m === 'list' ? 'sum' : m, f) }; });
+            var time = ['month', 'year', 'day', 'week'].indexOf(q.group) >= 0;
+            res.groups.sort(function (a, b) { return time && !q.sort ? (a.key < b.key ? -1 : 1) : (b.value - a.value) * (q.sort === 'asc' ? -1 : 1); });
+            if (q.limit > 0) res.groups = res.groups.slice(0, q.limit);
+            res.gmoney = !!MONEY[f] && m !== 'count';
+        } else if (q.limit > 0 && m === 'list') res.list = list.slice(0, q.limit);
+        return res;
+    }
+    function fmtVal(r) {
+        if (r.groups) { var t = r.groups[0]; return t ? glabel(t.key, r.q.group) + ' (' + (r.gmoney ? money(t.value) : t.value) + ')' : 'nothing'; }
+        if (r.m === 'count' || r.m === 'list') return String(r.value);
+        return r.money ? money(r.value) : (Math.round(r.value * 100) / 100).toLocaleString('en-US');
+    }
+    function glabel(k, g) {
+        if (g === 'month' && /^\d{4}-\d{2}$/.test(k)) return new Date(k + '-15T12:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        if ((g === 'day' || g === 'week') && /^\d{4}-\d{2}-\d{2}$/.test(k)) return (g === 'week' ? 'Week of ' : '') + nice(k);
+        return k;
+    }
+
+    /* ---------- quick questions: no AI needed ---------- */
+    function today() { return ymd(new Date()); }
+    function monthStart() { var d = new Date(); return ymd(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    function yearStart() { return new Date().getFullYear() + '-01-01'; }
+    var QUICK = [
+        { t: 'This month’s income', p: function () { return { queries: [{ dataset: 'jobs', from: monthStart(), to: today(), measure: 'sum', field: 'total', label: 'Income this month (with GST)' }, { dataset: 'jobs', from: monthStart(), to: today(), measure: 'count', label: 'Jobs this month' }], answer: 'This month you made {1} from {2} jobs.' }; } },
+        { t: 'Last week', week: true },
+        { t: 'Unpaid invoices', p: function () { return { queries: [{ dataset: 'jobs', filters: [{ field: 'status', op: 'eq', value: 'unpaid' }], measure: 'list', sort_by: 'date', sort: 'asc', label: 'Invoiced, not paid yet' }, { dataset: 'jobs', filters: [{ field: 'status', op: 'eq', value: 'unpaid' }], measure: 'sum', field: 'total', label: 'Owed to you' }], answer: '{1} invoices are not paid yet, {2} in total.' }; } },
+        { t: 'Not invoiced yet', p: function () { return { queries: [{ dataset: 'jobs', filters: [{ field: 'invoiced', op: 'is_false' }], measure: 'list', sort_by: 'date', sort: 'asc', label: 'Jobs without an invoice' }, { dataset: 'jobs', filters: [{ field: 'invoiced', op: 'is_false' }], measure: 'sum', field: 'total', label: 'Worth' }], answer: '{1} jobs have no invoice yet, worth {2}.' }; } },
+        { t: 'GST this year', p: function () { return { queries: [{ dataset: 'jobs', from: yearStart(), to: today(), measure: 'sum', field: 'gst', label: 'GST collected on jobs' }, { dataset: 'receipts', from: yearStart(), to: today(), measure: 'sum', field: 'gst', label: 'GST paid on receipts' }], answer: 'This year you collected {1} in GST and paid {2} on receipts.' }; } },
+        { t: 'Best months', p: function () { return { queries: [{ dataset: 'jobs', from: yearStart(), to: today(), measure: 'sum', field: 'total', group: 'month', sort: 'desc', label: 'Income by month this year' }], answer: 'Your best month this year was {1}.' }; } },
+        { t: 'Spending by category', p: function () { return { queries: [{ dataset: 'receipts', from: yearStart(), to: today(), measure: 'sum', field: 'total', group: 'category', sort: 'desc', label: 'Receipts by category this year' }], answer: 'You spent the most on {1} this year.' }; } }
+    ];
+
+    /* ---------- the AI turns a question into a recipe ---------- */
+    function topNames(ds, field, n) {
+        var c = {}; rows(ds).forEach(function (r) { var v = String(r[field] || '').trim(); if (v) c[v] = (c[v] || 0) + 1; });
+        return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).slice(0, n);
+    }
+    function prompt(question, prev) {
+        var t = new Date();
+        return [
+            'You turn a roofing contractor\'s question about his own business records into a JSON recipe. You never see the records; an app runs the recipe exactly.',
+            'Today is ' + t.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' (' + ymd(t) + '). Weeks start on Monday. Money is in ' + cur() + '. "Made", "earned", "income" = jobs total (with GST) unless he says before GST (then amount).',
+            'Datasets and fields:',
+            '- jobs: ' + FIELDS.jobs,
+            '- quotes: ' + FIELDS.quotes,
+            '- projects: ' + FIELDS.projects,
+            '- receipts (his business expenses): ' + FIELDS.receipts,
+            'Known job customers: ' + JSON.stringify(topNames('jobs', 'customer', 40)),
+            'Known quote customers: ' + JSON.stringify(topNames('quotes', 'customer', 30)),
+            'Known receipt stores: ' + JSON.stringify(topNames('receipts', 'store', 40)),
+            'Known receipt categories: ' + JSON.stringify(topNames('receipts', 'category', 30)),
+            'Return ONLY JSON: {"queries":[{"dataset":"jobs|quotes|projects|receipts","from":"YYYY-MM-DD or empty","to":"YYYY-MM-DD or empty","date_field":"date or another date field","filters":[{"field":"...","op":"eq|neq|contains|not_contains|in|gt|gte|lt|lte|is_true|is_false|empty|not_empty","value":"..."}],"measure":"count|sum|avg|min|max|list","field":"money field for sum/avg/min/max","group":"empty or month|week|year|day|<a text field>","sort":"desc|asc","sort_by":"field to sort a list by","limit":0,"label":"short label"}],"answer":"one friendly sentence using {1}, {2}... for each query result","clarify":""}',
+            'Rules: up to 3 queries. For a name the user gives, use op "contains" with the shortest distinctive word (e.g. "pinnacle"), matching a known name if one fits; for an address use "contains" on address. "Which/what jobs" questions use measure "list". "Unpaid" = status eq "unpaid". "Biggest/largest" = max, "smallest" = min. Group results the user wants broken down. {n} becomes a formatted number or money amount (for grouped queries: the top group with its value). If the question cannot be answered from these records, set "clarify" to a short helpful reply and "queries" to [].',
+            prev ? 'The previous question was: ' + JSON.stringify(prev.q) + ' with recipe ' + JSON.stringify(prev.plan) + '. The new question may be a follow-up to it.' : '',
+            'Question: ' + JSON.stringify(question)
+        ].filter(Boolean).join('\n');
+    }
+    function parseJson(t) {
+        t = String(t || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+        var i = t.indexOf('{'), j = t.lastIndexOf('}'); if (i < 0 || j < i) throw new Error('The AI did not return a recipe.');
+        return JSON.parse(t.slice(i, j + 1));
+    }
+
+    /* ---------- the Ask sheet ---------- */
+    var sheet = null, history = [], prev = null, busy = false;
+    function build() {
+        if (sheet) return sheet;
+        sheet = document.createElement('div'); sheet.id = 'ask-sheet'; sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', 'Ask IncAtor');
+        sheet.innerHTML = '<div class="ask-box"><header class="ask-hd"><span class="ask-hi"><i class="fas fa-magic"></i></span><div class="ask-ht"><b>Ask IncAtor</b><small>Questions about your jobs, quotes, projects and receipts</small></div><button type="button" class="ask-x" data-ask="close" aria-label="Close"><i class="fas fa-times"></i></button></header>' +
+            '<div class="ask-log" id="ask-log"></div><div class="ask-chips" id="ask-chips"></div>' +
+            '<form class="ask-in" id="ask-form"><input id="ask-q" type="text" autocomplete="off" enterkeyhint="send" placeholder="e.g. How much did I make in October?" aria-label="Your question"><button type="submit" aria-label="Ask"><i class="fas fa-chevron-right"></i></button></form></div>';
+        document.body.appendChild(sheet);
+        sheet.querySelector('#ask-chips').innerHTML = QUICK.map(function (c, i) { return '<button type="button" class="ask-chip" data-quick="' + i + '">' + esc(c.t) + '</button>'; }).join('');
+        sheet.addEventListener('click', function (e) {
+            var t = e.target.closest('[data-ask], [data-quick], [data-more]'); if (e.target === sheet) { close(); return; } if (!t) return;
+            if (t.getAttribute('data-ask') === 'close') close();
+            else if (t.getAttribute('data-ask') === 'ai') { close(); try { showPage('settings'); } catch (er) { /* ignore */ } setTimeout(function () { var x = document.getElementById('receipt-settings-section'); if (x) x.scrollIntoView({ behavior: 'smooth' }); }, 700); }
+            else if (t.hasAttribute('data-quick')) quick(+t.getAttribute('data-quick'));
+            else if (t.hasAttribute('data-more')) { var box = t.closest('.ask-rows'); if (box) box.classList.add('all'); t.remove(); }
+        });
+        sheet.querySelector('#ask-form').addEventListener('submit', function (e) { e.preventDefault(); var i = sheet.querySelector('#ask-q'), q = i.value.trim(); if (!q || busy) return; i.value = ''; ask(q); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sheet.classList.contains('open')) close(); });
+        return sheet;
+    }
+    function open(q) {
+        build(); sheet.classList.add('open'); document.documentElement.classList.add('ask-open');
+        if (!history.length) say('bot', '<p>Ask me anything about your business, like <i>“How much did I make from Pinnacle in October?”</i> or <i>“Which jobs aren’t paid yet?”</i> Or tap a quick question below.</p>' +
+            (window.IncAI && IncAI.ready() ? '' : '<p class="ask-note">Quick questions work right away. For your own questions, turn on the AI reader in <button type="button" class="ask-link" data-ask="ai">Settings &gt; SlipVault</button> (the same Gemini key works).</p>'));
+        if (q) ask(q); else setTimeout(function () { var i = sheet.querySelector('#ask-q'); if (i && window.innerWidth > 700) i.focus(); }, 300);
+    }
+    function close() { if (sheet) sheet.classList.remove('open'); document.documentElement.classList.remove('ask-open'); }
+    function say(who, html) {
+        var log = sheet.querySelector('#ask-log'), d = document.createElement('div'); d.className = 'ask-m ' + who; d.innerHTML = html; log.appendChild(d);
+        history.push(who); setTimeout(function () { log.scrollTop = log.scrollHeight; }, 30); return d;
+    }
+    function rowHtml(ds, r) {
+        if (ds === 'jobs') return '<div class="ask-r"><span><b>' + esc(r.address || '(no address)') + '</b><small>' + esc(nice(r.date)) + (r.customer ? ' · ' + esc(r.customer) : '') + (r.invoice_no ? ' · ' + esc(r.invoice_no) : '') + '</small></span><span class="ask-rv">' + money(r.total) + '<small class="st-' + r.status.replace(/ /g, '') + '">' + esc(r.status) + '</small></span></div>';
+        if (ds === 'quotes') return '<div class="ask-r"><span><b>' + esc(r.customer || r.title || r.number) + '</b><small>' + esc([r.number, nice(r.date), r.address].filter(Boolean).join(' · ')) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span></div>';
+        if (ds === 'projects') return '<div class="ask-r"><span><b>' + esc(r.name) + '</b><small>' + esc(nice(r.date)) + '</small></span><span class="ask-rv">' + money(r.total) + '<small>' + esc(r.status) + '</small></span></div>';
+        return '<div class="ask-r"><span><b>' + esc(r.store || '(store)') + '</b><small>' + esc([nice(r.date), r.category].filter(Boolean).join(' · ')) + '</small></span><span class="ask-rv">' + money(r.total) + (r.gst ? '<small>GST ' + money(r.gst) + '</small>' : '') + '</span></div>';
+    }
+    function showResult(plan, results) {
+        var ans = String(plan.answer || '').replace(/\{(\d)\}/g, function (m, i) { var r = results[+i - 1]; return r ? '<b>' + esc(fmtVal(r)) + '</b>' : m; });
+        if (!ans) ans = results.map(function (r) { return esc(r.q.label || '') + ': <b>' + esc(fmtVal(r)) + '</b>'; }).join('<br>');
+        var html = '<p class="ask-ans">' + ans + '</p>';
+        results.forEach(function (r) {
+            var head = '<div class="ask-qh"><span>' + esc(r.q.label || NOUN[r.ds][1]) + (r.q.from || r.q.to ? ' <small>' + esc([r.q.from ? nice(r.q.from) : 'start', r.q.to ? nice(r.q.to) : 'today'].join(' – ')) + '</small>' : '') + '</span><b>' + esc(r.groups ? r.groups.length + ' groups' : fmtVal(r)) + '</b></div>';
+            var body = '';
+            if (r.groups) body = '<div class="ask-rows">' + r.groups.map(function (g, i) { return '<div class="ask-r' + (i >= 8 ? ' more' : '') + '"><span><b>' + esc(glabel(g.key, r.q.group)) + '</b><small>' + g.n + ' ' + NOUN[r.ds][g.n === 1 ? 0 : 1] + '</small></span><span class="ask-rv">' + (r.gmoney ? money(g.value) : g.value) + '</span></div>'; }).join('') + (r.groups.length > 8 ? '<button type="button" class="ask-more" data-more="1">Show all ' + r.groups.length + '</button>' : '') + '</div>';
+            else if (r.m === 'list') body = r.list.length ? '<div class="ask-rows">' + r.list.map(function (x, i) { return rowHtml(r.ds, x).replace('class="ask-r"', 'class="ask-r' + (i >= 8 ? ' more' : '') + '"'); }).join('') + (r.list.length > 8 ? '<button type="button" class="ask-more" data-more="1">Show all ' + r.list.length + '</button>' : '') + '</div>' : '<p class="ask-note">Nothing matches.</p>';
+            else if (r.pick) body = '<div class="ask-rows">' + rowHtml(r.ds, r.pick) + '</div>';
+            html += '<div class="ask-q">' + head + body + '</div>';
+        });
+        var scanned = results.reduce(function (t, r) { return t + r.scanned; }, 0);
+        html += '<p class="ask-foot"><i class="fas fa-lock"></i> Worked out on this device from your ' + results.map(function (r) { return NOUN[r.ds][1]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' and ') + ' (' + scanned + ' records). ' + (plan.byAI ? 'The AI only saw your question.' : '') + '</p>';
+        say('bot', html);
+    }
+    function quick(i) {
+        var c = QUICK[i]; if (!c) return;
+        if (c.week) { close(); openWeek(); return; }
+        say('me', '<p>' + esc(c.t) + '</p>');
+        var plan = c.p(); prev = { q: c.t, plan: plan };
+        showResult(plan, plan.queries.map(run));
+    }
+    async function ask(q) {
+        say('me', '<p>' + esc(q) + '</p>');
+        if (!(window.IncAI && IncAI.ready())) { say('bot', '<p>To answer your own questions I need the AI reader turned on. Go to <button type="button" class="ask-link" data-ask="ai">Settings &gt; SlipVault &gt; AI reader</button> and add your Gemini key (the same one you use for receipts). The quick questions below work without it.</p>'); return; }
+        busy = true; var wait = say('bot', '<p class="ask-wait"><i class="fas fa-spinner fa-spin"></i> Working it out...</p>');
+        try {
+            var plan = parseJson(await IncAI.text(prompt(q, prev)));
+            wait.remove(); history.pop();
+            if (plan.clarify && !(plan.queries || []).length) { say('bot', '<p>' + esc(plan.clarify) + '</p>'); return; }
+            plan.queries = (plan.queries || []).slice(0, 3); plan.byAI = true;
+            if (!plan.queries.length) { say('bot', '<p>I could not turn that into a question about your records. Try asking about jobs, quotes, projects or receipts.</p>'); return; }
+            prev = { q: q, plan: { queries: plan.queries, answer: plan.answer } };
+            showResult(plan, plan.queries.map(run));
+        } catch (e) {
+            try { wait.remove(); history.pop(); } catch (e2) { /* ignore */ }
+            say('bot', '<p class="ask-bad">Sorry, that did not work: ' + esc(e && e.message || 'unknown problem') + '</p>');
+        } finally { busy = false; }
+    }
+
+    /* ---------- weekly summary ---------- */
+    function lastWeek() { var t = new Date(); t.setHours(12, 0, 0, 0); var mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7) - 7); var from = ymd(mon); return { from: from, to: addDays(from, 6) }; }
+    function weekNumbers(range) {
+        var J = rows('jobs'), Q = rows('quotes');
+        var wk = J.filter(function (r) { return r.date && r.date >= range.from && r.date <= range.to; });
+        var unpaid = J.filter(function (r) { return r.status === 'unpaid'; }), noinv = J.filter(function (r) { return !r.invoiced; });
+        var waiting = Q.filter(function (r) { return r.status === 'sent'; });
+        var R = rows('receipts').filter(function (r) { return r.date && r.date >= range.from && r.date <= range.to; });
+        var sum = function (l, f) { return l.reduce(function (t, r) { return t + num(r[f || 'total']); }, 0); };
+        var oldest = unpaid.map(function (r) { return r.invoice_date || r.date; }).filter(Boolean).sort()[0] || '';
+        var drafts = 0; try { var st = window.IncMail && IncMail.status && IncMail.status(); drafts = st && st.drafts || 0; } catch (e) { /* ignore */ }
+        return { range: range, jobs: wk, income: sum(wk), gst: sum(wk, 'gst'), unpaid: unpaid, unpaidSum: sum(unpaid), oldest: oldest, noinv: noinv, noinvSum: sum(noinv), waiting: waiting, waitingSum: sum(waiting), spent: sum(R), receipts: R.length, drafts: drafts };
+    }
+    function openWeek() {
+        build(); open();
+        var W = weekNumbers(lastWeek()), days = W.oldest ? Math.round((Date.now() - new Date(W.oldest + 'T12:00:00')) / 864e5) : 0;
+        var tile = function (ic, label, val, sub, cls) { return '<div class="wk-t ' + (cls || '') + '"><i class="fas ' + ic + '"></i><small>' + esc(label) + '</small><b>' + val + '</b>' + (sub ? '<em>' + sub + '</em>' : '') + '</div>'; };
+        var html = '<p class="ask-ans">Your week: <b>' + esc(nice(W.range.from)) + ' – ' + esc(nice(W.range.to)) + '</b></p><div class="wk-grid">' +
+            tile('fa-coins', 'Income', money(W.income), W.jobs.length + ' job' + (W.jobs.length === 1 ? '' : 's') + ' · GST ' + money(W.gst), 'g') +
+            tile('fa-exclamation-circle', 'Unpaid invoices', W.unpaid.length + ' · ' + money(W.unpaidSum), W.unpaid.length && days ? 'oldest ' + days + ' days' : '', W.unpaid.length ? 'r' : '') +
+            tile('fa-file-alt', 'Not invoiced yet', W.noinv.length + ' · ' + money(W.noinvSum), '', W.noinv.length ? 'a' : '') +
+            tile('fa-clipboard-list', 'Quotes waiting', W.waiting.length + ' · ' + money(W.waitingSum), 'sent, no answer yet', '') +
+            tile('fa-inbox', 'Work orders to approve', String(W.drafts), '', W.drafts ? 'a' : '') +
+            tile('fa-receipt', 'Spent (receipts)', money(W.spent), W.receipts + ' receipt' + (W.receipts === 1 ? '' : 's'), '') + '</div>';
+        if (W.unpaid.length) html += '<div class="ask-q"><div class="ask-qh"><span>Unpaid invoices, oldest first</span><b>' + money(W.unpaidSum) + '</b></div><div class="ask-rows">' + W.unpaid.slice().sort(function (a, b) { return (a.invoice_date || a.date) < (b.invoice_date || b.date) ? -1 : 1; }).map(function (r, i) { return rowHtml('jobs', r).replace('class="ask-r"', 'class="ask-r' + (i >= 6 ? ' more' : '') + '"'); }).join('') + (W.unpaid.length > 6 ? '<button type="button" class="ask-more" data-more="1">Show all ' + W.unpaid.length + '</button>' : '') + '</div></div>';
+        if (W.jobs.length) html += '<div class="ask-q"><div class="ask-qh"><span>Last week’s jobs</span><b>' + W.jobs.length + '</b></div><div class="ask-rows">' + W.jobs.map(function (r, i) { return rowHtml('jobs', r).replace('class="ask-r"', 'class="ask-r' + (i >= 6 ? ' more' : '') + '"'); }).join('') + (W.jobs.length > 6 ? '<button type="button" class="ask-more" data-more="1">Show all ' + W.jobs.length + '</button>' : '') + '</div></div>';
+        say('bot', html);
+    }
+
+    /* ---------- the weekly summary comes from your IncAtor server: keep it up to date ---------- */
+    function wsDay() { var v = parseInt(S().weekSumDay, 10); return v >= 0 && v <= 6 ? v : 1; }
+    function wsHour() { var v = parseInt(S().weekSumHour, 10); return v >= 0 && v <= 23 ? v : 8; }
+    function tz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Vancouver'; } catch (e) { return 'America/Vancouver'; } }
+    function payload() {
+        var cut = addDays(today(), -120);
+        var J = rows('jobs').filter(function (r) { return (r.date && r.date >= cut) || r.status !== 'paid'; }).slice(-3000).map(function (r) { return [r.date, Math.round(r.total * 100) / 100, r.paid ? 1 : 0, r.invoiced ? 1 : 0, r.invoice_date || '']; });
+        var Q = rows('quotes').filter(function (r) { return r.status === 'sent'; }).slice(-500).map(function (r) { return [Math.round(r.total * 100) / 100, r.sent_date || r.date]; });
+        return { tz: tz(), day: wsDay(), hour: wsHour(), cur: cur(), jobs: J, quotes: Q };
+    }
+    var lastSent = '';
+    try { lastSent = localStorage.getItem('incator:wsSent') || ''; } catch (e) { /* ignore */ }
+    function canSend() { return !!(window.IncMail && IncMail.api && IncMail.hasPass && IncMail.hasPass()); }
+    function sync(force) {
+        if (!canSend()) return;
+        var p = payload(), h = JSON.stringify(p); h = h.length + ':' + h.split('').reduce(function (a, c) { return (a * 31 + c.charCodeAt(0)) | 0; }, 7);
+        if (!force && h === lastSent) return;
+        IncMail.api('/summary/data', p).then(function () { lastSent = h; try { localStorage.setItem('incator:wsSent', h); } catch (e) { /* ignore */ } }, function () { /* tried again later */ });
+    }
+    setTimeout(function () { sync(false); }, 12000);
+    setInterval(function () { sync(false); }, 3 * 60000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') sync(false); });
+
+    /* ---------- Settings > Notifications: the weekly summary's day and time, and "send one now" ---------- */
+    var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    function hourName(h) { return (h % 12 || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM'); }
+    function addSetting() {
+        var body = document.getElementById('nt-body'); if (!body || body.querySelector('#ws-item') || !body.querySelector('.nt-types')) return;
+        var it = document.createElement('div'); it.className = 'setting-item'; it.id = 'ws-item';
+        it.innerHTML = '<div class="setting-header"><div class="setting-icon"><i class="fas fa-calendar-alt"></i></div><div class="setting-content"><h4 class="setting-title">Weekly summary</h4>' +
+            '<p class="setting-description">A notification with last week’s income, unpaid invoices, jobs not invoiced yet, quotes waiting and work orders to approve. Turn it on or off with “Weekly summary” in the list above. It uses your data as of the last time IncAtor was open.</p></div></div>' +
+            '<div class="ws-row"><label>Day <select id="ws-day">' + DAYS.map(function (d, i) { return '<option value="' + i + '"' + (i === wsDay() ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select></label>' +
+            '<label>Time <select id="ws-hour">' + Array.apply(null, Array(24)).map(function (x, h) { return '<option value="' + h + '"' + (h === wsHour() ? ' selected' : '') + '>' + hourName(h) + '</option>'; }).join('') + '</select></label></div>' +
+            '<div class="wm-btns"><button type="button" class="app-btn" id="ws-test"><i class="fas fa-bell mr-2"></i>Send me one now</button><button type="button" class="app-btn" id="ws-open"><i class="fas fa-chart-bar mr-2"></i>See last week</button></div>';
+        var types = body.querySelector('.nt-types').closest('.setting-item'); types.parentNode.insertBefore(it, types.nextSibling);
+        it.addEventListener('change', function () {
+            try { appSettings.weekSumDay = +it.querySelector('#ws-day').value; appSettings.weekSumHour = +it.querySelector('#ws-hour').value; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ }
+            sync(true); try { showToast('Weekly summary: ' + DAYS[wsDay()] + 's at ' + hourName(wsHour()), 'success'); } catch (e) { /* ignore */ }
+        });
+        it.querySelector('#ws-open').addEventListener('click', function () { openWeek(); });
+        it.querySelector('#ws-test').addEventListener('click', function () {
+            var b = this; if (!canSend()) { try { showToast('Connect your IncAtor server first (Settings > Work Orders)', 'error'); } catch (e) { /* ignore */ } return; }
+            b.disabled = true;
+            IncMail.api('/summary/data', payload()).then(function () { return IncMail.api('/summary/test', {}); }).then(function (j) {
+                try { showToast(j && j.sent ? 'Sent - check your notifications' : 'Made, but no device is set up for notifications yet', j && j.sent ? 'success' : 'info'); } catch (e) { /* ignore */ }
+            }, function (e) { try { showToast(e.message || 'Could not send it', 'error'); } catch (e2) { /* ignore */ } }).then(function () { b.disabled = false; });
+        });
+    }
+    new MutationObserver(addSetting).observe(document.documentElement, { childList: true, subtree: true });
+
+    /* ---------- where to find it ---------- */
+    function addEntryPoints() {
+        var mh = document.querySelector('#mobile-home .mh-cta');
+        if (mh && !document.getElementById('mh-ask')) mh.insertAdjacentHTML('afterend', '<button type="button" class="ask-bar" id="mh-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything…</span><i class="fas fa-chevron-right"></i></button>');
+        var hc = document.querySelector('.home-cards-container');
+        if (hc && !document.getElementById('hd-ask')) hc.insertAdjacentHTML('beforebegin', '<button type="button" class="ask-bar ask-bar-d" id="hd-ask" data-askopen="1"><i class="fas fa-magic"></i><span>Ask IncAtor anything about your jobs, quotes and receipts…</span><i class="fas fa-chevron-right"></i></button>');
+    }
+    addEntryPoints(); setTimeout(addEntryPoints, 1500);
+    document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-askopen]')) open(); });
+    function goHash(h) {
+        h = String(h || '').replace(/^[^#]*/, '');
+        if (h !== '#week' && h !== '#ask') return;
+        setTimeout(function () { if (h === '#week') openWeek(); else open(); try { history.replaceState(null, '', location.href.replace(/#.*$/, '')); } catch (e) { /* ignore */ } }, 1200);
+    }
+    goHash(location.hash);
+    window.addEventListener('hashchange', function () { goHash(location.hash); });
+    try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'incator-open') goHash(e.data.url); }); } catch (e) { /* ignore */ }
+
+    window.IncAsk = { open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt };
+
+    var st = document.createElement('style'); st.id = 'incator-ask-css';
+    st.textContent = [
+        '.ask-bar { display: flex; align-items: center; gap: 10px; width: 100%; margin: 14px 0 4px; padding: 13px 16px; border-radius: 16px; border: 1px solid rgba(168,85,247,.4); background: linear-gradient(135deg, rgba(168,85,247,.16), rgba(236,72,153,.12)); color: inherit; text-align: left; font-size: .95rem; cursor: pointer; }',
+        '.ask-bar span { flex: 1; opacity: .85; } .ask-bar > i:first-child { color: #c084fc; } .ask-bar > i:last-child { opacity: .5; font-size: .8rem; }',
+        '.ask-bar-d { max-width: 1100px; margin: 0 auto 18px; } @media (max-width: 700px) { .ask-bar-d { display: none; } }',
+        '#ask-sheet { position: fixed; inset: 0; z-index: 9500; display: none; align-items: flex-end; justify-content: center; background: rgba(5,3,15,.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }',
+        '#ask-sheet.open { display: flex; } html.ask-open { overflow: hidden; }',
+        '.ask-box { width: 100%; max-width: 720px; height: min(92vh, 900px); display: flex; flex-direction: column; border-radius: 24px 24px 0 0; background: rgba(22,16,44,.97); color: #fff; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 -10px 40px rgba(0,0,0,.5); padding-bottom: env(safe-area-inset-bottom, 0px); animation: askUp .3s ease; }',
+        '@keyframes askUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }',
+        '@media (min-width: 701px) { #ask-sheet { align-items: center; } .ask-box { border-radius: 24px; height: min(86vh, 860px); } }',
+        '.ask-hd { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }',
+        '.ask-hi { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #a855f7, #ec4899); }',
+        '.ask-ht { flex: 1; min-width: 0; } .ask-ht b { display: block; font-size: 1.05rem; } .ask-ht small { display: block; font-size: .74rem; opacity: .65; }',
+        '.ask-x { background: rgba(255,255,255,.08); border: 0; color: inherit; width: 36px; height: 36px; border-radius: 50%; }',
+        '.ask-log { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; }',
+        '.ask-m { max-width: 92%; padding: 10px 13px; border-radius: 16px; font-size: .9rem; line-height: 1.45; }',
+        '.ask-m.me { align-self: flex-end; background: linear-gradient(135deg, #a855f7, #ec4899); border-bottom-right-radius: 6px; }',
+        '.ask-m.bot { align-self: stretch; max-width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-bottom-left-radius: 6px; }',
+        '.ask-m p + p { margin-top: 8px; } .ask-ans { font-size: 1rem; } .ask-ans b { color: #f0abfc; }',
+        '.ask-note { font-size: .8rem; opacity: .75; } .ask-bad { color: #fca5a5; } .ask-wait { opacity: .8; }',
+        '.ask-link { background: none; border: 0; padding: 0; color: #c084fc; text-decoration: underline; font: inherit; cursor: pointer; }',
+        '.ask-q { margin-top: 10px; border-radius: 12px; background: rgba(0,0,0,.18); overflow: hidden; }',
+        '.ask-qh { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 9px 11px; font-size: .82rem; } .ask-qh small { opacity: .6; margin-left: 4px; } .ask-qh b { white-space: nowrap; }',
+        '.ask-rows .ask-r { display: flex; justify-content: space-between; gap: 10px; padding: 8px 11px; border-top: 1px solid rgba(255,255,255,.06); font-size: .84rem; }',
+        '.ask-rows .ask-r.more { display: none; } .ask-rows.all .ask-r.more { display: flex; }',
+        '.ask-r > span:first-child { min-width: 0; } .ask-r b { display: block; font-weight: 600; overflow-wrap: anywhere; } .ask-r small { display: block; font-size: .72rem; opacity: .65; }',
+        '.ask-rv { text-align: right; white-space: nowrap; font-weight: 600; } .ask-rv small { font-weight: 500; text-transform: capitalize; }',
+        '.ask-rv .st-unpaid { color: #fca5a5; opacity: 1; } .ask-rv .st-paid { color: #86efac; opacity: 1; } .ask-rv .st-notinvoiced { color: #fcd34d; opacity: 1; }',
+        '.ask-more { width: 100%; padding: 9px; background: none; border: 0; border-top: 1px solid rgba(255,255,255,.06); color: #c084fc; font-size: .8rem; }',
+        '.ask-foot { margin-top: 10px; font-size: .7rem; opacity: .55; }',
+        '.ask-chips { display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px; scrollbar-width: none; } .ask-chips::-webkit-scrollbar { display: none; }',
+        '.ask-chip { flex: 0 0 auto; padding: 8px 13px; border-radius: 999px; border: 1px solid rgba(192,132,252,.45); background: rgba(168,85,247,.12); color: inherit; font-size: .8rem; white-space: nowrap; }',
+        '.ask-in { display: flex; gap: 8px; padding: 8px 12px 12px; }',
+        '.ask-in input { flex: 1; min-width: 0; padding: 12px 15px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); color: inherit; font-size: 16px; outline: none; }',
+        '.ask-in input:focus { border-color: #c084fc; } .ask-in button { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 50%; border: 0; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); }',
+        '.wk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }',
+        '.wk-t { padding: 11px; border-radius: 14px; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.07); } .wk-t i { opacity: .7; font-size: .85rem; } .wk-t small { display: block; font-size: .72rem; opacity: .7; margin-top: 4px; }',
+        '.wk-t b { display: block; font-size: 1.02rem; margin-top: 2px; } .wk-t em { display: block; font-style: normal; font-size: .7rem; opacity: .6; margin-top: 2px; }',
+        '.wk-t.g b { color: #86efac; } .wk-t.r b { color: #fca5a5; } .wk-t.a b { color: #fcd34d; }',
+        '.ws-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0 4px; } .ws-row label { display: flex; align-items: center; gap: 8px; font-size: .85rem; }',
+        '.ws-row select { padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,.08); color: inherit; border: 1px solid rgba(255,255,255,.18); }',
+        'html.lm .ask-box { background: rgba(255,255,255,.98); color: #1d1733; border-color: rgba(29,23,51,.1); } html.lm .ask-m.bot { background: rgba(29,23,51,.04); border-color: rgba(29,23,51,.08); }',
+        'html.lm .ask-q, html.lm .wk-t { background: rgba(29,23,51,.05); } html.lm .ask-rows .ask-r, html.lm .ask-more { border-color: rgba(29,23,51,.08); } html.lm .ask-ans b { color: #a21caf; }',
+        'html.lm .ask-in input { background: #fff; border-color: rgba(29,23,51,.18); } html.lm .ask-x { background: rgba(29,23,51,.06); } html.lm .ask-hd { border-color: rgba(29,23,51,.08); }',
+        'html.lm .wk-t.g b, html.lm .ask-rv .st-paid { color: #15803d; } html.lm .wk-t.r b, html.lm .ask-rv .st-unpaid { color: #b91c1c; } html.lm .wk-t.a b, html.lm .ask-rv .st-notinvoiced { color: #b45309; }',
+        'html[data-theme="sleek"] .ask-box { background: var(--sk-bg); color: var(--sk-fg); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-m.bot, html[data-theme="sleek"] .ask-q, html[data-theme="sleek"] .wk-t { background: var(--sk-raise); border-color: var(--sk-line); }',
+        'html[data-theme="sleek"] .ask-m.me, html[data-theme="sleek"] .ask-in button, html[data-theme="sleek"] .ask-hi { background: var(--sk-fg); color: var(--sk-bg); } html[data-theme="sleek"] .ask-ans b { color: inherit; }',
+        'html[data-theme="sleek"] .ask-bar { background: var(--sk-raise); border-color: var(--sk-line); } html[data-theme="sleek"] .ask-chip { background: transparent; border-color: var(--sk-line); }'
     ].join('\n');
     document.head.appendChild(st);
 })();
