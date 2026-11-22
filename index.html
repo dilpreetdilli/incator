@@ -10697,6 +10697,12 @@ bootstrap();
             });
         }
 
+        function jobsPeriod() {                                         // "this year", "in 2025", "in all years", "from 1 Mar to 30 Apr"
+            if (viewFrom || viewTo) return `from ${viewFrom ? formatDate(viewFrom) : 'the start'} to ${viewTo ? formatDate(viewTo) : 'today'}`;
+            if (viewYear === 'all') return 'in all years';
+            return viewYear === currentYearStr() ? 'this year' : `in ${viewYear}`;
+        }
+        window.incJobsPeriod = jobsPeriod;
         function updateViewSummaryLine() {
             const el = document.getElementById('view-summary-line');
             if (!el) return;
@@ -10706,7 +10712,7 @@ bootstrap();
             const n = displayedEntries.length;
             const outstanding = sum(displayedEntries.filter(e => e.invoiced && !e.paid), 'total');
             el.classList.add('es-chips');
-            el.innerHTML = `<span class="es-chip"><b>${n}</b> ${n === 1 ? 'entry' : 'entries'}</span><span class="es-chip">Subtotal <b>${formatCurrency(sum(displayedEntries, 'baseAmount'))}</b></span><span class="es-chip">GST <b>${formatCurrency(sum(displayedEntries, 'gst'))}</b></span><span class="es-chip total">Total <b>${formatCurrency(sum(displayedEntries, 'total'))}</b></span>` + (outstanding > 0 ? `<span class="es-chip owing">Owing <b>${formatCurrency(outstanding)}</b></span>` : '');
+            el.innerHTML = `<span class="es-chip"><b>${n}</b> ${n === 1 ? 'Job' : 'Jobs'} ${jobsPeriod()}</span><span class="es-chip">Subtotal <b>${formatCurrency(sum(displayedEntries, 'baseAmount'))}</b></span><span class="es-chip">GST <b>${formatCurrency(sum(displayedEntries, 'gst'))}</b></span><span class="es-chip total">Total <b>${formatCurrency(sum(displayedEntries, 'total'))}</b></span>` + (outstanding > 0 ? `<span class="es-chip owing">Owing <b>${formatCurrency(outstanding)}</b></span>` : '');
             el.style.display = 'flex';
         }
 
@@ -10749,13 +10755,8 @@ bootstrap();
             const sortLabels = { 'date-asc': 'Oldest first', 'total-desc': 'Highest total', 'total-asc': 'Lowest total', 'address-asc': 'Address A-Z', 'address-desc': 'Address Z-A' };
             const parts = [];
             let active = 0;
-            if (viewFrom || viewTo) {
-                parts.push(`${viewFrom ? formatDate(viewFrom) : 'Start'} to ${viewTo ? formatDate(viewTo) : 'today'}`);
-                active++;
-            } else {
-                parts.push(viewYear === 'all' ? 'All years' : viewYear);
-                if (viewYear !== currentYearStr()) active++;
-            }
+            if (viewFrom || viewTo) active++;                                // the year / dates now show with the number of jobs ("26 Jobs this year")
+            else if (viewYear !== currentYearStr()) active++;
             if (viewInvoiceFilter !== 'all') { parts.push(statusLabels[viewInvoiceFilter]); active++; }
             if (viewSort !== 'date-desc') { parts.push(sortLabels[viewSort]); active++; }
             summary.textContent = parts.join('  ·  ');
@@ -33495,7 +33496,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.21 (v72)';
+var VERSION = '2026.11.21 (v73)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -34842,6 +34843,125 @@ window.IncVersion = VERSION;
         return html;
     }
     var NAV_RE = /^(?:please\s+)?(?:open|go to|goto|take me to|bring up|jump to|show me|where(?:'s| is| are| do i find| can i find)?|find)\b/i;
+    /* ---------- questions about your numbers in your own words, worked out on this device (no AI needed) ----------
+       "how much did I make last month", "GST in Q2", "how many jobs at Oak St this year", "biggest job in 2025",
+       "what did I spend at Home Depot", "when did I buy drip edge", "income by month", "this month vs last month"... */
+    var MON = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    function monIdx(w) { w = String(w || '').toLowerCase(); if (w.length < 3) return -1; for (var i = 0; i < 12; i++) if (MON[i].indexOf(w) === 0 || (w === 'sept' && i === 8)) return i; return -1; }
+    function endOfMonth(y, m) { return ymd(new Date(y, m + 1, 0)); }
+    function monday(d) { d = new Date(d); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }
+    var MONRX = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+    function periods(s) {                                                   // every time period named in the question, in order
+        var out = [], now = new Date(), Y = now.getFullYear(), M = now.getMonth(), m, re;
+        function add(i, len, from, to, label) { out.push({ i: i, len: len, from: from, to: to, label: label }); }
+        var rules = [
+            [/\btoday\b/g, function () { return [today(), today(), 'today']; }],
+            [/\byesterday\b/g, function () { var y = addDays(today(), -1); return [y, y, 'yesterday']; }],
+            [/\bthis week\b/g, function () { return [ymd(monday(now)), today(), 'this week']; }],
+            [/\blast week\b/g, function () { var a = monday(now); a.setDate(a.getDate() - 7); return [ymd(a), addDays(ymd(a), 6), 'last week']; }],
+            [/\bthis month\b/g, function () { return [monthStart(), today(), 'this month']; }],
+            [/\blast month\b/g, function () { var a = new Date(Y, M - 1, 1); return [ymd(a), endOfMonth(a.getFullYear(), a.getMonth()), 'last month']; }],
+            [/\b(?:this|the current) year\b|\bso far this year\b|\bytd\b|\byear to date\b/g, function () { return [yearStart(), today(), 'this year']; }],
+            [/\blast year\b/g, function () { return [(Y - 1) + '-01-01', (Y - 1) + '-12-31', 'in ' + (Y - 1)]; }],
+            [/\b(?:in the |over the )?(?:last|past) (\d{1,3}) (day|week|month|year)s?\b/g, function (x) { var n = +x[1], u = x[2], a = new Date(); if (u === 'day') a.setDate(a.getDate() - n + 1); else if (u === 'week') a.setDate(a.getDate() - 7 * n + 1); else if (u === 'month') a.setMonth(a.getMonth() - n); else a.setFullYear(a.getFullYear() - n); return [ymd(a), today(), 'in the last ' + n + ' ' + u + 's']; }],
+            [/\b(?:q([1-4])|(first|second|third|fourth) quarter)(?: (?:of )?(\d{4}))?\b/g, function (x) { var q = x[1] ? +x[1] : ['first', 'second', 'third', 'fourth'].indexOf(x[2]) + 1, y = x[3] ? +x[3] : Y; return [y + '-' + String((q - 1) * 3 + 1).padStart(2, '0') + '-01', endOfMonth(y, q * 3 - 1), 'in Q' + q + (y !== Y ? ' ' + y : '')]; }],
+            [new RegExp('\\bsince ' + MONRX + '(?: (\\d{4}))?\\b', 'g'), function (x) { var mi = monIdx(x[1]), y = x[2] ? +x[2] : (mi > M ? Y - 1 : Y); return [ymd(new Date(y, mi, 1)), today(), 'since ' + MON[mi].replace(/^./, function (c) { return c.toUpperCase(); }) + (y !== Y ? ' ' + y : '')]; }],
+            [new RegExp('\\b' + MONRX + '(?: (?:of )?(\\d{4}|last year|this year))?\\b', 'g'), function (x) { var mi = monIdx(x[1]); if (mi < 0) return null; if (x[1] === 'may' && !/\b(in|of|during|for|since) may\b|\bmay \d{4}\b/.test(s)) return null; var y = /^\d{4}$/.test(x[2] || '') ? +x[2] : x[2] === 'last year' ? Y - 1 : x[2] === 'this year' ? Y : (mi > M ? Y - 1 : Y); return [ymd(new Date(y, mi, 1)), endOfMonth(y, mi), 'in ' + MON[mi].replace(/^./, function (c) { return c.toUpperCase(); }) + (y !== Y ? ' ' + y : '')]; }],
+            [/\b(?:in |for |during )?(20\d{2})\b/g, function (x) { return [x[1] + '-01-01', x[1] + '-12-31', 'in ' + x[1]]; }],
+            [/\b(?:all time|ever|in total|altogether|all years)\b/g, function () { return ['', '', 'in all']; }]
+        ];
+        rules.forEach(function (r) {
+            r[0].lastIndex = 0;
+            while ((m = r[0].exec(s))) {
+                var i = m.index, len = m[0].length;
+                if (out.some(function (o) { return i < o.i + o.len && o.i < i + len; })) continue;   // already part of a longer one
+                var v = r[1](m); if (v) add(i, len, v[0], v[1], v[2]);
+            }
+        });
+        return out.sort(function (a, b) { return a.i - b.i; });
+    }
+    function pickField(ds, words2) {                                         // which text field these words are in (address or customer, store or items...)
+        var all = rows(ds), cands = ds === 'jobs' ? ['address', 'customer', 'notes', 'invoice_no', 'wo_number'] : ds === 'receipts' ? ['store', 'category', 'items', 'notes'] : ds === 'quotes' ? ['customer', 'address', 'title', 'number'] : ['name'];
+        var w = words2.toLowerCase().split(/\s+/).filter(Boolean);
+        for (var i = 0; i < cands.length; i++) {
+            var f = cands[i];
+            if (all.some(function (r) { var v = String(r[f] || '').toLowerCase(); return w.every(function (x) { return v.indexOf(x) >= 0 || v.indexOf(x.replace(/s$/, '')) >= 0; }); })) return f;
+        }
+        return null;
+    }
+    var LSTOP = /\b(how|much|many|did|do|does|i|we|my|me|our|the|a|an|in|on|at|for|from|to|of|with|and|or|was|were|is|are|have|has|had|what|which|who|whom|when|where|total|totals|sum|made|make|earn|earned|earnings|income|revenue|sales|spent|spend|spending|bought|buy|purchased|purchase|cost|costs|pay|paid|unpaid|owe|owed|owing|outstanding|invoiced|uninvoiced|not|yet|jobs?|entries|entry|receipts?|expenses?|quotes?|projects?|number|count|average|avg|biggest|largest|highest|smallest|lowest|cheapest|most|least|expensive|show|list|give|tell|find|all|any|there|get|got|gst|tax|taxes|before|after|without|with|subtotal|by|per|each|month|monthly|week|weekly|year|yearly|store|stores|category|categories|customer|customers|client|clients|compare|vs|versus|than|so|far|please|last|this|be|it|that|these|those|ever|you|can|could|would|value|money|amount|work|worth|job's|s|time|times)\b/g;
+    function localPlan(q) {
+        var s = String(q || '').toLowerCase().replace(/[’']/g, "'").replace(/[?!.,]+/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!s) return null;
+        var ps = periods(s);
+        var ds = /\bquotes?\b|\bestimates?\b/.test(s) ? 'quotes' : /\bprojects?\b/.test(s) ? 'projects'
+            : /\b(spen[dt]|spending|bought|buy|purchas\w*|receipts?|expenses?|slipvault|stores?|cost me)\b/.test(s) ? 'receipts' : 'jobs';
+        var when = /\bwhen did (?:i|we) (?:buy|get|purchase|order)\b|\blast time (?:i|we) (?:bought|got|purchased)\b/.test(s);
+        if (when) ds = 'receipts';
+        var measure = when ? 'list'
+            : /\bhow many\b|\bnumber of\b|\bcount\b/.test(s) ? 'count'
+            : /\baverage\b|\bavg\b|\btypical\b|\bmean\b/.test(s) ? 'avg'
+            : /\b(biggest|largest|highest|most expensive|best|top)\b/.test(s) && !/\bby\b|\bmonths?\b|\bper\b/.test(s) ? 'max'
+            : /\b(smallest|lowest|cheapest|least)\b/.test(s) && !/\bby\b|\bper\b/.test(s) ? 'min'
+            : /^(list|show|which|what jobs|what receipts|what quotes|who)\b|\b(list|show me|which)\b/.test(s) ? 'list'
+            : /\bhow much\b|\btotal\b|\bsum\b|\bmade\b|\bmake\b|\bearn|\bincome\b|\brevenue\b|\bsales\b|\bspen[dt]\b|\bspending\b|\bgst\b|\bowe|\bowing\b|\boutstanding\b/.test(s) ? 'sum' : '';
+        var filters = [], label = [], text = s;
+        ps.forEach(function (p) { text = text.slice(0, p.i) + ' '.repeat(p.len) + text.slice(p.i + p.len); });
+        if (ds === 'jobs') {
+            if (/\b(unpaid|not paid|owe|owed|owes|owing|outstanding|waiting to be paid|haven't been paid|not been paid)\b/.test(s)) { filters.push({ field: 'status', op: 'eq', value: 'unpaid' }); label.push('unpaid'); }
+            else if (/\b(not invoiced|uninvoiced|without (?:an )?invoice|no invoice|haven't invoiced|need(?:s)? (?:an )?invoice)\b/.test(s)) { filters.push({ field: 'invoiced', op: 'is_false' }); label.push('not invoiced'); }
+            else if (/\bpaid\b/.test(s) && !/\bpaid for\b/.test(s)) { filters.push({ field: 'paid', op: 'is_true' }); label.push('paid'); }
+            else if (/\binvoiced\b/.test(s)) { filters.push({ field: 'invoiced', op: 'is_true' }); label.push('invoiced'); }
+        }
+        if (ds === 'quotes') { var qs = /\b(draft|sent|accepted|declined|rejected|approved)\b/.exec(s); if (qs) { filters.push({ field: 'status', op: 'eq', value: qs[1] === 'approved' ? 'accepted' : qs[1] === 'rejected' ? 'declined' : qs[1] }); label.push(qs[1]); } }
+        var field = /\bgst\b|\btax(es)?\b/.test(s) ? 'gst' : /\b(before|without|excluding|minus) (gst|tax)\b|\bsubtotal\b|\bpre ?tax\b/.test(s) ? (ds === 'receipts' ? 'subtotal' : ds === 'jobs' ? 'amount' : 'total') : 'total';
+        if (ds === 'quotes' || ds === 'projects') field = 'total';
+        var group = /\b(by|per|each|every) month\b|\bmonthly\b|\bmonth by month\b/.test(s) ? 'month' : /\b(by|per|each|every) week\b|\bweekly\b/.test(s) ? 'week' : /\b(by|per|each|every) year\b|\byearly\b|\byear by year\b/.test(s) ? 'year'
+            : /\b(by|per|each) (store|shop)\b|\bwhich stores?\b/.test(s) && ds === 'receipts' ? 'store' : /\b(by|per|each) categor(y|ies)\b|\bcategories\b/.test(s) && ds === 'receipts' ? 'category' : /\b(by|per|each) (customer|client)\b|\bwhich (customers|clients)\b/.test(s) ? 'customer' : '';
+        if (/\bbest months?\b|\bworst months?\b|\bbusiest months?\b/.test(s)) { group = 'month'; measure = 'sum'; }
+        // what the question is about: "at Oak St", "for John", "from Home Depot", "when did I buy drip edge"
+        var tw = '';
+        var tm = when ? /\b(?:buy|get|purchase|order|bought|got|purchased)\s+(?:the |some |a |an |my )?(.+)$/.exec(text) : /\b(?:at|on|for|from|to|with|about|called|named)\s+(.+)$/.exec(text);
+        if (tm) tw = tm[1];
+        else if (ds === 'receipts' && /\bon\b/.test(text)) { var on = /\bon\s+(.+)$/.exec(text); if (on) tw = on[1]; }
+        tw = tw.replace(LSTOP, ' ').replace(/\s+/g, ' ').trim();
+        if (tw) {
+            var tf = when ? 'items' : pickField(ds, tw);
+            if (!tf && ds === 'receipts') tf = 'items';
+            if (tf) { filters.push({ field: tf, op: 'contains', value: tw.split(' ').slice(0, 3).join(' ') }); label.push((tf === 'store' || tf === 'customer' ? (ds === 'receipts' ? 'at ' : 'for ') : tf === 'address' ? 'at ' : tf === 'items' ? 'for ' : 'with ') + tw); }
+            else if (!measure && !ps.length) return null;                   // not about your records
+        }
+        if (!measure) {
+            if (!filters.length && !ps.length && !group) return null;
+            measure = filters.length && !group ? 'list' : 'sum';
+        }
+        if (!/\b(made|make|earn|income|revenue|sales|spen[dt]|spending|bought|gst|tax|total|how much|owe|owing|outstanding|how many|count|number of|average|biggest|largest|highest|smallest|lowest|cheapest|list|show|which|when|best|worst|busiest|by|per|compare|vs|versus)\b/.test(s) && !ps.length && !filters.length) return null;
+        var noun = NOUN[ds][1], dsWord = { jobs: 'jobs', receipts: 'receipts', quotes: 'quotes', projects: 'projects' }[ds];
+        var defaultP = (measure === 'sum' || measure === 'avg' || measure === 'count' || group) && !filters.some(function (f) { return f.field === 'status' || f.field === 'invoiced'; }) && !when
+            ? { from: yearStart(), to: today(), label: 'this year' } : { from: '', to: '', label: '' };
+        var plist = ps.length ? ps.slice(0, 3) : [defaultP];
+        function lab(p) {
+            var what = measure === 'count' ? 'Number of ' + (label.length ? label.join(' ') + ' ' : '') + noun
+                : measure === 'avg' ? 'Average ' + dsWord.replace(/s$/, '') + (field === 'gst' ? ' GST' : '')
+                : measure === 'max' ? 'Biggest ' + dsWord.replace(/s$/, '') : measure === 'min' ? 'Smallest ' + dsWord.replace(/s$/, '')
+                : measure === 'list' ? (label.length ? label.join(' ').replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' : 'Your ') + noun
+                : field === 'gst' ? (ds === 'receipts' ? 'GST you paid' : 'GST collected') + (label.length ? ' (' + label.join(', ') + ')' : '')
+                : ds === 'receipts' ? 'Spent' + (label.length ? ' ' + label.join(' ') : '')
+                : ds === 'jobs' ? (filters.some(function (f) { return f.value === 'unpaid'; }) ? 'Owed to you' : 'Income') + (label.length && !filters.some(function (f) { return f.value === 'unpaid'; }) ? ' (' + label.join(', ') + ')' : '')
+                : 'Total of ' + (label.length ? label.join(' ') + ' ' : '') + noun;
+            var tail = ds === 'jobs' && (measure === 'sum' || measure === 'avg') && field !== 'gst' ? (field === 'amount' ? ' (before GST)' : ' (with GST)') : '';
+            return what + (p.label && p.label !== 'in all' ? ' ' + p.label : p.label === 'in all' ? ' (all time)' : '') + tail;
+        }
+        var queries = plist.map(function (p) {
+            return { dataset: ds, from: p.from, to: p.to, filters: filters.slice(), measure: measure, field: field, group: group || undefined, sort: when ? 'desc' : (group && ['month', 'week', 'year'].indexOf(group) < 0 ? 'desc' : undefined), sort_by: when ? 'date' : undefined, limit: when ? 6 : undefined, label: lab(p) };
+        });
+        var ans;
+        if (when) ans = queries[0].filters.length ? 'You last bought ' + esc(tw) + ' on {1}.' : '';
+        else if (queries.length === 1) ans = esc(queries[0].label) + ': {1}' + (group ? '' : '.');
+        else ans = queries.map(function (x, i) { return esc(x.label) + ': {' + (i + 1) + '}'; }).join('<br>');
+        if (group && /\bbest\b|\bbusiest\b/.test(s)) ans = 'Your best ' + (group === 'month' ? 'month' : group) + ' ' + (plist[0].label || '') + ' was {1}.';
+        return { queries: queries, answer: ans, local: true };
+    }
     var DO_RE = /\b(?:help me|walk me|guide me|show me how|teach me|step by step)\b/i;
     function pageNamed(q) {                                                // "open SlipVault", "go to JobNest": a page named in the question
         var qw = words(q);
@@ -35003,6 +35123,15 @@ window.IncVersion = VERSION;
         if (!ai || (!looksData && h.top >= 5)) {
             if (!looksData && localAnswer(q)) return;
             if (!ai) {
+                var lp = null; try { lp = localPlan(q); } catch (e0) { lp = null; }
+                if (lp) { prev = { q: q, plan: lp }; showResult(lp, lp.queries.map(run)); return; }
+                if (looksData || h.top < 2.5) { if (localAnswer(q)) return; }
+                say('bot', '<p>I’m not sure what you mean. Here are things I can answer straight away; tap one, or ask it your own way:</p><div class="ask-next">' +
+                    ['How much did I make last month?', 'Unpaid invoices', 'GST this year', 'Income by month', 'How many jobs this year?', 'What did I spend this month?', 'When did I buy shingles?', 'How do I change the background?'].map(function (x) { return '<button type="button" class="ask-chip" data-chip="a:' + esc(x) + '">' + esc(x) + '</button>'; }).join('') +
+                    '</div><p class="ask-note">Tip: <button type="button" class="ask-link" data-ask="ai">turn on the AI reader</button> and I’ll understand anything you ask in your own words.</p>');
+                return;
+            }
+            if (false) {
                 say('bot', '<p>' + (looksData ? 'To work out questions about your numbers in your own words I need the AI reader turned on.' : 'I didn’t find that in IncAtor. Try other words, or turn on the AI reader so I understand any question.') + '</p><div class="ask-acts"><button type="button" class="ask-act main" data-ask="ai"><i class="fas fa-magic"></i> Show me how</button></div>');
                 return;
             }
@@ -35031,6 +35160,8 @@ window.IncVersion = VERSION;
             }
         } catch (e) {
             try { wait.remove(); } catch (e2) { /* ignore */ }
+            var lp2 = null; try { lp2 = looksData ? localPlan(q) : null; } catch (e3) { lp2 = null; }
+            if (lp2) { prev = { q: q, plan: lp2 }; showResult(lp2, lp2.queries.map(run)); return; }   // the AI is not reachable: work it out here
             if (!localAnswer(q)) say('bot', '<p class="ask-bad">Sorry, that did not work: ' + esc(e && e.message || 'unknown problem') + '</p>');
         } finally { busy = false; }
     }
@@ -35178,7 +35309,7 @@ window.IncVersion = VERSION;
     window.addEventListener('hashchange', function () { goHash(location.hash); });
     try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'incator-open') goHash(e.data.url); }); } catch (e) { /* ignore */ }
 
-    window.IncAsk = { name: NAME, act: function (q) { open(); return localAction(q); }, jobnest: jobnest, isOpen: isOpen, open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt,
+    window.IncAsk = { plan: function (q) { return localPlan(q); }, name: NAME, act: function (q) { open(); return localAction(q); }, jobnest: jobnest, isOpen: isOpen, open: open, close: close, ask: function (q) { open(q); }, week: openWeek, run: run, weekNumbers: weekNumbers, lastWeek: lastWeek, payload: payload, sync: sync, prompt: prompt,
         tour: startTour, endTour: endTour, tours: TOURS, index: function () { INDEX = null; return index(); }, find: localHelp, show: function (id) { var x = byId(id); if (x) showItem(x); }, state: function () { return tour ? { id: tour.id, i: tour.i } : null; } };
 
     var st = document.createElement('style'); st.id = 'incator-ask-css';
@@ -35264,7 +35395,12 @@ window.IncVersion = VERSION;
         '.floating-nav .nav-ask .na-orb { width: 78%; height: 78%; max-width: 40px; max-height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 4px 14px rgba(168,85,247,.5); transition: box-shadow .25s, transform .25s; }',
         '.floating-nav .nav-ask .na-orb i { font-size: .85em; color: #fff; }',
         '.floating-nav .nav-ask.ask-live .na-orb { box-shadow: 0 0 0 3px rgba(240,171,252,.55), 0 4px 14px rgba(168,85,247,.6); transform: scale(1.06); }',
-        'html[data-theme="sleek"] .floating-nav .nav-ask .na-orb { background: var(--sk-fg); box-shadow: none; } html[data-theme="sleek"] .floating-nav .nav-ask .na-orb i { color: var(--sk-bg); }',
+        'html[data-theme="sleek"][data-theme] body .floating-nav .nav-ask .na-orb { background: var(--sk-fg) !important; background-image: none !important; box-shadow: none !important; } html[data-theme="sleek"][data-theme] body .floating-nav .nav-ask .na-orb i { color: var(--sk-bg) !important; -webkit-text-fill-color: var(--sk-bg) !important; }',
+        /* Sleek's bar: black and white like the rest of Sleek (Light: dark icons on white; Dark: light icons on charcoal) */
+        'html[data-theme="sleek"][data-theme] body .floating-nav { background: var(--sk-raise) !important; background-image: none !important; border-color: var(--sk-line2) !important; box-shadow: 0 10px 28px rgba(0,0,0,.12) !important; }',
+        'html[data-theme="sleek"][data-theme] body .floating-nav .nav-item:not(.nav-ask) { background: transparent !important; background-image: none !important; box-shadow: none !important; }',
+        'html[data-theme="sleek"][data-theme] body .floating-nav .nav-item:not(.nav-ask), html[data-theme="sleek"][data-theme] body .floating-nav .nav-item:not(.nav-ask) i { color: var(--sk-fg) !important; -webkit-text-fill-color: var(--sk-fg) !important; }',
+        'html[data-theme="sleek"][data-theme] body .floating-nav .nav-item.active:not(.nav-ask) { background: var(--sk-soft) !important; }',
         '@media (min-width: 701px) { .floating-nav .nav-item.nav-ask { display: none !important; } }',
         '.ask-ring { position: fixed; z-index: 9600; border-radius: 14px; pointer-events: none; border: 3px solid #e879f9; box-shadow: 0 0 0 9999px rgba(5,3,15,.5), 0 0 22px 4px rgba(232,121,249,.75); animation: askPulse 1.4s ease-in-out infinite; transition: top .15s, left .15s, width .15s, height .15s; }',
         '@keyframes askPulse { 50% { border-color: #f9a8d4; box-shadow: 0 0 0 9999px rgba(5,3,15,.5), 0 0 34px 10px rgba(232,121,249,.55); } }',
@@ -35327,7 +35463,7 @@ window.IncVersion = VERSION;
     'use strict';
     var ON = false, T = 0, busy = false;
     var MARK = 'data-cg', ORIG = 'data-cg-orig';
-    var SKIP = '#bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
+    var SKIP = 'html[data-theme="sleek"] .floating-nav, #bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
     var SCOPE = '.page.active, .floating-nav, #mobile-home, .modal.show, .modal.active, .modal-content, .ic-dialog-layer, .notification, .entry-menu, .nm-sheet, .inc-mini-in, #ask-sheet, #ask-tour, #bk-warn, .popup-overlay.active, .popup-content';
     function parse(c) { var m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; var p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
     function lum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
@@ -35376,7 +35512,10 @@ window.IncVersion = VERSION;
         el.style.setProperty('color', css(nc), 'important'); el.style.setProperty('-webkit-text-fill-color', css(nc), 'important');
     }
     function check(el) {
-        if (el.hasAttribute(MARK)) { recheck(el); return; }
+        if (el.hasAttribute(MARK)) {
+            if (el.closest(SKIP)) { var st0 = el.getAttribute(ORIG); if (st0) el.setAttribute('style', st0); else el.removeAttribute('style'); el.removeAttribute(MARK); el.removeAttribute(ORIG); el.removeAttribute('data-cg-fg'); return; }   // now looked after by its theme
+            recheck(el); return;
+        }
         if (el.closest(SKIP)) return;
         var icon = el.tagName === 'I';
         if (!icon) { var own = false; for (var n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 3 && n.textContent.trim().length > 0) { own = true; break; } if (!own) return; }
@@ -35446,7 +35585,7 @@ window.IncVersion = VERSION;
         if (!cnt) { cnt = document.createElement('span'); cnt.id = 'jn-count'; bar.appendChild(cnt); }
         var line = document.getElementById('view-summary-line'), chip = line && line.querySelector('.es-chip');
         var txt = chip ? chip.textContent.replace(/\s+/g, ' ').trim() : '';
-        if (!/entr|job/i.test(txt)) { var n = document.querySelectorAll('#entries-container .iconic-entry-card').length; txt = n ? n + ' entr' + (n === 1 ? 'y' : 'ies') : ''; }
+        if (!/entr|job/i.test(txt)) { var n = document.querySelectorAll('#entries-container .iconic-entry-card').length; txt = n + ' Job' + (n === 1 ? '' : 's') + ' ' + (window.incJobsPeriod ? incJobsPeriod() : ''); }
         var yr = document.getElementById('view-filter-summary');
         cnt.textContent = txt ? ((yr && yr.textContent.trim()) ? '· ' : '') + txt : '';
         return true;
