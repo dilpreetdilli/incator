@@ -35700,33 +35700,45 @@ window.IncVersion = VERSION;
 /* IncAtor - Snapora: your job photos from Shiftora, shown over IncAtor's own background.
    Snapora itself is the file snapora.html (Shiftora's own file, uploaded next to this index.html). It opens on top of
    IncAtor's moving background, in light or dark to match IncAtor, and shows the same job folders and photos as Shiftora.
-   IncAtor's own data is never touched. The app lock covers Snapora too.
-   The first time, signing in happens on Snapora's own page (Google doesn't allow it inside another page), then it comes back here.
-   Snapora opens from its page, the navigation bar (under More unless you add it in Settings > Appearance > Navigation bar),
-   a Home tile (Settings > Appearance > Home tiles) or search. "IncAtor" at its top left closes it. */
+   The app lock covers Snapora too. The first time, signing in happens on Snapora's own page (Google doesn't allow it
+   inside another page), then it comes back here. "IncAtor" at its top left closes it.
+   JobNest: the latest 10 jobs show their Snapora photos (matched by street, town and house number; taken from 60 days
+   before to 30 days after the job date) - a Snapora badge on the job and a "From Snapora" row in Job photos.
+   Shiftora: IncAtor hands Shiftora the addresses of its latest jobs and work orders, so Shiftora can make job sites with the
+   full address (Shiftora: Admin settings > Location and worksites > Job sites from IncAtor). Nothing else of IncAtor is sent.
+   It also links Shiftora to IncAtor's server, so Shiftora gets new work-order addresses even while IncAtor is closed. */
 (function () {
     'use strict';
-    var FILE = 'snapora.html', loadedAt = Date.now(), ov = null, frame = null, lastPg = 'home', openNow = false;
+    var FILE = 'snapora.html', TOKEN_KEY = 'sb-maluyhawbjmropvqzjqp-auth-token';
+    var loadedAt = Date.now(), ov = null, frame = null, lastPg = 'home', openNow = false;
+    var info = null, waiters = [], asks = {}, nextId = 1, matches = null, matchesAt = 0, matching = null;
     function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function toast(m, k) { try { showToast(m, k || 'info'); } catch (e) { /* ignore */ } }
+    function signedInBefore() { try { return !!localStorage.getItem(TOKEN_KEY); } catch (e) { return false; } }
     function tone() {
         try { if (window.IncMode && IncMode.mode) return IncMode.mode() === 'light' ? 'light' : 'dark'; } catch (e) { /* ignore */ }
         return document.documentElement.getAttribute('data-theme') === 'regular' ? 'light' : 'dark';
     }
     function curPg() { return (document.body && document.body.getAttribute('data-pg')) || 'home'; }
+
+    /* ---------- Snapora's page (kept ready, hidden until you open it) ---------- */
+    function build() {
+        if (ov) return;
+        var tn = tone();
+        ov = document.createElement('div'); ov.id = 'sn-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Snapora');
+        frame = document.createElement('iframe'); frame.id = 'sn-frame'; frame.title = 'Snapora';
+        frame.setAttribute('allow', 'camera; geolocation; web-share; clipboard-write; fullscreen');
+        frame.setAttribute('allowtransparency', 'true');
+        frame.style.colorScheme = tn;
+        frame.src = FILE + '?embed=1&tone=' + tn;
+        ov.appendChild(frame); document.body.appendChild(ov);
+    }
     function open() {
         if (navigator.onLine === false) { toast('Snapora needs the internet. Connect and try again.', 'error'); back(); return; }
         try { sessionStorage.setItem('snap.from', 'IncAtor'); sessionStorage.removeItem('snap.oauth'); } catch (e) { /* ignore */ }
-        var tn = tone();
-        if (!ov) {
-            ov = document.createElement('div'); ov.id = 'sn-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Snapora');
-            frame = document.createElement('iframe'); frame.id = 'sn-frame'; frame.title = 'Snapora';
-            frame.setAttribute('allow', 'camera; geolocation; web-share; clipboard-write; fullscreen');
-            frame.setAttribute('allowtransparency', 'true');
-            frame.src = FILE + '?embed=1&tone=' + tn;
-            ov.appendChild(frame); document.body.appendChild(ov);
-        }
-        frame.style.colorScheme = tn;
+        build();
+        var tn = tone(); frame.style.colorScheme = tn;
         try { frame.contentWindow.postMessage({ snapTone: tn }, location.origin); } catch (e) { /* not loaded yet: it reads the tone itself */ }
         openNow = true;
         document.documentElement.classList.add('sn-on');
@@ -35738,11 +35750,146 @@ window.IncVersion = VERSION;
         openNow = false;
         document.documentElement.classList.remove('sn-on');
         back();
+        setTimeout(function () { refreshMatches(true); }, 600);   // photos you just took show up in JobNest
     }
     function shown() {
         if (Date.now() - loadedAt < 2500) { back(); return; }   // reopened on start-up: stay where you were
         open();
     }
+
+    /* ---------- asking Snapora (it answers from its own page, signed in as you) ---------- */
+    window.addEventListener('message', function (e) {
+        if (!frame || e.source !== frame.contentWindow || e.origin !== location.origin || !e.data) return;
+        var d = e.data;
+        if (d.snapReady) {
+            info = d; var w = waiters; waiters = []; w.forEach(function (f) { f(d); });
+            if (d.signedIn) { setTimeout(shareJobs, 1500); setTimeout(linkServer, 2500); refreshMatches(true); }
+            return;
+        }
+        if (d.snapReply && asks[d.snapReply]) { var f = asks[d.snapReply]; delete asks[d.snapReply]; f(d); }
+    });
+    function whenReady(ms) {
+        build();
+        if (info) return Promise.resolve(info);
+        return new Promise(function (res) { waiters.push(res); setTimeout(function () { res(info || { signedIn: false, timeout: true }); }, ms || 20000); });
+    }
+    async function ask(what, extra) {
+        var r = await whenReady();
+        if (!r.signedIn) throw Object.assign(new Error('Sign in to Snapora first.'), { signin: true });
+        return new Promise(function (res, rej) {
+            var id = 'q' + (nextId++);
+            var t = setTimeout(function () { delete asks[id]; rej(new Error('Snapora didn’t answer.')); }, 30000);
+            asks[id] = function (d) { clearTimeout(t); if (d.ok) res(d.data); else rej(Object.assign(new Error(d.error || 'Snapora couldn’t answer.'), { signin: !!d.signin })); };
+            frame.contentWindow.postMessage(Object.assign({ snapAsk: what, id: id }, extra || {}), location.origin);
+        });
+    }
+    function day(v) { var s = String(v || ''); if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10); var d = new Date(s); return isNaN(d) ? '' : d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+    function latestJobs(n) {
+        var list = [];
+        try { list = (entries || []).filter(function (e) { return e && e.address && String(e.address).trim(); }).slice(); } catch (e) { list = []; }
+        list.sort(function (a, b) { return (Date.parse(b.timestamp || b.date) || 0) - (Date.parse(a.timestamp || a.date) || 0); });
+        return list.slice(0, n).map(function (e) { return { key: 'e:' + e.id, address: String(e.address), date: day(e.date) }; });
+    }
+    function drafts() { try { var a = JSON.parse(appStore.getItem('woDrafts') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+
+    /* ---------- Shiftora: the addresses of the latest jobs and work orders (for its job sites) ---------- */
+    async function shareJobs() {
+        if (!info || !info.signedIn || !info.admin) return;
+        var wo = drafts().filter(function (d) { return d && d.wo && d.wo.address; }).map(function (d) { return { key: 'd:' + d.id, address: String(d.wo.address), date: day(d.wo.date), kind: 'work order' }; });
+        var list = wo.concat(latestJobs(40).map(function (j) { return Object.assign(j, { kind: 'job' }); })).slice(0, 50);
+        if (!list.length) return;
+        var sig = JSON.stringify(list), last = {};
+        try { last = JSON.parse(localStorage.getItem('sn.shared') || '{}') || {}; } catch (e) { last = {}; }
+        if (last.sig === sig && Date.now() - (last.at || 0) < 6 * 3600000) return;   // nothing new
+        try { await ask('shareJobs', { jobs: list }); localStorage.setItem('sn.shared', JSON.stringify({ sig: sig, at: Date.now() })); } catch (e) { /* tried again later */ }
+    }
+
+    // Shiftora can also ask IncAtor's server (where Gmail work orders arrive) by itself, even while IncAtor is closed:
+    // IncAtor hands Shiftora the server's address and a key that only reads addresses. Checked again every 3 days.
+    async function linkServer() {
+        if (!info || !info.signedIn || !info.admin || !window.IncMail || !IncMail.api) return;
+        var last = 0; try { last = +localStorage.getItem('sn.link') || 0; } catch (e) { last = 0; }
+        if (Date.now() - last < 3 * 864e5) return;
+        try {
+            var r = await IncMail.api('/shiftora/link', {});
+            if (!r || !r.url || !r.key) return;
+            var d = await ask('linkServer', { url: r.url, key: r.key });
+            if (d && d.linked) localStorage.setItem('sn.link', String(Date.now()));
+        } catch (e) { /* no IncAtor server yet, or an older one: IncAtor still sends its jobs while it's open */ }
+    }
+
+    /* ---------- JobNest: Snapora photos of the latest 10 jobs ---------- */
+    function refreshMatches(force) {
+        if (!signedInBefore()) return Promise.resolve(null);
+        if (!force && matches && Date.now() - matchesAt < 120000) return Promise.resolve(matches);
+        if (matching) return matching;
+        matching = ask('jobPhotos', { jobs: latestJobs(10) }).then(function (m) { matches = m || {}; matchesAt = Date.now(); paintBadges(); refreshSection(); return matches; },
+            function () { return matches; }).then(function (m) { matching = null; return m; });
+        return matching;
+    }
+    function paintBadges() {
+        Array.prototype.forEach.call(document.querySelectorAll('.iconic-entry-card[data-entry-id]'), function (card) {
+            var key = 'e:' + card.getAttribute('data-entry-id'), m = matches && matches[key], b = card.querySelector('.sn-badge');
+            if (!m) { if (b) b.remove(); return; }
+            var n = m.photos.length, label = n + ' Snapora photo' + (n === 1 ? '' : 's');
+            if (!b) {
+                var meta = card.querySelector('.entry-meta'); if (!meta) return;
+                b = document.createElement('button'); b.type = 'button'; b.className = 'invoiced-badge sn-badge';
+                b.addEventListener('click', function (e) { e.stopPropagation(); try { IncJobPhotos.open(key); } catch (x) { /* ignore */ } });
+                meta.appendChild(b);
+            }
+            if (b.getAttribute('aria-label') !== label) { b.setAttribute('aria-label', label); b.title = label; b.innerHTML = '<i class="fas fa-snapora"></i><span>' + n + '</span>'; }
+        });
+    }
+    var galJob = null;
+    function sectionHtml(job) {
+        var latest = latestJobs(10).some(function (j) { return j.key === job; });
+        if (!latest) return '';
+        if (!signedInBefore()) return '<div class="sn-sec"><h4><i class="fas fa-snapora"></i> From Snapora</h4><p class="sn-sec-note">Sign in to Snapora once to also see Shiftora’s photos of this job here.</p><button type="button" class="app-btn sn-sec-open"><i class="fas fa-snapora mr-2"></i>Open Snapora</button></div>';
+        if (!matches) return '<div class="sn-sec"><h4><i class="fas fa-snapora"></i> From Snapora</h4><p class="sn-sec-note">Looking in Snapora…</p></div>';
+        var m = matches[job];
+        if (!m) return '<div class="sn-sec"><h4><i class="fas fa-snapora"></i> From Snapora</h4><p class="sn-sec-note">No Snapora photos at this address around the job’s date.</p></div>';
+        return '<div class="sn-sec"><h4><i class="fas fa-snapora"></i> From Snapora · ' + m.photos.length + ' photo' + (m.photos.length === 1 ? '' : 's') + '</h4>' +
+            '<p class="sn-sec-note">' + esc(m.groups.map(function (g) { return g.label; }).join(', ')) + ' · taken with Shiftora. Tap a photo to open it in Snapora.</p>' +
+            '<div class="jp-grid">' + m.photos.map(function (p) {
+                return '<button type="button" class="jp-th sn-th" data-sn-group="' + esc(p.group_id) + '" aria-label="Snapora photo' + (p.note ? '. Note: ' + esc(p.note) : '') + '"><img alt="" loading="lazy" src="' + esc(p.thumb) + '">' +
+                    (p.phase && p.phase !== 'during' ? '<em class="sn-ph">' + (p.phase === 'before' ? 'Before' : 'After') + '</em>' : '') + '</button>';
+            }).join('') + '</div>' +
+            '<button type="button" class="app-btn sn-sec-open" data-sn-group="' + esc(m.groups[0].id) + '"><i class="fas fa-snapora mr-2"></i>Open in Snapora</button></div>';
+    }
+    function refreshSection() {
+        var body = document.querySelector('.jp-ov .jp-body'); if (!body || !galJob) return;
+        var old = body.querySelector('.sn-sec'), html = sectionHtml(galJob);
+        if (old) old.remove();
+        if (html) body.insertAdjacentHTML('beforeend', html);
+    }
+    function hookGallery() {
+        if (!window.IncJobPhotos || IncJobPhotos._sn) return !!(window.IncJobPhotos && IncJobPhotos._sn);
+        var orig = IncJobPhotos.open;
+        IncJobPhotos.open = function (job) {
+            var r = orig.apply(this, arguments);
+            galJob = String(job || '');
+            var ovl = document.querySelector('.jp-ov');
+            if (ovl) {
+                var body = ovl.querySelector('.jp-body');
+                refreshSection();
+                try { new MutationObserver(function () { if (body.isConnected && !body.querySelector('.sn-sec')) refreshSection(); }).observe(body, { childList: true }); } catch (e) { /* ignore */ }
+                ovl.addEventListener('click', function (e) {
+                    var b = e.target.closest('[data-sn-group], .sn-sec-open'); if (!b) return;
+                    e.stopPropagation();
+                    var gid = b.getAttribute('data-sn-group');
+                    try { IncJobPhotos.close(); } catch (x) { /* ignore */ }
+                    open();
+                    if (gid) ask('openGroup', { groupId: gid }).catch(function () { /* Snapora shows its list */ });
+                }, true);
+                refreshMatches(false).then(refreshSection);
+            }
+            return r;
+        };
+        IncJobPhotos._sn = true;
+        return true;
+    }
+
     function injectPage() {
         var settings = $('settings-page'); if (!settings || $('snapora-page')) return;
         settings.parentNode.insertAdjacentHTML('beforeend',
@@ -35758,8 +35905,13 @@ window.IncVersion = VERSION;
         $('sn-open').addEventListener('click', open);
         try { new MutationObserver(function () { if (pg.classList.contains('active') && !pg._on) { pg._on = 1; shown(); } else if (!pg.classList.contains('active')) pg._on = 0; })
             .observe(pg, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
-        try { new MutationObserver(function () { var c = curPg(); if (c !== 'snapora') lastPg = c; })
+        try { new MutationObserver(function () { var c = curPg(); if (c !== 'snapora') lastPg = c; if (c === 'view') refreshMatches(false); })
             .observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+        // JobNest cards are drawn again often: put the Snapora badges back each time
+        try { var bt = 0; new MutationObserver(function (ms) {
+            if (!matches) return;
+            if (ms.some(function (m) { return Array.prototype.some.call(m.addedNodes, function (n) { return n.nodeType === 1 && (n.classList.contains('iconic-entry-card') || (n.querySelector && n.querySelector('.iconic-entry-card'))); }); })) { clearTimeout(bt); bt = setTimeout(paintBadges, 80); }
+        }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* ignore */ }
         // navigation bar (it goes under "More" unless you add it to the bar in Settings > Appearance > Navigation bar)
         var nav = document.querySelector('.floating-nav');
         if (nav && !nav.querySelector('[data-page="snapora"]')) {
@@ -35792,11 +35944,26 @@ window.IncVersion = VERSION;
         'html.sn-on #app,html.sn-on .floating-nav,html.sn-on .lgx-lens,html.sn-on #inc-mini,html.sn-on #ask-fab,html.sn-on #rc-selbar,html.sn-on #undo-bar,html.sn-on #notification-container{visibility:hidden!important}' +
         '@keyframes sn-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}' +
         '@media (prefers-reduced-motion: reduce){html.sn-on #sn-ov{animation:none}}' +
+        /* JobNest: Snapora badge and the "From Snapora" row in Job photos */
+        '.invoiced-badge.sn-badge{cursor:pointer;display:inline-flex;align-items:center;gap:5px;color:#fed7aa;border-color:rgba(251,146,60,.55);background:rgba(234,88,12,.16);font:inherit;font-size:.78rem}' +
+        '.sn-badge i{font-size:.85em}' +
+        '.sn-sec{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)}' +
+        '.sn-sec h4{margin:0 0 4px;font-size:.78rem;letter-spacing:.07em;text-transform:uppercase;color:#fdba74;display:flex;align-items:center;gap:6px}' +
+        '.sn-sec-note{margin:0 0 8px;font-size:.8rem;color:rgba(255,255,255,.75)}' +
+        '.sn-sec .sn-th{position:relative}.sn-sec .sn-th img{width:100%;height:100%;object-fit:cover;display:block}' +
+        '.sn-ph{position:absolute;right:4px;top:4px;padding:1px 6px;border-radius:999px;font:700 .6rem var(--font,inherit);font-style:normal;color:#fff;background:rgba(0,0,0,.6)}' +
+        '.sn-sec-open{margin-top:10px}' +
         '.fa-snapora{--ic:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Ccircle%20cx=%2712%27%20cy=%2712%27%20r=%279%27/%3E%3Cpath%20d=%27M14.3%208l5.7%209.9M9.7%208h11.4M7.4%2012l5.7-9.9M9.7%2016L4%206.1M14.3%2016H2.9M16.6%2012l-5.7%209.9%27/%3E%3C/svg%3E")}';
     document.head.appendChild(css);
-    function boot() { injectPage(); setTimeout(injectPage, 1500); fromSignIn(); }
+    function boot() {
+        injectPage(); setTimeout(injectPage, 1500); fromSignIn();
+        if (!hookGallery()) { var n = 0, iv = setInterval(function () { if (hookGallery() || ++n > 40) clearInterval(iv); }, 250); }
+        // signed in to Snapora on this device before: get it ready in the background (JobNest photos, job addresses for Shiftora)
+        setTimeout(function () { if (signedInBefore() && navigator.onLine !== false) build(); }, 4000);
+        setInterval(function () { if (info && info.signedIn && document.visibilityState === 'visible') shareJobs(); }, 30 * 60000);
+    }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-    window.IncSnapora = { open: open, close: close, isOpen: function () { return openNow; } };
+    window.IncSnapora = { open: open, close: close, isOpen: function () { return openNow; }, refresh: function () { return refreshMatches(true); } };
 })();
 </script>
 </body>
