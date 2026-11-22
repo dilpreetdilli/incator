@@ -13600,7 +13600,7 @@ bootstrap();
 'use strict';
 if (window.IncNavMore) return;
 var OLD = 'navPinned', KO = 'navOrder', KC = 'navCount', DEF = ['home', 'add', 'view', 'receipts', 'summary', 'trash'], DEFN = 6;
-var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', account: 'Account' };
+var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', account: 'Account', snapora: 'Snapora' };
 var nav = null, moreBtn = null, sheet = null, applying = false;
 function reduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 function items() { return nav ? Array.prototype.filter.call(nav.querySelectorAll('.nav-item'), function (it) { return it !== moreBtn && it.getAttribute('data-page'); }) : []; }
@@ -17073,7 +17073,7 @@ document.addEventListener('DOMContentLoaded', populateGstPeriods); setTimeout(po
         if (/^https?:$/.test(location.protocol)) { fetch('apple-touch-icon.png', { method: 'HEAD', cache: 'no-store' }).then(r => { if (!r.ok) useBuiltIn(); }, useBuiltIn); }
         else useBuiltIn();
     } catch (e) { /* icon is optional */ }
-    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) { navigator.serviceWorker.register('sw.js').catch(function () { /* optional file */ }); }
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) { navigator.serviceWorker.register('sw-snap.js').catch(function () { navigator.serviceWorker.register('sw.js').catch(function () { /* optional file */ }); }); }
     let deferred = null;
     window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferred = ev; refresh(); });
     window.addEventListener('appinstalled', () => { deferred = null; refresh(); });
@@ -33805,10 +33805,10 @@ window.IncVersion = VERSION;
    The pages and every feature are exactly the same as in the other themes. */
 (function () {
     'use strict';
-    var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', roofcalc: 'RoofVision', account: 'Account' };
+    var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', roofcalc: 'RoofVision', snapora: 'Snapora', account: 'Account' };
     var SHORT = { projects: 'Quotes', data: 'Backup', summary: 'Analytics', receipts: 'SlipVault', roofcalc: 'RoofVision' };
     var ICON = { home: 'home', add: 'plus', view: 'layer-group', projects: 'briefcase', receipts: 'receipt', summary: 'chart-bar', data: 'cloud', settings: 'cog', trash: 'trash' };
-    var TINT = { home: '#2563eb', add: '#2563eb', view: '#4f46e5', projects: '#e8710a', receipts: '#16a34a', summary: '#0284c7', data: '#0891b2', settings: '#6b7280', trash: '#dc2626', roofcalc: '#92643a' };
+    var TINT = { home: '#2563eb', add: '#2563eb', view: '#4f46e5', projects: '#e8710a', receipts: '#16a34a', summary: '#0284c7', data: '#0891b2', settings: '#6b7280', trash: '#dc2626', roofcalc: '#92643a', snapora: '#e8590c' };
     var LOGO = [['Blue', '#2563eb'], ['Purple', '#7c3aed'], ['Pink', '#db2777'], ['Red', '#dc2626'], ['Orange', '#ea580c'], ['Gold', '#ca8a04'], ['Green', '#16a34a'], ['Teal', '#0d9488'], ['Sky', '#0284c7'], ['Graphite', '#374151']];
     var RING = [['Rainbow', 'rainbow'], ['Same as logo', 'match']].concat(LOGO).concat([['No rings', 'none']]);
     function esc(x) { return String(x == null ? '' : x).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -34091,10 +34091,11 @@ window.IncVersion = VERSION;
         receipts: { n: 'SlipVault', ic: 'receipt', sel: '#mh-tile-receipts' },
         trash: { n: 'Trash', ic: 'trash', sel: '.mh-tt', g: 'linear-gradient(135deg,#f87171,#dc2626)', cls: 'mh-tt' },
         roofcalc: { n: 'RoofVision', ic: 'house-roof', sel: '.mh-trv', g: 'linear-gradient(135deg,#f59e0b,#b45309)', cls: 'mh-trv' },
-        settings: { n: 'Settings', ic: 'cog', sel: '.mh-tst', g: 'linear-gradient(135deg,#94a3b8,#475569)', cls: 'mh-tst' }
+        settings: { n: 'Settings', ic: 'cog', sel: '.mh-tst', g: 'linear-gradient(135deg,#94a3b8,#475569)', cls: 'mh-tst' },
+        snapora: { n: 'Snapora', ic: 'snapora', sel: '.mh-tsn', g: 'linear-gradient(135deg,#fb923c,#c2410c)', cls: 'mh-tsn' }
     };
-    var ORDER = ['view', 'quotes', 'projects', 'summary', 'data', 'receipts', 'trash', 'roofcalc', 'settings'];
-    var DEF = { six: ORDER.slice(0, 6), nine: ORDER.slice() };
+    var ORDER = ['view', 'quotes', 'projects', 'summary', 'data', 'receipts', 'trash', 'roofcalc', 'settings', 'snapora'];
+    var DEF = { six: ORDER.slice(0, 6), nine: ORDER.slice(0, 9) };   // the original tiles; Snapora can be added in Settings > Appearance > Home tiles
     var MAX = { six: 6, nine: 9 };
     function S() { try { return appSettings || {}; } catch (e) { return {}; } }
     function save(v) { try { appSettings.homeTiles = v; appStore.setItem('appSettings', JSON.stringify(appSettings)); } catch (e) { /* ignore */ } }
@@ -34380,6 +34381,7 @@ window.IncVersion = VERSION;
         { pg: 'quotes', t: 'Quotes', k: 'quote estimate proposal' },
         { pg: 'projects', t: 'Projects', k: 'project' },
         { pg: 'roofcalc', t: 'RoofVision', k: 'roof calculator measure squares materials' },
+        { pg: 'snapora', t: 'Snapora', k: 'snapora photos pictures camera job photos before after shiftora' },
         { pg: 'data', t: 'Backup & Data', k: 'backup restore export import google drive delete' },
         { pg: 'trash', t: 'Trash', k: 'deleted restore bin' },
         { pg: 'settings', t: 'Settings', k: 'settings options preferences' }
@@ -35692,6 +35694,72 @@ window.IncVersion = VERSION;
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
     window.IncRegular = { on: on, paint: paint, colorFor: colorFor };
+})();
+</script>
+<script id="incator-snapora">
+/* IncAtor - Snapora: your job photos from Shiftora, opened from IncAtor.
+   Snapora itself is the file snapora.html (Shiftora's own file, uploaded next to this index.html). It signs in with the
+   Google account you use for Shiftora and shows the same job folders and photos. IncAtor's own data is never touched.
+   Snapora opens from its page, the navigation bar (under More unless you add it in Settings > Appearance > Navigation bar),
+   a Home tile (Settings > Appearance > Home tiles) or search. Its Back button returns to IncAtor. */
+(function () {
+    'use strict';
+    var FILE = 'snapora.html', loadedAt = Date.now(), going = 0;
+    function $(id) { return document.getElementById(id); }
+    function toast(m, k) { try { showToast(m, k || 'info'); } catch (e) { /* ignore */ } }
+    function launch() {
+        if (going) return;
+        if (navigator.onLine === false) { toast('Snapora needs the internet. Connect and try again.', 'error'); return; }
+        going = 1;
+        try { sessionStorage.setItem('snap.from', 'IncAtor'); sessionStorage.removeItem('snap.oauth'); } catch (e) { /* ignore */ }
+        location.href = FILE;
+        setTimeout(function () { going = 0; }, 5000);
+    }
+    function shown() {
+        if (Date.now() - loadedAt < 2500) { try { showPage('home'); } catch (e) { /* ignore */ } return; }   // reopened on start-up: stay on Home
+        setTimeout(function () { var pg = $('snapora-page'); if (pg && pg.classList.contains('active')) launch(); }, 450);
+    }
+    function injectPage() {
+        var settings = $('settings-page'); if (!settings || $('snapora-page')) return;
+        settings.parentNode.insertAdjacentHTML('beforeend',
+            '<div id="snapora-page" class="page">' +
+            '<div class="back-btn animate-item" onclick="showPage(\'home\')"><i class="fas fa-arrow-left"></i> Back to Home</div>' +
+            '<div class="stunning-form-container animate-item"><div class="magical-header"><div class="floating-orb orb-1"></div><div class="floating-orb orb-2"></div><div class="floating-orb orb-3"></div>' +
+            '<div class="header-content"><div class="magic-icon"><i class="fas fa-snapora"></i><div class="icon-glow"></div></div>' +
+            '<h2 class="magic-title">Snapora</h2><p class="magic-subtitle">Job photos, shared with Shiftora</p></div></div>' +
+            '<div class="sn-card"><p class="sn-wait"><i class="fas fa-circle-notch fa-spin"></i> Opening Snapora…</p>' +
+            '<button type="button" class="app-btn sn-open" id="sn-open"><i class="fas fa-snapora mr-2"></i>Open Snapora</button>' +
+            '<p class="sn-note">The same job folders and photos as Snapora in Shiftora. The first time, sign in with the Google account you use for Shiftora.</p></div>' +
+            '</div></div>');
+        var pg = $('snapora-page');
+        $('sn-open').addEventListener('click', function () { going = 0; launch(); });
+        try { new MutationObserver(function () { if (pg.classList.contains('active') && !pg._on) { pg._on = 1; shown(); } else if (!pg.classList.contains('active')) pg._on = 0; })
+            .observe(pg, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
+        // navigation bar (it goes under "More" unless you add it to the bar in Settings > Appearance > Navigation bar)
+        var nav = document.querySelector('.floating-nav');
+        if (nav && !nav.querySelector('[data-page="snapora"]')) {
+            var it = document.createElement('div'); it.className = 'nav-item'; it.setAttribute('data-tooltip', 'Snapora'); it.setAttribute('data-page', 'snapora');
+            it.setAttribute('onclick', "navigateToPage('snapora')"); it.innerHTML = '<i class="fas fa-snapora"></i>';
+            var ref = nav.querySelector('[data-page="summary"]'); if (ref) nav.insertBefore(it, ref); else nav.appendChild(it);
+            try { if (window.IncNavMore && IncNavMore.apply) IncNavMore.apply(); } catch (e) { /* ignore */ }
+        }
+    }
+    // back from Snapora: the phone may show this screen exactly as it was left, so go Home
+    window.addEventListener('pageshow', function (e) {
+        going = 0;
+        var pg = $('snapora-page');
+        if (e.persisted && pg && pg.classList.contains('active')) { try { showPage('home'); } catch (x) { /* ignore */ } }
+    });
+    var css = document.createElement('style'); css.id = 'sn-css';
+    css.textContent = '#snapora-page .sn-card{display:grid;gap:14px;justify-items:center;text-align:center;padding:26px 18px 30px}' +
+        '#snapora-page .sn-wait{font-weight:600;opacity:.85;margin:0}#snapora-page .sn-open{min-width:230px;justify-content:center}' +
+        '#snapora-page .sn-note{font-size:14px;opacity:.75;max-width:440px;margin:0;line-height:1.45}' +
+        '.mh-tsn .mh-tile-icon i{color:#fff}' +
+        '.fa-snapora{--ic:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2024%2024%27%20fill=%27none%27%20stroke=%27%23000%27%20stroke-width=%272%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%3E%3Ccircle%20cx=%2712%27%20cy=%2712%27%20r=%279%27/%3E%3Cpath%20d=%27M14.3%208l5.7%209.9M9.7%208h11.4M7.4%2012l5.7-9.9M9.7%2016L4%206.1M14.3%2016H2.9M16.6%2012l-5.7%209.9%27/%3E%3C/svg%3E")}';
+    document.head.appendChild(css);
+    function boot() { injectPage(); setTimeout(injectPage, 1500); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    window.IncSnapora = { open: launch };
 })();
 </script>
 </body>
