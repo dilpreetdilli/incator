@@ -13603,7 +13603,17 @@ bootstrap();
     }
     function start() {
         sync();
-        if (window.MutationObserver) { var mo = new MutationObserver(sync); document.querySelectorAll('.page').forEach(function (pg) { mo.observe(pg, { attributes: true, attributeFilter: ['class'] }); }); }
+        if (!window.MutationObserver) return;
+        var mo = new MutationObserver(sync), seen = [], parents = [];
+        function watch() {                                              // pages added later (RoofVision, Snapora...) are watched too
+            document.querySelectorAll('.page').forEach(function (pg) {
+                if (seen.indexOf(pg) < 0) { seen.push(pg); mo.observe(pg, { attributes: true, attributeFilter: ['class'] }); }
+                var par = pg.parentNode; if (par && parents.indexOf(par) < 0) { parents.push(par); add.observe(par, { childList: true }); }
+            });
+        }
+        var add = new MutationObserver(function () { watch(); sync(); });
+        watch();
+        setTimeout(function () { watch(); sync(); }, 3000);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
@@ -24589,7 +24599,7 @@ function mapColors(val, fn, og) { var changed = false; var v = val.replace(COL, 
 var TEXT = ['color', '-webkit-text-fill-color', 'fill', 'caret-color', '-webkit-text-stroke-color'];
 var FILL = ['background', 'background-color', 'background-image'];
 var LINE = ['border', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline', 'outline-color', 'stroke', 'column-rule-color'];
-var SKIP = /#inv-sheet|#wm-home|\.hs-|#wm-trip|\.tr-|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|#bk-warn|\.bkw-|#rg-|\.rg[nsmp]-|html\.lm|html\.glass-op/;
+var SKIP = /#inv-sheet|#wm-home|\.hs-|#wm-trip|\.tr-|#wm-boy|\.wm-office|\.ob-|#pg-head|\.iv-|\.wm-zzz|\.zb-|\.wm-sleep|\.theme-prev|\.bgx|bgpv|sky-pv|#inc-sky|#inc-stars|#inc-shoot|\.jp-view|\.jpc|\.rc-cam|\.rc-view|\.icg-|\.ico-|ic-gate|\.lgx-lens|\.cel-layer|\.pn-ed|\.floating-bubbles|\.bubble|\.cbub|\.fa-[a-z-]+\s*$|::-webkit-scrollbar|\.isk-|\.ie-scene|#inc-lock|\.il-|#ptr|#bk-warn|\.bkw-|#rg-|\.rg[nsmp]-|html\.lm|html\.glass-op/;
 var SKIP_OG = new RegExp(SKIP.source.replace('|html\\.lm', ''));      // the hand-made light touches are read too (Sleek in light)
 function skipped(sel, og) { return (og ? SKIP_OG : SKIP).test(sel) || /\.theme-prev/.test(sel) || (SLEEK && OTHER_THEME.test(sel)) || (ORB && /\.mh-ring|\.mh-orb/.test(sel)); }
 var SHORT = { background: 'fill', border: 'line', 'border-color': 'line', 'border-top': 'line', 'border-right': 'line', 'border-bottom': 'line', 'border-left': 'line', outline: 'line' };
@@ -24705,7 +24715,7 @@ function fixInline(el) {
     }
     el.setAttribute('data-lm-done', el.getAttribute('style'));
 }
-var SKIPEL = '#bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
+var SKIPEL = '#ptr, #bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .bgx, .bgpv, .sky-pv, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .ic-overlay, .lgx-lens, .cel-layer, .pn-ed, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .rc-cic, .bz-dot';
 function fixAll(root) { Array.prototype.forEach.call((root || document).querySelectorAll('[style]'), fixInline); }
 function undoInline() { Array.prototype.forEach.call(document.querySelectorAll('[' + ORIG + ']'), function (el) { el.setAttribute('style', el.getAttribute(ORIG)); el.removeAttribute(ORIG); el.removeAttribute('data-lm-done'); }); }
 var mo = null, hm = null, t = 0;
@@ -26419,7 +26429,7 @@ window.IncRoof = { calc: calc, job: () => job, len: len, lenInfo: lenInfo, plan:
 'use strict';
 if (window.IncInk) return;
 var BRIGHT = { alpine: 1, canyon: 1, seaset: 1, hills: 1, partly: 1, overcast: 1, rooftops: 1, snowpines: 1, waves: 1, pines: 1 };
-var SKIP = '#bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, .bgx, #inc-sky, #inc-stars, .floating-bubbles, .rc-cam, .jp-view, .pn-ed, .bgpv, .sky-pv, .cel-layer, svg, canvas, .lgx-lens, .ie-scene';
+var SKIP = '#ptr, #bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, .bgx, #inc-sky, #inc-stars, .floating-bubbles, .rc-cam, .jp-view, .pn-ed, .bgpv, .sky-pv, .cel-layer, svg, canvas, .lgx-lens, .ie-scene';
 function bgKey() { try { return window.IncSky ? IncSky.mode() : 'theme'; } catch (e) { return 'theme'; } }
 function active() { var k = bgKey(); return !!k && k !== 'theme' && !document.documentElement.classList.contains('lm'); }
 function bright() { return active() && !!BRIGHT[bgKey()]; }
@@ -29642,7 +29652,7 @@ if (window.IncTextSize) return;
 var DEF = 30, root = document.documentElement, base = 0, done = new WeakSet(), cur = null;
 function S() { try { var v = +appSettings.textSize; return v >= 1 && v <= 100 ? Math.round(v) : DEF; } catch (e) { return DEF; } }
 function factor(v) { v = Math.max(1, Math.min(100, +v || DEF)); return v <= DEF ? 0.85 + (v - 1) / (DEF - 1) * 0.15 : 1 + (v - DEF) / (100 - DEF) * 0.5; }
-var SKIP = /#bk-warn|\.bkw-|#rg-|\.rg[nsmp]-|\.iv-|#inv-sheet|\.ilm-|\.ilb-|#qz-doc|\.qd-|\.qz-doc|\.qt-|\.hs-|\.zb-|\.ob-|\.wm-scene|#wm-|\.trip-|@page/;
+var SKIP = /#ptr|#bk-warn|\.bkw-|#rg-|\.rg[nsmp]-|\.iv-|#inv-sheet|\.ilm-|\.ilb-|#qz-doc|\.qd-|\.qz-doc|\.qt-|\.hs-|\.zb-|\.ob-|\.wm-scene|#wm-|\.trip-|@page/;
 function fixRules(list) {                                               // text set in fixed pixels follows the same factor
     for (var i = 0; i < list.length; i++) {
         var r = list[i];
@@ -33513,7 +33523,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.22 (v74)';
+var VERSION = '2026.11.22 (v75)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -34413,6 +34423,7 @@ window.IncVersion = VERSION;
         { sel: '#ts-range', pg: 'settings', t: 'Text size', k: 'text size font bigger smaller larger read' },
         { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
         { sel: '#gd-auto', pg: 'data', t: 'Make backups fully automatic', k: 'automatic backups stopped reconnect google drive keeps asking backup stopped always backup never stop' },
+        { pg: 'home', t: 'Pull down to refresh', k: 'refresh reload pull down swipe down update sync now newest data' },
         { sel: '#shf-card', pg: 'data', t: 'Shiftora check-ins', k: 'shiftora check in check-ins history job addresses snapora link when did shiftora' },
         { sel: '#ht-box', pg: 'settings', t: 'Home tiles', k: 'home tiles cards choose which tiles home page shortcuts add trash roofvision settings tile order' },
         { sel: '#rg-tune', pg: 'settings', t: 'IncAtor logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
@@ -35483,7 +35494,7 @@ window.IncVersion = VERSION;
     'use strict';
     var ON = false, T = 0, busy = false;
     var MARK = 'data-cg', ORIG = 'data-cg-orig';
-    var SKIP = 'html[data-theme="sleek"] .floating-nav, #bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
+    var SKIP = 'html[data-theme="sleek"] .floating-nav, #ptr, #bk-warn, #rg-tune, #rg-menu, #rg-side, #rg-nav, #inv-sheet, .theme-prev, .theme-card, .bgx, .bgpv, .sky-pv, .sky-opt .sky-art, #inc-sky, .jp-view, .jpc, .rc-cam, .rc-view, .lgx-lens, .cel-layer, .floating-bubbles, #inc-lock, .gsw, .sky-dots, .bz-dot, canvas, svg, .pdf-page, .inv-paper, .ie-scene, .empty-illus, .glow-sw, [data-cg-skip]';
     var SCOPE = '.page.active, .floating-nav, #mobile-home, .modal.show, .modal.active, .modal-content, .ic-dialog-layer, .notification, .entry-menu, .nm-sheet, .inc-mini-in, #ask-sheet, #ask-tour, #bk-warn, .popup-overlay.active, .popup-content';
     function parse(c) { var m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; var p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
     function lum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
@@ -35732,6 +35743,14 @@ window.IncVersion = VERSION;
     }
     function tm(d) { return new Date(d).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
     function ago(t) { var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; }
+    function nice(d) { var t = new Date(d + 'T12:00:00'); return isNaN(t) ? d : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+    function addrHtml(j) {                                             // one address: the full address, where it came from, and the parts Shiftora read from it
+        if (typeof j === 'string') return '<div class="shf-ad"><b>' + esc(j) + '</b></div>';     // check-ins kept by an older server: the address only
+        var parts = [['No.', j.num], ['Street', j.street], ['Town', j.locality], ['Province', j.region], ['Postal code', j.postal]].filter(function (p) { return p[1]; });
+        var from = (j.kind === 'work order' ? 'Work order' : j.kind === 'job' ? 'Job' : (j.kind || '')) + (j.date ? ' · ' + nice(j.date) : '');
+        return '<div class="shf-ad"><b>' + esc(j.address || '') + '</b>' + (from ? '<span class="shf-from">' + esc(from) + '</span>' : '') +
+            (parts.length ? '<span class="shf-parts">' + parts.map(function (p) { return '<span><em>' + esc(p[0]) + '</em> ' + esc(p[1]) + '</span>'; }).join('') + '</span>' : '<span class="shf-parts"><span>Shiftora could not split this address into parts</span></span>') + '</div>';
+    }
     function paint() {
         var head = $('shf-head'), body = $('shf-body'), sum = $('shf-sum'), box = $('shf-log'); if (!head) return;
         head.setAttribute('aria-expanded', String(open)); body.hidden = !open; box.classList.toggle('open', open);
@@ -35750,8 +35769,8 @@ window.IncVersion = VERSION;
                 if (dl !== day) { day = dl; html += '<div class="gdl-day">' + esc(dl) + '</div>'; }
                 var a = (x.a || []).filter(Boolean);
                 html += '<div class="gdl-row shf-row"><span class="gdl-ri"><i class="fas fa-snapora"></i></span><span class="gdl-rt"><b>' + esc(tm(x.at)) + '</b><small>' +
-                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + '</small>' +
-                    (a.length ? '<details class="shf-a"><summary>Show addresses</summary><ul>' + a.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul></details>' : '') + '</span></div>';
+                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + (x.asked ? ' (Shiftora asked for up to ' + x.asked + ')' : '') + '</small>' +
+                    (a.length ? '<details class="shf-a"><summary>What Shiftora took</summary>' + a.map(addrHtml).join('') + '</details>' : '') + '</span></div>';
             });
         }
         body.innerHTML = html;
@@ -35773,7 +35792,147 @@ window.IncVersion = VERSION;
     window.IncShiftoraLog = { open: function () { open = true; paint(); refresh(true); }, refresh: refresh, list: function () { return list; } };
     var st = document.createElement('style'); st.id = 'incator-shiftora-log-css';
     st.textContent = '.shf-ic{background:rgba(234,88,12,.2)!important;color:#fb923c!important}' +
-        '.shf-a{margin-top:4px;font-size:.74rem}.shf-a summary{cursor:pointer;opacity:.8}.shf-a ul{margin:4px 0 0;padding-left:18px;opacity:.85}.shf-a li{margin:2px 0}';
+        '.shf-a{margin-top:4px;font-size:.76rem}.shf-a summary{cursor:pointer;opacity:.85;font-weight:600;padding:2px 0}' +
+        '.shf-ad{margin:6px 0 0;padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.09);display:grid;gap:3px}.shf-ad b{font-size:.84rem;font-weight:700}' +
+        '.shf-from{font-size:.72rem;opacity:.75}.shf-parts{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.72rem;opacity:.9}.shf-parts em{font-style:normal;opacity:.65}';
+    document.head.appendChild(st);
+})();
+</script>
+<script id="incator-pull">
+/* Pull down to refresh, on every page (phones and tablets): at the top of a page, pull down and let go.
+   IncAtor then checks Google Drive for changes from your other devices (they come in straight away), asks your IncAtor
+   server for new work orders, notifications and check-ins, updates the weather and redraws the page you're on.
+   Inside Snapora it reloads Snapora's job folders and photos. Nothing you are typing is lost. */
+(function () {
+    'use strict';
+    var TH = 78, MAX = 140, ind = null, busy = false;
+    function cur() { return document.body.getAttribute('data-pg') || 'home'; }
+    function make() {
+        ind = document.createElement('div'); ind.id = 'ptr'; ind.setAttribute('aria-hidden', 'true');
+        ind.innerHTML = '<i class="fas fa-sync-alt"></i>'; document.body.appendChild(ind);
+    }
+    function show(dy, top) {
+        if (!ind) make();
+        var k = Math.min(dy, MAX);
+        ind.style.top = top + 'px';
+        ind.style.opacity = String(Math.min(1, dy / TH));
+        ind.style.transform = 'translate(-50%, ' + Math.round(k * 0.55 - 46) + 'px) rotate(' + Math.round(dy * 2.4) + 'deg)';
+        ind.classList.toggle('ready', dy >= TH);
+        ind.classList.add('show');
+    }
+    function hide() { if (!ind) return; ind.classList.remove('show', 'ready', 'spin', 'done'); ind.style.opacity = '0'; ind.style.transform = 'translate(-50%, -46px)'; }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function run(refresh) {
+        if (busy) return; busy = true;
+        if (ind) { ind.classList.add('spin'); ind.style.transform = 'translate(-50%, 26px)'; ind.style.opacity = '1'; }
+        var t0 = Date.now();
+        try { await Promise.race([refresh(), wait(9000)]); } catch (e) { /* shown below */ }
+        var left = 650 - (Date.now() - t0); if (left > 0) await wait(left);   // long enough to see that something happened
+        if (ind) { ind.classList.remove('spin'); ind.classList.add('done'); ind.innerHTML = '<i class="fas fa-check"></i>'; }
+        await wait(450);
+        hide(); if (ind) ind.innerHTML = '<i class="fas fa-sync-alt"></i>';
+        busy = false;
+    }
+    async function refreshApp() {
+        var pg = cur(), tasks = [];
+        function t(f) { try { var p = f(); if (p && p.then) tasks.push(p.catch(function () { /* ignore */ })); } catch (e) { /* ignore */ } }
+        t(function () { return window.IncLive && IncLive.check('you pulled down to refresh', true); });   // newer data from your other devices
+        t(function () { return window.IncMail && IncMail.hasPass && IncMail.hasPass() && IncMail.refresh(true); });
+        t(function () { return window.IncMail && IncMail.hasPass && IncMail.hasPass() && IncMail.pullDrafts(false); });
+        t(function () { return window.IncNotes && IncNotes.refresh(); });
+        t(function () { return window.IncWx && IncWx.refresh(); });
+        if (pg === 'data') { t(function () { return window.IncShiftoraLog && IncShiftoraLog.refresh(true); }); t(function () { return window.IncBackupLog && IncBackupLog.refresh(true); }); }
+        t(function () { return window.IncSnapora && IncSnapora.refresh(); });
+        await Promise.race([Promise.all(tasks), wait(8000)]);
+        if (pg !== 'add' && pg !== 'snapora') { try { showPage(pg); } catch (e) { /* ignore */ } }   // the page you're on, drawn again (Create Job keeps what you typed)
+    }
+    function refreshSnapora(doc) {
+        return function () {
+            var w = doc.defaultView;
+            try { doc.dispatchEvent(new w.Event('snapora:changed')); } catch (e) { /* ignore */ }      // an open job: its photos again
+            try { if (!doc.querySelector('dialog[open]')) w.dispatchEvent(new w.HashChangeEvent('hashchange')); } catch (e) { /* ignore */ }   // the job folders again
+            try { if (window.IncSnapora) IncSnapora.refresh(); } catch (e) { /* ignore */ }
+            return wait(900);
+        };
+    }
+    function scrolledDown(t, doc) {
+        var se = doc.scrollingElement || doc.documentElement;
+        if (se && se.scrollTop > 0) return true;
+        for (var n = t; n && n.nodeType === 1 && n !== doc.body && n !== doc.documentElement; n = n.parentElement) {
+            if (n.scrollTop > 0) { var o = doc.defaultView.getComputedStyle(n).overflowY; if (o === 'auto' || o === 'scroll') return true; }
+        }
+        return false;
+    }
+    function inFixed(t, doc) {                                          // sheets, pop-ups, bars and menus pull nothing
+        for (var n = t; n && n.nodeType === 1 && n !== doc.body && n !== doc.documentElement; n = n.parentElement) {
+            if (doc.defaultView.getComputedStyle(n).position === 'fixed') return true;
+        }
+        return false;
+    }
+    function editable(t) { return !!(t.closest && t.closest('input, textarea, select, [contenteditable="true"], [data-noptr], input[type=range]')); }
+    function attach(doc, o) {
+        var y0 = null, x0 = 0, dy = 0, on = false;
+        doc.addEventListener('touchstart', function (e) {
+            y0 = null;
+            if (busy || e.touches.length !== 1 || !o.allowed(e.target)) return;
+            y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; dy = 0; on = false;
+        }, { passive: true });
+        doc.addEventListener('touchmove', function (e) {
+            if (y0 == null) return;
+            var t = e.touches[0], my = t.clientY - y0, mx = Math.abs(t.clientX - x0);
+            if (!on) {
+                if (my < -4 || mx > 14 && mx > my) { y0 = null; return; }   // scrolling up, or a sideways swipe
+                if (my < 12 || mx > my) return;
+                if (scrolledDown(e.target, doc)) { y0 = null; return; }
+                on = true; y0 = t.clientY - 1;
+            }
+            dy = Math.max(0, t.clientY - y0);
+            show(dy * 0.85, o.top());
+            if (e.cancelable) e.preventDefault();                       // the page stays put while you pull
+        }, { passive: false });
+        function end() { if (y0 == null) return; var go = on && dy * 0.85 >= TH; y0 = null; on = false; if (go) run(o.refresh); else hide(); }
+        doc.addEventListener('touchend', end, { passive: true });
+        doc.addEventListener('touchcancel', function () { y0 = null; on = false; hide(); }, { passive: true });
+    }
+    // IncAtor's own pages
+    attach(document, {
+        allowed: function (t) {
+            if (document.documentElement.classList.contains('sn-on') || document.querySelector('.ic-dialog-layer, dialog[open]')) return false;
+            return !editable(t) && !inFixed(t, document);
+        },
+        top: function () { var pg = document.getElementById('pg-head'); var r = pg && pg.offsetHeight ? pg.getBoundingClientRect() : null; return Math.max(0, r && r.bottom < 200 ? r.bottom : 0) + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0); },
+        refresh: refreshApp
+    });
+    // inside Snapora (same website, so IncAtor can listen there too)
+    var hooked = null;
+    setInterval(function () {
+        var f = document.getElementById('sn-frame'), d = null;
+        try { d = f && f.contentDocument; } catch (e) { d = null; }
+        if (!d || d === hooked || !d.body || d.URL === 'about:blank') return;
+        hooked = d;
+        attach(d, {
+            allowed: function (t) { return document.documentElement.classList.contains('sn-on') && !editable(t); },
+            top: function () { return Math.round(f.getBoundingClientRect().top) + 8; },
+            refresh: refreshSnapora(d)
+        });
+    }, 1000);
+    window.IncPull = { refresh: function () { return run(refreshApp); } };
+    var st = document.createElement('style'); st.id = 'incator-pull-css';
+    st.textContent = [
+        'html, body { overscroll-behavior-y: none; }',                  // no second, built-in pull (or rubber band) on top of IncAtor's own
+        '#ptr { position: fixed; left: 50%; top: 0; z-index: 9800; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; pointer-events: none;',
+        '  opacity: 0; transform: translate(-50%, -46px); transition: opacity .15s, background .2s, color .2s; background: rgba(28,18,58,.9); color: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.3); font-size: 16px; }',
+        '#ptr.show { transition: opacity .15s, background .2s; } #ptr.spin, #ptr.done { transition: transform .25s ease, opacity .2s, background .2s; }',
+        '#ptr.ready, #ptr.spin, #ptr.done { background: rgb(var(--pr4, 139, 92, 246)); }',
+        '#ptr.spin i { animation: ptrSpin .8s linear infinite; } @keyframes ptrSpin { to { transform: rotate(360deg); } }',
+        'html.lm #ptr { background: rgba(255,255,255,.96); color: rgb(var(--pr5, 109, 40, 217)); } html.lm #ptr.ready, html.lm #ptr.spin, html.lm #ptr.done { background: rgb(var(--pr5, 109, 40, 217)); color: #fff; }',
+        'html[data-theme="regular"] #ptr { background: var(--sk-raise); color: var(--rg-acc); border: 1px solid var(--sk-line2); box-shadow: 0 4px 14px rgba(0,0,0,.12); }',
+        'html[data-theme="regular"] #ptr.ready, html[data-theme="regular"] #ptr.spin, html[data-theme="regular"] #ptr.done { background: var(--rg-acc); color: #fff; }',
+        'html[data-theme="sleek"] #ptr { background: var(--sk-raise); color: var(--sk-fg); border: 1px solid var(--sk-line2); }',
+        'html[data-theme="sleek"] #ptr.ready, html[data-theme="sleek"] #ptr.spin, html[data-theme="sleek"] #ptr.done { background: var(--sk-fg); color: var(--sk-bg); }',
+        '#ptr i { color: inherit !important; -webkit-text-fill-color: currentColor !important; }',
+        '@media (prefers-reduced-motion: reduce) { #ptr.spin i { animation: none; } }'
+    ].join('\n');
     document.head.appendChild(st);
 })();
 </script>
