@@ -7203,6 +7203,23 @@ setTimeout(wrap, 500);
                             </div>
                         </div>
 
+                        <!-- Shiftora check-ins (v74) -->
+                        <div class="magic-calc-display animate-item" id="shf-card" style="margin: 20px 0; padding: 20px;">
+                            <div class="live-calc-header" style="margin-bottom: 12px;">
+                                <div class="live-calc-icon" style="background: linear-gradient(135deg, rgba(234, 88, 12, 0.2), rgba(234, 88, 12, 0.32)); color: #fb923c;">
+                                    <i class="fas fa-snapora"></i>
+                                </div>
+                                <div>
+                                    <h3 class="live-calc-title" style="color: #fb923c;">Shiftora check-ins</h3>
+                                    <p class="text-gray-400 text-sm">When Shiftora asked IncAtor's server for your job addresses</p>
+                                </div>
+                            </div>
+                            <div class="gdl" id="shf-log">
+                                <button type="button" class="gdl-head" id="shf-head" aria-expanded="false" aria-controls="shf-body"><span class="gdl-ic shf-ic"><i class="fas fa-calendar-alt"></i></span><span class="gdl-tt"><b>Last 30 days</b><small id="shf-sum">Tap to see every check-in</small></span><i class="fas fa-chevron-down gdl-chev"></i></button>
+                                <div class="gdl-body" id="shf-body" hidden></div>
+                            </div>
+                        </div>
+
                         <!-- Backup Safety Net Card -->
                         <div class="magic-calc-display animate-item" style="margin: 20px 0; padding: 20px;">
                             <div class="live-calc-header" style="margin-bottom: 16px;">
@@ -29375,7 +29392,7 @@ function sweep() {
     return a.length - keep.length;
 }
 function due() { if (!autoOn()) return 0; var c = cutoff(); return loadLocal().filter(function (n) { return Date.parse(n.at) < c; }).length + serverList.filter(function (n) { return Date.parse(n.at) < c; }).length; }
-var ICON = { 1: 'envelope', 2: 'sync-alt', 3: 'file-alt', 4: 'search', 5: 'check', 6: 'copy', 7: 'folder-open', 8: 'clipboard-list', 9: 'exclamation-circle', 10: 'copy', 11: 'refresh', 12: 'check-circle', 13: 'exclamation-triangle', 14: 'exclamation-triangle', 15: 'key' };
+var ICON = { 1: 'envelope', 2: 'sync-alt', 3: 'file-alt', 4: 'search', 5: 'check', 6: 'copy', 7: 'folder-open', 8: 'clipboard-list', 9: 'exclamation-circle', 10: 'copy', 11: 'refresh', 12: 'check-circle', 13: 'exclamation-triangle', 14: 'exclamation-triangle', 15: 'key', 21: 'snapora' };
 async function loadServer(force) {
     if (!serverOn()) { serverList = []; serverErr = ''; return; }
     if (!force && Date.now() - serverAt < 60000) return;
@@ -33496,7 +33513,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.21 (v73)';
+var VERSION = '2026.11.22 (v74)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -34396,6 +34413,7 @@ window.IncVersion = VERSION;
         { sel: '#ts-range', pg: 'settings', t: 'Text size', k: 'text size font bigger smaller larger read' },
         { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
         { sel: '#gd-auto', pg: 'data', t: 'Make backups fully automatic', k: 'automatic backups stopped reconnect google drive keeps asking backup stopped always backup never stop' },
+        { sel: '#shf-card', pg: 'data', t: 'Shiftora check-ins', k: 'shiftora check in check-ins history job addresses snapora link when did shiftora' },
         { sel: '#ht-box', pg: 'settings', t: 'Home tiles', k: 'home tiles cards choose which tiles home page shortcuts add trash roofvision settings tile order' },
         { sel: '#rg-tune', pg: 'settings', t: 'IncAtor logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
         { sel: '#gd-log', pg: 'data', t: 'Last 30 days of backups', k: 'backup history list when backed up' },
@@ -35696,6 +35714,69 @@ window.IncVersion = VERSION;
     window.IncRegular = { on: on, paint: paint, colorFor: colorFor };
 })();
 </script>
+<script id="incator-shiftora-log">
+/* Data Management > Shiftora check-ins: every time Shiftora asked IncAtor's server for the addresses of your latest work
+   orders and jobs, in the last 30 days (the server keeps the list and removes older lines by itself). Each check-in also
+   sends a notification to your phone ("Shiftora Checked In"; Settings > Notifications can turn that type off). */
+(function () {
+    'use strict';
+    var open = false, list = null, linked = null, err = '', loading = false, at = 0;
+    function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function M() { return window.IncMail && IncMail.api ? IncMail : null; }
+    function dayLabel(d) {
+        var t = new Date(d), n = new Date(), y = new Date(); y.setDate(n.getDate() - 1);
+        if (t.toDateString() === n.toDateString()) return 'Today';
+        if (t.toDateString() === y.toDateString()) return 'Yesterday';
+        return t.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+    function tm(d) { return new Date(d).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+    function ago(t) { var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; }
+    function paint() {
+        var head = $('shf-head'), body = $('shf-body'), sum = $('shf-sum'), box = $('shf-log'); if (!head) return;
+        head.setAttribute('aria-expanded', String(open)); body.hidden = !open; box.classList.toggle('open', open);
+        if (list && list.length) sum.textContent = list.length + ' check-in' + (list.length === 1 ? '' : 's') + ' · last ' + ago(Date.parse(list[0].at));
+        else if (list) sum.textContent = linked === false ? 'Shiftora isn’t linked yet' : 'No check-ins in the last 30 days';
+        else sum.textContent = err ? 'Couldn’t load' : 'Tap to see every check-in';
+        if (!open) return;
+        var html = '<p class="gdl-note">Shiftora asks for the addresses of your latest work orders and jobs so it can make job sites with the full address. Lines older than 30 days are removed by themselves. You get a notification each time.</p>';
+        if (err) html += '<p class="gdl-msg">' + esc(err) + '</p>';
+        else if (loading && !list) html += '<p class="gdl-msg">Asking your IncAtor server…</p>';
+        else if (!list || !list.length) html += '<p class="gdl-msg">' + (linked === false ? 'Shiftora isn’t linked to IncAtor yet. Open Snapora once (signed in as the Shiftora administrator) and IncAtor links it by itself.' : 'No check-ins in the last 30 days.') + '</p>';
+        else {
+            var day = '';
+            list.forEach(function (x, i) {
+                var dl = dayLabel(x.at);
+                if (dl !== day) { day = dl; html += '<div class="gdl-day">' + esc(dl) + '</div>'; }
+                var a = (x.a || []).filter(Boolean);
+                html += '<div class="gdl-row shf-row"><span class="gdl-ri"><i class="fas fa-snapora"></i></span><span class="gdl-rt"><b>' + esc(tm(x.at)) + '</b><small>' +
+                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + '</small>' +
+                    (a.length ? '<details class="shf-a"><summary>Show addresses</summary><ul>' + a.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul></details>' : '') + '</span></div>';
+            });
+        }
+        body.innerHTML = html;
+    }
+    async function refresh(force) {
+        var m = M();
+        if (!m || !m.hasPass || !m.hasPass()) { err = 'Sign in to your IncAtor server first (Settings > Work Orders).'; paint(); return; }
+        if (loading || (!force && Date.now() - at < 60000 && list)) return;
+        loading = true; err = ''; paint();
+        try { var j = await m.api('/shiftora/history'); list = Array.isArray(j.log) ? j.log : []; linked = j.linked; at = Date.now(); }
+        catch (e) { err = /unknown|404|not found/i.test(e && e.message || '') ? 'Your IncAtor server needs the latest update (index.ts) to keep this history.' : (e && e.message) || 'Could not reach your IncAtor server.'; }
+        loading = false; paint();
+    }
+    document.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('#shf-head')) { open = !open; paint(); if (open) refresh(false); }
+    });
+    // the Data page: show the summary line without opening the list
+    try { new MutationObserver(function () { if (document.body.getAttribute('data-pg') === 'data') refresh(false); }).observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
+    window.IncShiftoraLog = { open: function () { open = true; paint(); refresh(true); }, refresh: refresh, list: function () { return list; } };
+    var st = document.createElement('style'); st.id = 'incator-shiftora-log-css';
+    st.textContent = '.shf-ic{background:rgba(234,88,12,.2)!important;color:#fb923c!important}' +
+        '.shf-a{margin-top:4px;font-size:.74rem}.shf-a summary{cursor:pointer;opacity:.8}.shf-a ul{margin:4px 0 0;padding-left:18px;opacity:.85}.shf-a li{margin:2px 0}';
+    document.head.appendChild(st);
+})();
+</script>
 <script id="incator-snapora">
 /* IncAtor - Snapora: your job photos from Shiftora, shown over IncAtor's own background.
    Snapora itself is the file snapora.html (Shiftora's own file, uploaded next to this index.html). It opens on top of
@@ -35732,7 +35813,12 @@ window.IncVersion = VERSION;
         frame.setAttribute('allowtransparency', 'true');
         frame.style.colorScheme = tn;
         frame.src = FILE + '?embed=1&tone=' + tn;
+        frame.addEventListener('load', function () { skin(); setTimeout(skin, 400); setTimeout(skin, 1500); });
         ov.appendChild(frame); document.body.appendChild(ov);
+        wireSwipe();
+        try {   // Snapora draws its pages again and again: keep IncAtor's look on top
+            var n = 0, iv = setInterval(function () { skin(); if (++n > 40) clearInterval(iv); }, 500);
+        } catch (e) { /* ignore */ }
     }
     function open() {
         if (navigator.onLine === false) { toast('Snapora needs the internet. Connect and try again.', 'error'); back(); return; }
@@ -35741,8 +35827,119 @@ window.IncVersion = VERSION;
         var tn = tone(); frame.style.colorScheme = tn;
         try { frame.contentWindow.postMessage({ snapTone: tn }, location.origin); } catch (e) { /* not loaded yet: it reads the tone itself */ }
         openNow = true;
+        if (curPg() !== 'snapora') { lastPg = curPg(); try { showPage('snapora'); } catch (e) { /* ignore */ } }   // the navigation bar shows Snapora as the page you're on
         document.documentElement.classList.add('sn-on');
+        layout(); skin();
         setTimeout(function () { try { frame.focus(); } catch (e) { /* ignore */ } }, 60);
+    }
+    /* Snapora sits in IncAtor's page area: above the bottom navigation bar on phones, right of the sidebar (Regular) on
+       tablets and computers. The navigation bar stays in front, exactly as on every other page. */
+    function layout() {
+        if (!ov) return;
+        var b = 0, l = 0, nav = window.incNavBox ? incNavBox() : document.querySelector('.floating-nav');
+        if (nav && nav.offsetHeight && getComputedStyle(nav).display !== 'none' && getComputedStyle(nav).visibility !== 'hidden') {
+            var r = nav.getBoundingClientRect();
+            if (r.top > window.innerHeight * 0.5 && r.top < window.innerHeight) b = Math.ceil(window.innerHeight - r.top + (nav.id === 'rg-nav' ? 0 : 6));
+        }
+        var side = $('rg-side');
+        if (side && side.offsetWidth && getComputedStyle(side).display !== 'none') l = Math.ceil(side.getBoundingClientRect().right);
+        ov.style.setProperty('--sn-b', b ? b + 'px' : 'env(safe-area-inset-bottom, 0px)');
+        ov.style.setProperty('--sn-l', l + 'px');
+    }
+    window.addEventListener('resize', function () { if (openNow) layout(); });
+    setInterval(function () { if (openNow) layout(); }, 1200);
+
+    /* Snapora looks like a page of IncAtor: IncAtor's font, its colours and cards for the theme you chose, light or dark.
+       (snapora.html is on the same website, so IncAtor can dress it directly.) */
+    function rgbOf(c) {
+        var d = document.createElement('i'); d.style.display = 'none'; d.style.color = c; document.body.appendChild(d);
+        var m = (getComputedStyle(d).color.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3); d.remove(); return m.join(' ');
+    }
+    function palette() {
+        var cs = getComputedStyle(document.documentElement), th = document.documentElement.getAttribute('data-theme'), light = tone() === 'light';
+        var v = function (n, d) { return (cs.getPropertyValue(n) || '').trim() || d; }, font = getComputedStyle(document.body).fontFamily;
+        if (th === 'regular' || th === 'sleek') {
+            var reg = th === 'regular';
+            return { th: th, font: font, tint: rgbOf(v('--sk-raise', light ? '#fff' : '#1b1d22')), a: 1, ink: v('--sk-fg', light ? '#111' : '#f3f3f3'), steel: v('--sk-mut', '#6b7280'),
+                border: v('--sk-line2', 'rgba(127,127,127,.25)'), brand: reg ? v('--rg-acc', '#2563eb') : v('--sk-fg', '#111'), brandInk: reg ? v('--rg-on', '#fff') : v('--sk-bg', '#fff'),
+                radius: reg ? '14px' : '18px', shadow: reg ? 'none' : '0 1px 3px rgba(0,0,0,.06)', flat: true, logo: false };
+        }
+        var pr4 = v('--pr4', '139, 92, 246'), pr5 = v('--pr5', '109, 40, 217'), panel = v('--panel', '28, 18, 58');
+        if (light) return { th: th, font: font, tint: '255 255 255', a: 0.72, ink: '#1d1733', steel: 'rgba(29,23,51,.62)', border: 'rgba(255,255,255,.85)', brand: 'rgb(' + pr5 + ')', brandInk: '#fff', radius: '20px', shadow: '0 10px 28px rgba(40,30,90,.10)', flat: false, logo: true };
+        return { th: th, font: font, tint: panel.replace(/,/g, ' ').replace(/\s+/g, ' '), a: 0.55, ink: '#f5f3ff', steel: 'rgba(245,243,255,.66)', border: 'rgba(255,255,255,.12)', brand: 'rgb(' + pr4 + ')', brandInk: '#fff', radius: '20px', shadow: '0 14px 36px rgba(0,0,0,.35)', flat: false, logo: true };
+    }
+    function skin() {
+        var d = null; try { d = frame && frame.contentDocument; } catch (e) { d = null; }
+        if (!d || !d.head || !d.documentElement || d.URL === 'about:blank') return;
+        var P = palette(), R = ':root.inc-skin.inc-skin';
+        var css = [
+            R + ', ' + R + '[data-skin], ' + R + '[data-skin][data-skin-mode] { --font: ' + P.font + '; --font-cond: ' + P.font + '; --ink: ' + P.ink + '; --steel: ' + P.steel + '; --tint: ' + P.tint + '; --glass-tint: ' + P.tint + '; --glass-a: ' + P.a + ';',
+            '  --glass-border: ' + P.border + '; --line: ' + P.border + '; --r-card: ' + P.radius + '; --glass-shadow: ' + P.shadow + '; --brand: ' + P.brand + '; --brand-dk: ' + P.brand + '; --brand-lt: ' + P.brand + ';',
+            '  --brand-ink: ' + P.brandInk + '; --brand-ink-dk: ' + P.brandInk + '; --brand-ink-lt: ' + P.brandInk + '; color: ' + P.ink + '; }',
+            R + ' body, ' + R + ' button, ' + R + ' input, ' + R + ' select, ' + R + ' textarea, ' + R + ' h1, ' + R + ' h2, ' + R + ' h3 { font-family: ' + P.font + ' !important; }',
+            R + ' .snap-tag { display: none !important; }',                                         // no Snapora slogan inside IncAtor
+            R + ' .snap-topbar .snap-back { display: none !important; }',                            // IncAtor's navigation bar (and the swipe) take you back
+            R + ' .snap-brand h1 { letter-spacing: -.01em !important; font-weight: 800; font-size: clamp(1.6rem, 4vw, 2.1rem); }',
+            P.logo ? '' : R + ' .snap-brand > .snap-logo { display: none !important; }',
+            P.flat ? R + ' .card, ' + R + ' .stat, ' + R + ' .pg-card, ' + R + ' .summary-strip, ' + R + ' .row-item, ' + R + ' dialog.sheet, ' + R + ' .sp-card { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }' : '',
+            P.flat ? R + ' .page-enter > .card::after { display: none !important; }' : '',
+            P.th === 'sleek' ? R + ' .btn-primary { background: ' + P.brand + ' !important; color: ' + P.brandInk + ' !important; border-color: ' + P.brand + ' !important; }' : '',
+            R + ' .snap-topbar { padding-top: 8px !important; }',                                     // IncAtor already keeps it clear of the iPhone's top bar
+            R + ' #splash .splash-name, ' + R + ' #splash .splash-tag { color: ' + P.ink + ' !important; font-family: ' + P.font + ' !important; }',
+            R + ' #splash .splash-tag { color: ' + P.steel + ' !important; }'
+        ].filter(Boolean).join('\n');
+        // Snapora's security rules don't allow extra <style> tags, so IncAtor's look goes in as a stylesheet made in code
+        var w = d.defaultView;
+        try {
+            if (w && w.CSSStyleSheet && 'adoptedStyleSheets' in d) {
+                var sh = d.__incSkin;                                              // one per page load (the frame's window outlives its first, empty page)
+                if (!sh) { sh = d.__incSkin = new w.CSSStyleSheet(); }
+                if (d.__incSkinCss !== css) { sh.replaceSync(css); d.__incSkinCss = css; }
+                if (d.adoptedStyleSheets[d.adoptedStyleSheets.length - 1] !== sh) d.adoptedStyleSheets = Array.prototype.filter.call(d.adoptedStyleSheets, function (x) { return x !== sh; }).concat([sh]);
+            } else if (w && d.__incSkinCss !== css && d.styleSheets.length) {      // older browsers: added to the end of Snapora's own stylesheet
+                var host = d.styleSheets[0]; d.__incSkinN = d.__incSkinN || 0;
+                for (var k = 0; k < d.__incSkinN; k++) host.deleteRule(host.cssRules.length - 1);
+                var rules = css.split('\n').filter(Boolean), added = 0;
+                rules.forEach(function (r) { try { host.insertRule(r, host.cssRules.length); added++; } catch (e) { /* skip */ } });
+                d.__incSkinN = added; d.__incSkinCss = css;
+            }
+        } catch (e) { /* Snapora still works, in its own look */ }
+        d.documentElement.classList.add('inc-skin');
+        d.documentElement.classList.toggle('inc-flat', !!P.flat);
+        // the same light/dark on both sides, or the browser paints a solid backdrop behind Snapora instead of IncAtor's background
+        var tn = tone(); frame.style.colorScheme = tn;
+        if (d.documentElement.style.getPropertyValue('color-scheme') !== tn) d.documentElement.style.setProperty('color-scheme', tn, 'important');
+    }
+
+    /* Swipe from the left edge to go back: closes the open job (or photo) inside Snapora, or leaves Snapora for the page you
+       were on, just like the other pages of IncAtor. */
+    function goBack() {
+        var d = null; try { d = frame && frame.contentDocument; } catch (e) { d = null; }
+        var dl = d ? Array.prototype.filter.call(d.querySelectorAll('dialog[open]'), function (x) { return !x.classList.contains('closing'); }) : [];
+        if (dl.length) {
+            var top = dl[dl.length - 1], ev = new Event('cancel', { cancelable: true });
+            top.dispatchEvent(ev);
+            setTimeout(function () { if (top.open && !top.classList.contains('closing')) { try { top.close(); } catch (e) { /* ignore */ } } }, 300);
+            return;
+        }
+        close();
+    }
+    function wireSwipe() {
+        var edge = document.createElement('div'); edge.id = 'sn-edge'; edge.setAttribute('aria-hidden', 'true'); edge.setAttribute('data-noswipe', '1');   // IncAtor's page swipe leaves this to Snapora's own
+        var ind = document.createElement('div'); ind.id = 'sn-back-ind'; ind.setAttribute('aria-hidden', 'true'); ind.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        ov.appendChild(edge); ov.appendChild(ind);
+        var x0 = null, y0 = 0, dx = 0, on = false;
+        edge.addEventListener('touchstart', function (e) { e.stopPropagation(); var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; on = false; }, { passive: true });
+        edge.addEventListener('touchmove', function (e) {
+            e.stopPropagation();   // IncAtor's own page swipe must not act as well
+            if (x0 == null) return;
+            var t = e.touches[0], mx = t.clientX - x0, my = Math.abs(t.clientY - y0);
+            if (!on && my > 24 && my > mx) { x0 = null; ind.classList.remove('show'); return; }       // scrolling, not a swipe
+            dx = Math.max(0, mx); on = dx > 6;
+            if (on) { e.preventDefault(); ind.classList.add('show'); ind.style.transform = 'translate(' + Math.min(dx * 0.5, 70) + 'px, -50%)'; ind.style.top = (t.clientY - ov.getBoundingClientRect().top) + 'px'; ind.classList.toggle('go', dx > 80); }
+        }, { passive: false });
+        function end(e) { if (e) e.stopPropagation(); if (x0 == null) return; var go = dx > 80; x0 = null; ind.classList.remove('show', 'go'); ind.style.transform = ''; if (go) goBack(); }
+        edge.addEventListener('touchend', end); edge.addEventListener('touchcancel', function (e) { e.stopPropagation(); x0 = null; ind.classList.remove('show', 'go'); });
     }
     function back() { try { showPage(lastPg && lastPg !== 'snapora' ? lastPg : 'home'); } catch (e) { /* ignore */ } }
     function close() {
@@ -35753,6 +35950,7 @@ window.IncVersion = VERSION;
         setTimeout(function () { refreshMatches(true); }, 600);   // photos you just took show up in JobNest
     }
     function shown() {
+        if (openNow) return;
         if (Date.now() - loadedAt < 2500) { back(); return; }   // reopened on start-up: stay where you were
         open();
     }
@@ -35762,6 +35960,7 @@ window.IncVersion = VERSION;
         if (!frame || e.source !== frame.contentWindow || e.origin !== location.origin || !e.data) return;
         var d = e.data;
         if (d.snapReady) {
+            skin();
             info = d; var w = waiters; waiters = []; w.forEach(function (f) { f(d); });
             if (d.signedIn) { setTimeout(shareJobs, 1500); setTimeout(linkServer, 2500); refreshMatches(true); }
             return;
@@ -35905,7 +36104,11 @@ window.IncVersion = VERSION;
         $('sn-open').addEventListener('click', open);
         try { new MutationObserver(function () { if (pg.classList.contains('active') && !pg._on) { pg._on = 1; shown(); } else if (!pg.classList.contains('active')) pg._on = 0; })
             .observe(pg, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
-        try { new MutationObserver(function () { var c = curPg(); if (c !== 'snapora') lastPg = c; if (c === 'view') refreshMatches(false); })
+        try { new MutationObserver(function () {
+            var c = curPg();
+            if (c !== 'snapora') { lastPg = c; if (openNow) { openNow = false; document.documentElement.classList.remove('sn-on'); setTimeout(function () { refreshMatches(true); }, 600); } }
+            if (c === 'view') refreshMatches(false);
+        })
             .observe(document.body, { attributes: true, attributeFilter: ['data-pg'] }); } catch (e) { /* ignore */ }
         // JobNest cards are drawn again often: put the Snapora badges back each time
         try { var bt = 0; new MutationObserver(function (ms) {
@@ -35927,21 +36130,29 @@ window.IncVersion = VERSION;
         try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
         setTimeout(open, 1200);
     }
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && openNow) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && openNow) goBack(); });
     window.addEventListener('incmode', function () {   // light / dark changed in IncAtor
         if (!frame) return; var tn = tone(); frame.style.colorScheme = tn;
         try { frame.contentWindow.postMessage({ snapTone: tn }, location.origin); } catch (e) { /* ignore */ }
+        setTimeout(skin, 150); setTimeout(skin, 800);
     });
+    try { new MutationObserver(function () { if (!frame) return; setTimeout(function () { skin(); layout(); }, 200); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) { /* ignore */ }
     var css = document.createElement('style'); css.id = 'sn-css';
     css.textContent = '#snapora-page .sn-card{display:grid;gap:14px;justify-items:center;text-align:center;padding:26px 18px 30px}' +
         '#snapora-page .sn-open{min-width:230px;justify-content:center}' +
         '#snapora-page .sn-note{font-size:14px;opacity:.75;max-width:440px;margin:0;line-height:1.45}' +
         '.mh-tsn .mh-tile-icon i{color:#fff}' +
         /* Snapora on top; IncAtor's background (stars, bubbles, colours) stays visible behind it; IncAtor's own page, bar and buttons step aside */
-        '#sn-ov{position:fixed;inset:0;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);z-index:9600;display:none;background:transparent}' +   /* clear of the iPhone status bar and home bar */
+        '#sn-ov{position:fixed;left:var(--sn-l,0px);right:0;top:env(safe-area-inset-top,0px);bottom:var(--sn-b,env(safe-area-inset-bottom,0px));z-index:95;display:none;background:transparent}' +   /* IncAtor's page area: under the navigation bar (it stays in front), clear of the iPhone's top bar */
+        '#sn-edge{position:absolute;left:0;top:0;bottom:0;width:18px;z-index:2;touch-action:pan-y}' +
+        '#sn-back-ind{position:absolute;left:-34px;top:50%;width:44px;height:44px;margin-top:0;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;opacity:0;transition:opacity .15s,background .15s;background:rgba(0,0,0,.45);color:#fff;font-size:16px;transform:translate(0,-50%)}' +
+        '#sn-back-ind.show{opacity:1}#sn-back-ind.go{background:rgb(var(--pr4,139,92,246))}' +
+        'html[data-theme="regular"] #sn-back-ind.go{background:var(--rg-acc)}html[data-theme="sleek"] #sn-back-ind.go{background:var(--sk-fg);color:var(--sk-bg)}' +
+        '@media (hover:hover) and (pointer:fine){#sn-edge{display:none}}' +
         'html.sn-on #sn-ov{display:block;animation:sn-in .28s ease-out both}' +
         '#sn-frame{display:block;width:100%;height:100%;border:0;background:transparent}' +
-        'html.sn-on #app,html.sn-on .floating-nav,html.sn-on .lgx-lens,html.sn-on #inc-mini,html.sn-on #ask-fab,html.sn-on #rc-selbar,html.sn-on #undo-bar,html.sn-on #notification-container{visibility:hidden!important}' +
+        'html.sn-on #app,html.sn-on .lgx-lens,html.sn-on #inc-mini,html.sn-on #ask-fab,html.sn-on #rc-selbar,html.sn-on #undo-bar,html.sn-on #sel-fab,html.sn-on #bk-warn{visibility:hidden!important}' +
         '@keyframes sn-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}' +
         '@media (prefers-reduced-motion: reduce){html.sn-on #sn-ov{animation:none}}' +
         /* JobNest: Snapora badge and the "From Snapora" row in Job photos */
@@ -35963,7 +36174,7 @@ window.IncVersion = VERSION;
         setInterval(function () { if (info && info.signedIn && document.visibilityState === 'visible') shareJobs(); }, 30 * 60000);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-    window.IncSnapora = { open: open, close: close, isOpen: function () { return openNow; }, refresh: function () { return refreshMatches(true); } };
+    window.IncSnapora = { open: open, close: close, back: goBack, layout: layout, skin: skin, isOpen: function () { return openNow; }, refresh: function () { return refreshMatches(true); } };
 })();
 </script>
 </body>
