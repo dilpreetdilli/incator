@@ -27772,7 +27772,8 @@ function cardHtml(d) {
     var gstRate = S('gstRate', 5), a = amountsFor(w.total || 0, 0);
     var h = '<article class="wo-card" data-wd="' + esc(d.id) + '">' +
         '<header class="wo-ch"><div><b>' + (w.woNumber ? 'Work order #' + esc(w.woNumber) : 'Work order') + '</b>' + (w.pages && w.pages.length > 0 && d.files.length === 1 && (d.files[0].pages || 0) > w.pages.length ? '<small>page' + (w.pages.length > 1 ? 's ' : ' ') + w.pages.join(', ') + ' of ' + d.files[0].pages + '</small>' : '') + '</div><span class="wo-kind ' + ki[1] + '">' + ki[0] + '</span></header>' +
-        '<div class="wo-files">' + fileChips(d.files) + '</div>';
+        '<div class="wo-files">' + fileChips(d.files) + '</div>' +
+        (w.autoWhy && w.autoWhy.length ? '<div class="wo-autowhy" role="note"><i class="fas fa-exclamation-triangle"></i><div><b>Auto Import didn’t save this one by itself:</b><ul>' + w.autoWhy.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div></div>' : '');
     if (m.kind !== 'new' && m.job) {
         h += '<div class="wo-match"><p>' + esc(m.why) + '</p><table class="wo-diff"><thead><tr><th></th><th>Saved job</th><th>This work order</th></tr></thead><tbody>' +
             C.diff(w, m.job).map(function (r) {
@@ -28473,7 +28474,7 @@ function paintMail() {
         '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-envelope"></i></div><div class="setting-content"><h4 class="setting-title">Gmail Connection</h4></div></div>' + gm + '</div>' +
         (g ? '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-inbox"></i></div><div class="setting-content"><h4 class="setting-title">Automatic Work Order Import</h4>' +
             '<p class="setting-description">' + (s.auto_on ? 'On: checking emails received from <b>' + esc(dayStr(s.start_at)) + '</b>, every few minutes, even when IncAtor is closed.' : 'Off. Checking Gmail by hand and uploading still work.') + '</p></div></div>' +
-            '<div class="setting-control">' + tog('wm-auto', s.auto_on, 'Automatic Work Order Import') + '</div>' + schedHtml() +
+            '<div class="setting-control">' + tog('wm-auto', s.auto_on, 'Automatic Work Order Import') + '</div>' + schedHtml() + autoSaveHtml() +
             ((s.start_log || []).length ? '<details class="wm-hist"><summary>Start date history</summary>' + s.start_log.slice().reverse().map(function (h) { return '<div>' + esc(dayStr(h.at)) + ': from ' + esc(dayStr(h.start_at)) + '</div>'; }).join('') + '</details>' : '') + '</div>' +
           '<div class="setting-item"><div class="setting-header"><div class="setting-icon"><i class="fas fa-sliders-h"></i></div><div class="setting-content"><h4 class="setting-title">Email Filters</h4>' +
             '<p class="setting-description">An email is imported when it matches ANY word in each list that is on, and EVERY list that is on and has words. A work order PDF (attached or behind a work order link) is always needed.</p></div></div>' +
@@ -28509,6 +28510,8 @@ async function onClick(e) {
         if (!ok) return; try { await api('/gmail/disconnect', {}); toast('Gmail disconnected', 'info'); } catch (err) { toast(err.message, 'error'); } refresh(true); return;
     }
     if (t.id === 'wm-auto') { await toggleAuto(); return; }
+    if (t.id === 'wm-autosave') { await toggleAutoSave(); return; }
+    if (a === 'autojob') { try { IncWO.openJob(t.getAttribute('data-job')); } catch (err) { /* ignore */ } return; }
     if (t.id === 'wm-son') { var s0 = sched(); s0.on = !s0.on; if (s0.on && !s0.days.length) s0.days = [1, 2, 3, 4, 5]; saveSched(s0); return; }
     if (a === 'sday') { var s1 = sched(), d = +t.getAttribute('data-d'), at = s1.days.indexOf(d); if (at >= 0) s1.days.splice(at, 1); else s1.days.push(d); s1.days.sort(); saveSched(s1, true); return; }
     if (a === 'squick') { var s2 = sched(), q = t.getAttribute('data-q'); s2.days = q === 'wk' ? [1, 2, 3, 4, 5] : q === 'ms' ? [1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6]; saveSched(s2, true); return; }
@@ -28814,17 +28817,158 @@ async function pullDrafts(open) {
             res.drafts.forEach(function (d) {
                 var hit = free.filter(function (x) { return x.wo && C && C.normWo(x.wo.woNumber) === C.normWo(d.wo.woNumber); })[0] || free[0];
                 if (hit) free.splice(free.indexOf(hit), 1);
-                d.src = { server: hit ? hit.id : sd.id }; added.push(d);
+                d.src = { server: hit ? hit.id : sd.id };
+                var sw = (hit || sd).wo || {};                                  // what the server read from the same PDF (a second, separate reading)
+                d.wo.srvRead = { woNumber: sw.woNumber || '', address: sw.address || '', date: sw.date || '', total: sw.total > 0 ? +sw.total : null, ok: !(sw.flags && /Read when you open it/.test(sw.flags.total || '')) };
+                added.push(d);
             });
+            if (autoSaveOn() && res.drafts.length) await aiCheck(file, res.drafts);
             grp.forEach(function (x) { taken.push(x.id); });
         }
         if (added.length) IncWO.saveDrafts(IncWO.drafts().concat(added.map(function (d) { var o = { id: d.id, at: d.at, wo: d.wo, files: d.files, src: d.src }; if (d.needsPdf) { o.needsPdf = true; o.link = d.link; o.email = d.email; } return o; })));
+        if (added.length) { var savedIds = await autoSaveRun(); added = added.filter(function (d) { return savedIds.indexOf(d.id) < 0; }); }
         try { appStore.setItem('woServerTaken', JSON.stringify(taken.slice(-500))); } catch (e2) { /* ignore */ }
     } catch (e) { try { console.warn('IncAtor: work orders from Gmail could not be fetched yet:', e && e.message); } catch (x) { /* ignore */ } }   // tried again next time
     finally { pulling = false; }
     if (added.length && open) { var h = /#wo-draft=([\w-]+)/.exec(location.hash); openDrafts(h ? h[1] : null); }
     return added.length;
 }
+/* ---------------------------------------------------------------- Save to JobNest by itself (Settings > Work Orders)
+   A work order from Gmail is saved as a job only when everything checks out:
+   - every detail was found, and nothing was unclear (no warnings on any field)
+   - two separate readings agree: your IncAtor server and this device read the same PDF and got the same answers
+   - the AI reader (if you set one up in SlipVault) read it too and agrees
+   - it is not already in JobNest (same work order number, or the same address with the same date or amount)
+   - the amount, the date, the address and the work order number look like your usual work orders
+   - it was not a scanned picture, and the AI did not have to fill anything in
+   Anything else goes to you for review, with the reasons, and a notification. */
+function autoSaveOn() { return S('woAutoSave', false) === true; }
+function autoLog() { try { var a = JSON.parse(appStore.getItem('woAutoLog') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function autoLogAdd(x) { try { appStore.setItem('woAutoLog', JSON.stringify(autoLog().concat([x]).slice(-60))); } catch (e) { /* ignore */ } }
+function moneyS(v) { try { return formatCurrency(+v || 0); } catch (e) { return '$' + (+v || 0).toFixed(2); } }
+function median(a) { a = a.slice().sort(function (x, y) { return x - y; }); var m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
+function woShape(v) { return String(v || '').toUpperCase().replace(/^(?:WO|W\/O|W\.O\.)[-\s#]*/, '').replace(/[A-Z]/g, 'A').replace(/\d/g, '9').replace(/[^A9]/g, '-'); }
+async function aiCheck(file, list) {                                   // the AI reader reads the PDF on its own; its answers are compared later
+    try {
+        if (!window.RcptStore || !RcptStore.aiOn || !RcptStore.aiOn() || S('woUseAi', true) === false) return;
+        var C = window.IncWOCore, ans = await RcptStore.aiDoc({ pdf: file, prompt: C.AI_PROMPT }), j = RcptStore.parseAiJson(ans.text), ai = (j && j.workOrders) || [];
+        list.forEach(function (d, i) {
+            var hit = ai.filter(function (a) { return a && d.wo.woNumber && C.normWo(a.woNumber) === C.normWo(d.wo.woNumber); })[0] || (ai.length === list.length ? ai[i] : null);
+            if (!hit) { d.wo.aiRead = { none: true, n: ai.length }; return; }
+            var dd = C.parseDate(String(hit.date || '')).iso || '', tt = C.parseMoney(String(hit.total == null ? '' : hit.total));
+            d.wo.aiRead = { woNumber: String(hit.woNumber || ''), address: String(hit.address || ''), date: dd, total: tt > 0 ? tt : null, n: ai.length };
+        });
+    } catch (e) { list.forEach(function (d) { d.wo.aiRead = { error: true }; }); }
+}
+function oddities(d, jobs) {                                           // plain reasons why this one should be checked by you; [] = it can be saved
+    var C = window.IncWOCore, w = d.wo || {}, R = [], fl = w.flags || {};
+    if (d.needsPdf) return ['The work order PDF could not be downloaded.'];
+    var miss = [!w.woNumber && 'the work order number', !w.address && 'the address', !w.date && 'the date', !(w.total > 0) && 'the amount'].filter(Boolean);
+    if (miss.length) R.push('Not found: ' + miss.join(', ') + '.');
+    ['woNumber', 'address', 'date', 'total'].forEach(function (k) { if (fl[k] && R.length < 5) R.push(String(fl[k])); });
+    if (w.scanned) R.push('It is a scanned page, read from a picture, which is less reliable.');
+    if (w.aiUsed) R.push('The AI reader had to fill in a missing detail.');
+    if (R.length) return R;
+    var sr = w.srvRead;                                                // two readings of the same PDF
+    if (sr && sr.ok !== false) {
+        var diff = [];
+        if (sr.woNumber && C.normWo(sr.woNumber) !== C.normWo(w.woNumber)) diff.push('work order number');
+        if (sr.address && C.addrKey(sr.address) !== C.addrKey(w.address)) diff.push('address');
+        if (sr.date && sr.date !== w.date) diff.push('date');
+        if (sr.total > 0 && Math.abs(sr.total - w.total) > 0.005) diff.push('amount');
+        if (diff.length) R.push('Your server and this device read the ' + diff.join(', ') + ' differently.');
+    }
+    var ar = w.aiRead;
+    if (ar && !ar.none && !ar.error) {
+        var ad = [];
+        if (ar.woNumber && C.normWo(ar.woNumber) !== C.normWo(w.woNumber)) ad.push('work order number (' + ar.woNumber + ')');
+        if (ar.address && C.addrKey(ar.address) && C.addrKey(ar.address).split(' ').slice(0, 2).join(' ') !== C.addrKey(w.address).split(' ').slice(0, 2).join(' ')) ad.push('address (' + ar.address + ')');
+        if (ar.date && ar.date !== w.date) ad.push('date (' + ar.date + ')');
+        if (ar.total > 0 && Math.abs(ar.total - w.total) > 0.005) ad.push('amount (' + moneyS(ar.total) + ')');
+        if (ad.length) R.push('The AI reader read the ' + ad.join(', ') + ' differently.');
+    } else if (ar && ar.none && ar.n > 0) R.push('The AI reader found a different work order in this PDF.');
+    var m = C.compare(w, jobs);
+    if (m.kind !== 'new') R.push(m.kind === 'exact' ? 'It looks like it is already in JobNest.' : (m.why || 'It may already be in JobNest.'));
+    var recent = jobs.filter(function (e) { return e.address && C.addrKey(e.address) === C.addrKey(w.address) && e.date && Math.abs(Date.parse(e.date) - Date.parse(w.date)) < 45 * 864e5; })[0];
+    if (recent && m.kind === 'new') R.push('You already have a job at this address on ' + recent.date + '.');
+    var amts = jobs.map(function (e) { return +e.amount || 0; }).filter(function (v) { return v > 0; }).slice(-150);
+    if (w.total > 25000) R.push('The amount (' + moneyS(w.total) + ') is over $25,000.');
+    else if (w.total < 25) R.push('The amount (' + moneyS(w.total) + ') is under $25.');
+    else if (amts.length >= 5) {
+        var med = median(amts), mx = Math.max.apply(null, amts);
+        if (w.total > Math.max(med * 5, mx * 1.5)) R.push('The amount (' + moneyS(w.total) + ') is much bigger than your usual jobs (usually about ' + moneyS(med) + ').');
+        else if (w.total < med / 10) R.push('The amount (' + moneyS(w.total) + ') is much smaller than your usual jobs (usually about ' + moneyS(med) + ').');
+    }
+    var days = (Date.parse(w.date) - Date.now()) / 864e5;
+    if (!isFinite(days)) R.push('The date could not be understood.');
+    else if (days < -180) R.push('The date (' + w.date + ') is more than 6 months ago.');
+    else if (days > 120) R.push('The date (' + w.date + ') is more than 4 months away.');
+    if (!/\d/.test(w.address) || !/[a-z]{3,}/i.test(w.address) || w.address.length < 8) R.push('The address (' + w.address + ') has no clear street number and name.');
+    var shapes = jobs.map(function (e) { return woShape(e.woNumber); }).filter(Boolean).slice(-80), me = woShape(w.woNumber);
+    if (shapes.length >= 5 && !shapes.some(function (x) { return x.replace(/9+/g, '9') === me.replace(/9+/g, '9') && Math.abs(x.length - me.length) <= 2; }))
+        R.push('The work order number (' + w.woNumber + ') does not look like your other work order numbers.');
+    var twins = IncWO.drafts().filter(function (x) { return x.id !== d.id && x.wo && C.normWo(x.wo.woNumber) && C.normWo(x.wo.woNumber) === C.normWo(w.woNumber); });
+    if (twins.length) R.push('Another work order waiting for you has the same number.');
+    return R;
+}
+var autoBusy = false;
+async function autoSaveRun() {
+    var savedIds = [];
+    if (!autoSaveOn() || autoBusy || !window.IncWO || !window.IncWOCore) return savedIds;
+    autoBusy = true;
+    try {
+        var since = Date.parse(S('woAutoSaveAt', '') || '') || 0, saved = [];
+        var todo = IncWO.drafts().filter(function (d) { return d.src && d.src.server && d.wo && !d.wo.autoChecked && Date.parse(d.at || '') >= since - 60000; });
+        for (var i = 0; i < todo.length; i++) {
+            var d = todo[i], jobs = typeof entries !== 'undefined' ? entries.slice() : [];
+            var why = oddities(d, jobs), w = d.wo;
+            if (!why.length) {
+                var cl = null; try { cl = await api('/draft', { id: d.src.server, action: 'claim' }); } catch (e) { cl = { ok: true, old: true }; }   // an older server has no claims
+                if (!cl || !cl.ok) { IncWO.saveDrafts(IncWO.drafts().filter(function (x) { return x.id !== d.id; })); savedIds.push(d.id); continue; }   // another of your devices is saving it
+                var en = IncWO.createJob({ woNumber: w.woNumber, address: w.address, date: w.date, amount: w.total, notes: w.notes || '' }, d.files || []);
+                IncWO.saveDrafts(IncWO.drafts().filter(function (x) { return x.id !== d.id; }));
+                savedIds.push(d.id); saved.push({ w: w, en: en });
+                autoLogAdd({ at: new Date().toISOString(), job: en && en.id, woNumber: w.woNumber, address: w.address, date: w.date, total: w.total });
+                api('/draft', { id: d.src.server, action: 'saved', auto: true, job: en ? en.id : null, wo: { woNumber: w.woNumber, address: w.address, total: w.total } }).catch(function () { /* cleared later */ });
+            } else {
+                var all = IncWO.drafts(), me = all.filter(function (x) { return x.id === d.id; })[0];
+                if (me) { me.wo.autoChecked = true; me.wo.autoWhy = why; IncWO.saveDrafts(all); }
+                api('/draft', { id: d.src.server, action: 'review', why: why, wo: { woNumber: w.woNumber, address: w.address } }).catch(function () { /* the server's own notification still came */ });
+            }
+        }
+        if (saved.length) {
+            toast(saved.length === 1 ? 'Auto Import saved ' + (saved[0].w.woNumber ? 'work order #' + saved[0].w.woNumber : 'a work order') + ' (' + (saved[0].w.address || '') + ', ' + moneyS(saved[0].w.total) + ') to JobNest' : 'Auto Import saved ' + saved.length + ' work orders to JobNest', 'success');
+            pushJobs(); paintAutoLog();
+        }
+    } catch (e) { try { console.warn('IncAtor: Save to JobNest by itself stopped:', e && e.message); } catch (x) { /* ignore */ } }
+    finally { autoBusy = false; }
+    return savedIds;
+}
+function autoSaveHtml() {
+    var on = autoSaveOn(), log = autoLog().slice().reverse().slice(0, 20);
+    return '<div class="wm-autosave" id="wm-autosave-box"><div class="wm-cath"><div><b><i class="fas fa-magic"></i> Save to JobNest by itself</b><small>' + (on ? 'On: work orders that check out are saved as jobs without asking you.' : 'Off: every work order waits for you to approve it.') + '</small></div>' + tog('wm-autosave', on, 'Save imported work orders to JobNest by itself') + '</div>' +
+        '<p class="wm-note">Each work order is read twice (by your IncAtor server and by IncAtor on your phone' + (window.RcptStore && RcptStore.aiOn && RcptStore.aiOn() ? ', and a third time by ' + esc(RcptStore.aiName()) : '; set up the AI reader in SlipVault for a third reading') + '), compared with your saved jobs, and checked against your usual amounts, dates, addresses and work order numbers. Only if everything agrees is it saved by itself. Anything odd is sent to you for review with the reason, and you get a notification either way. The saving happens as soon as IncAtor is open on one of your devices.</p>' +
+        (on ? '<details class="wm-hist" id="wm-autolog"><summary>Saved by itself (' + log.length + ')</summary>' + autoLogHtml(log) + '</details>' : '') + '</div>';
+}
+function autoLogHtml(log) {
+    if (!log.length) return '<p class="wm-note">Nothing yet. Work orders saved by themselves are listed here.</p>';
+    return '<div class="wm-tests">' + log.map(function (x) { return '<div class="wm-t y"><b>' + (x.woNumber ? '#' + esc(x.woNumber) : 'Work order') + ' · ' + esc(moneyS(x.total)) + '</b> ' + esc(x.address || '') + '<small>' + esc(x.date || '') + ' · saved ' + esc(new Date(x.at).toLocaleString()) + '</small>' + (x.job ? ' <button type="button" class="wm-sug" data-wm="autojob" data-job="' + esc(x.job) + '">Open job</button>' : '') + '</div>'; }).join('') + '</div>';
+}
+function paintAutoLog() { var b = document.getElementById('wm-autosave-box'); if (b) b.outerHTML = autoSaveHtml(); }
+async function toggleAutoSave() {
+    var on = !autoSaveOn();
+    if (on) {
+        var ok = await showConfirmation({ title: 'Save work orders to JobNest by itself?', message: 'Work orders that check out completely are saved as jobs without asking you. Anything unusual still comes to you for review. You can turn this off any time.', type: 'info', confirmText: 'Turn on', cancelText: 'Not now' });
+        if (!ok) return;
+        save('woAutoSaveAt', new Date().toISOString());
+    }
+    save('woAutoSave', on);
+    try { await api('/settings', { autosave: on }); } catch (e) { toast('Saved on this device. The server could not be told yet: ' + e.message, 'info'); }
+    if (status && status.settings) status.autosave = on;
+    toast(on ? 'Auto Import now saves work orders to JobNest by itself' : 'Every work order waits for your approval again', on ? 'success' : 'info');
+    paintAutoLog();
+}
+window.IncAutoSave = { on: autoSaveOn, run: autoSaveRun, check: function (d) { return oddities(d, typeof entries !== 'undefined' ? entries : []); }, log: autoLog };
 function openDrafts(serverId) {
     var list = IncWO.drafts(); if (!list.length) return;
     if (serverId) { var pick = list.filter(function (d) { return d.src && d.src.server === serverId; }); if (pick.length) list = pick.concat(list.filter(function (d) { return pick.indexOf(d) < 0; })); }
@@ -28941,6 +29085,11 @@ var css = [
 '.wm-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px; margin: 8px 0; border-radius: 14px; border: 1px solid rgba(255,255,255,.15); cursor: pointer; } .wm-opt input[type=radio] { margin-top: 4px; } .wm-opt small { display: block; color: rgba(255,255,255,.7); font-size: .8rem; } .wm-opt .app-input { margin-top: 6px; font-size: 16px; }',
 '.wm-mail { display: block; width: 100%; text-align: left; padding: 10px; margin-top: 6px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: #fff; font: inherit; cursor: pointer; } .wm-mail small { display: block; color: rgba(255,255,255,.65); font-size: .76rem; } .wm-mail span { display: block; font-size: .78rem; color: rgba(255,255,255,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
 '#wm-checkbox { margin-top: 12px; text-align: center; } #wm-check { width: 100%; justify-content: center; }',
+'.wm-autosave { margin-top: 12px; padding: 12px; border-radius: 14px; border: 1px solid rgba(127,127,127,.22); background: rgba(127,127,127,.06); }',
+'.wm-autosave .wm-cath { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .wm-autosave .wm-cath small { display: block; font-size: .76rem; opacity: .75; margin-top: 2px; font-weight: 400; }',
+'.wm-autosave .wm-cath b i { margin-right: 6px; } .wm-autosave .wm-note { margin: 8px 0 0; }',
+'.wo-autowhy { display: flex; gap: 10px; margin: 10px 0 4px; padding: 10px 12px; border-radius: 12px; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); font-size: .82rem; }',
+'.wo-autowhy > i { color: #f59e0b; margin-top: 2px; } .wo-autowhy ul { margin: 4px 0 0; padding-left: 18px; } .wo-autowhy li { margin: 2px 0; }',
 '.wm-autorow { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); margin-bottom: 8px; }',
 '.wm-autotx b { display: block; font-size: .92rem; } .wm-autotx small { display: block; font-size: .76rem; opacity: .7; line-height: 1.35; margin-top: 2px; }',
 '.wm-autorow .magic-toggle { position: relative; right: auto; top: auto; -webkit-transform: none; transform: none; display: block; flex-shrink: 0; }',
@@ -33523,7 +33672,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.22 (v75)';
+var VERSION = '2026.11.25 (v76)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -34424,6 +34573,7 @@ window.IncVersion = VERSION;
         { sel: '#gd-restore-btn', pg: 'data', t: 'Restore Backup', k: 'restore backup bring back get data back lost' },
         { sel: '#gd-auto', pg: 'data', t: 'Make backups fully automatic', k: 'automatic backups stopped reconnect google drive keeps asking backup stopped always backup never stop' },
         { pg: 'home', t: 'Pull down to refresh', k: 'refresh reload pull down swipe down update sync now newest data' },
+        { sel: '#wm-autosave-box', pg: 'settings', t: 'Save work orders to JobNest by itself', k: 'auto save work orders jobnest automatically without approval auto import save by itself review odd' },
         { sel: '#shf-card', pg: 'data', t: 'Shiftora check-ins', k: 'shiftora check in check-ins history job addresses snapora link when did shiftora' },
         { sel: '#ht-box', pg: 'settings', t: 'Home tiles', k: 'home tiles cards choose which tiles home page shortcuts add trash roofvision settings tile order' },
         { sel: '#rg-tune', pg: 'settings', t: 'IncAtor logo colours (Regular theme)', k: 'logo colour color rings orb incator logo change logo colour regular theme' },
