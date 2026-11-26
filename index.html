@@ -13627,7 +13627,7 @@ bootstrap();
 'use strict';
 if (window.IncNavMore) return;
 var OLD = 'navPinned', KO = 'navOrder', KC = 'navCount', DEF = ['home', 'add', 'view', 'receipts', 'summary', 'trash'], DEFN = 6;
-var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', account: 'Account', snapora: 'Snapora' };
+var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', account: 'Account', snapora: 'Snapora', earnings: 'Job Earnings' };
 var nav = null, moreBtn = null, sheet = null, applying = false;
 function reduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
 function items() { return nav ? Array.prototype.filter.call(nav.querySelectorAll('.nav-item'), function (it) { return it !== moreBtn && it.getAttribute('data-page'); }) : []; }
@@ -28345,13 +28345,13 @@ function fetchSess(hdr) {                                       // quietly, in t
         .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (j) keepSess(j); getting = null; return j; }, function () { getting = null; return null; });
     return getting;
 }
-async function api(path, body, raw) {
+async function api(path, body, raw, keep) {
     var base = server(); if (!base) throw Object.assign(new Error('Add your IncAtor server address first (Settings > Work Orders > Work Order Email Integration).'), { noserver: true });
     var ses = path === '/hello' ? null : sess(), r, usedSess = false, hdr = {};
     async function send() {
         hdr = path === '/hello' ? {} : (ses ? { 'x-inc-session': ses.s } : { 'x-google-token': await token() });
         usedSess = !!ses;
-        return fetch(base + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: body ? JSON.stringify(body) : undefined });
+        return fetch(base + path, { method: body ? 'POST' : 'GET', headers: Object.assign({ 'Content-Type': 'application/json' }, hdr), body: body ? JSON.stringify(body) : undefined, keepalive: !!keep });
     }
     try {
         r = await send();
@@ -28984,17 +28984,36 @@ function hookResolve() {
     });
     hookResolve.done = true; return true;
 }
-/* a small list of saved jobs (number, address, date, base amount) so the server can spot duplicates while IncAtor is closed */
+/* a small list of saved jobs (number, address, date, base amount) so the server can spot duplicates while IncAtor is closed.
+   v77: sent within a second of any change (a job saved, edited, deleted or uploaded, a work order you uploaded here) and
+   again when you leave IncAtor, so the server can hand the new address to Shiftora straight away. */
 var jobsT = 0, lastSig = '';
-function pushJobs() {
-    clearTimeout(jobsT);
-    jobsT = setTimeout(function () {
-        if (!server() || !status || status.error) return;
-        var list = (typeof entries !== 'undefined' ? entries : []).map(function (e) { return { id: e.id, w: e.woNumber || '', a: e.address || '', d: e.date || '', m: e.amount || 0 }; }), sig = JSON.stringify(list);
-        if (sig === lastSig) return; lastSig = sig;
-        api('/jobs', { list: list }).catch(function () { lastSig = ''; });
-    }, 3000);
+function jobsBody() {
+    var list = (typeof entries !== 'undefined' ? entries : []).map(function (e) { return { id: e.id, w: e.woNumber || '', a: e.address || '', d: e.date || '', m: e.amount || 0 }; });
+    var wo = [];   // work orders uploaded on this device and not saved yet (the ones from Gmail are on the server already)
+    try { wo = (JSON.parse(appStore.getItem('woDrafts') || '[]') || []).filter(function (d) { return d && d.wo && d.wo.address && !(d.src && d.src.server); }).slice(0, 30)
+        .map(function (d) { return { id: String(d.id), a: String(d.wo.address).slice(0, 160), d: String(d.wo.date || '').slice(0, 10) }; }); } catch (e) { wo = []; }
+    return { list: list, wo: wo };
 }
+function pushJobs(when) {
+    clearTimeout(jobsT);
+    var go = function () {
+        if (!server() || !status || status.error) return;
+        var b = jobsBody(), sig = JSON.stringify(b);
+        if (sig === lastSig) return; lastSig = sig;
+        api('/jobs', b, false, when === true && sig.length < 60000).catch(function () { lastSig = ''; });
+    };
+    if (when === true) go(); else jobsT = setTimeout(go, typeof when === 'number' ? when : 3000);
+}
+(function hookJobsStore() {   // any change to your jobs or uploaded work orders, from any page or upload: send the list in a second
+    if (!window.appStore || appStore._jobsPush) { if (!window.appStore) setTimeout(hookJobsStore, 500); return; }
+    var orig = appStore.setItem;
+    appStore.setItem = function (k) { var r = orig.apply(this, arguments); if (k === 'incomeEntries' || k === 'woDrafts') { try { pushJobs(900); } catch (e) { /* ignore */ } } return r; };
+    appStore._jobsPush = true;
+})();
+window.addEventListener('incjobsaved', function () { pushJobs(400); });
+document.addEventListener('visibilitychange', function () { if (document.hidden) pushJobs(true); });   // leaving IncAtor: send now
+window.addEventListener('pagehide', function () { pushJobs(true); });
 
 /* ---------------------------------------------------------------- Settings > Notifications */
 function pushSupport() {
@@ -33672,7 +33691,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.25 (v76)';
+var VERSION = '2026.11.26 (v77)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33981,10 +34000,10 @@ window.IncVersion = VERSION;
    The pages and every feature are exactly the same as in the other themes. */
 (function () {
     'use strict';
-    var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', roofcalc: 'RoofVision', snapora: 'Snapora', account: 'Account' };
-    var SHORT = { projects: 'Quotes', data: 'Backup', summary: 'Analytics', receipts: 'SlipVault', roofcalc: 'RoofVision' };
+    var NAMES = { home: 'Home', add: 'Create Job', view: 'JobNest', projects: 'Quotes & Projects', receipts: 'SlipVault', summary: 'Analytics', data: 'Backup & Data', settings: 'Settings', trash: 'Trash', roofcalc: 'RoofVision', snapora: 'Snapora', earnings: 'Job Earnings', account: 'Account' };
+    var SHORT = { projects: 'Quotes', data: 'Backup', summary: 'Analytics', receipts: 'SlipVault', roofcalc: 'RoofVision', earnings: 'Earnings' };
     var ICON = { home: 'home', add: 'plus', view: 'layer-group', projects: 'briefcase', receipts: 'receipt', summary: 'chart-bar', data: 'cloud', settings: 'cog', trash: 'trash' };
-    var TINT = { home: '#2563eb', add: '#2563eb', view: '#4f46e5', projects: '#e8710a', receipts: '#16a34a', summary: '#0284c7', data: '#0891b2', settings: '#6b7280', trash: '#dc2626', roofcalc: '#92643a', snapora: '#e8590c' };
+    var TINT = { home: '#2563eb', add: '#2563eb', view: '#4f46e5', projects: '#e8710a', receipts: '#16a34a', summary: '#0284c7', data: '#0891b2', settings: '#6b7280', trash: '#dc2626', roofcalc: '#92643a', snapora: '#e8590c', earnings: '#ca8a04' };
     var LOGO = [['Blue', '#2563eb'], ['Purple', '#7c3aed'], ['Pink', '#db2777'], ['Red', '#dc2626'], ['Orange', '#ea580c'], ['Gold', '#ca8a04'], ['Green', '#16a34a'], ['Teal', '#0d9488'], ['Sky', '#0284c7'], ['Graphite', '#374151']];
     var RING = [['Rainbow', 'rainbow'], ['Same as logo', 'match']].concat(LOGO).concat([['No rings', 'none']]);
     function esc(x) { return String(x == null ? '' : x).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -34268,9 +34287,10 @@ window.IncVersion = VERSION;
         trash: { n: 'Trash', ic: 'trash', sel: '.mh-tt', g: 'linear-gradient(135deg,#f87171,#dc2626)', cls: 'mh-tt' },
         roofcalc: { n: 'RoofVision', ic: 'house-roof', sel: '.mh-trv', g: 'linear-gradient(135deg,#f59e0b,#b45309)', cls: 'mh-trv' },
         settings: { n: 'Settings', ic: 'cog', sel: '.mh-tst', g: 'linear-gradient(135deg,#94a3b8,#475569)', cls: 'mh-tst' },
-        snapora: { n: 'Snapora', ic: 'snapora', sel: '.mh-tsn', g: 'linear-gradient(135deg,#fb923c,#c2410c)', cls: 'mh-tsn' }
+        snapora: { n: 'Snapora', ic: 'snapora', sel: '.mh-tsn', g: 'linear-gradient(135deg,#fb923c,#c2410c)', cls: 'mh-tsn' },
+        earnings: { n: 'Earnings', ic: 'coins', sel: '.mh-tern', g: 'linear-gradient(135deg,#facc15,#ca8a04)', cls: 'mh-tern' }
     };
-    var ORDER = ['view', 'quotes', 'projects', 'summary', 'data', 'receipts', 'trash', 'roofcalc', 'settings', 'snapora'];
+    var ORDER = ['view', 'quotes', 'projects', 'summary', 'data', 'receipts', 'trash', 'roofcalc', 'settings', 'snapora', 'earnings'];
     var DEF = { six: ORDER.slice(0, 6), nine: ORDER.slice(0, 9) };   // the original tiles; Snapora can be added in Settings > Appearance > Home tiles
     var MAX = { six: 6, nine: 9 };
     function S() { try { return appSettings || {}; } catch (e) { return {}; } }
@@ -34558,6 +34578,7 @@ window.IncVersion = VERSION;
         { pg: 'projects', t: 'Projects', k: 'project' },
         { pg: 'roofcalc', t: 'RoofVision', k: 'roof calculator measure squares materials' },
         { pg: 'snapora', t: 'Snapora', k: 'snapora photos pictures camera job photos before after shiftora' },
+        { pg: 'earnings', t: 'Job Earnings', k: 'earnings profit earned wages labour labor employee hours paid employees days on site average per day gst base amount job costing margin' },
         { pg: 'data', t: 'Backup & Data', k: 'backup restore export import google drive delete' },
         { pg: 'trash', t: 'Trash', k: 'deleted restore bin' },
         { pg: 'settings', t: 'Settings', k: 'settings options preferences' }
@@ -35881,7 +35902,7 @@ window.IncVersion = VERSION;
    sends a notification to your phone ("Shiftora Checked In"; Settings > Notifications can turn that type off). */
 (function () {
     'use strict';
-    var open = false, list = null, linked = null, err = '', loading = false, at = 0;
+    var open = false, list = null, linked = null, push = null, err = '', loading = false, at = 0;
     function $(id) { return document.getElementById(id); }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function M() { return window.IncMail && IncMail.api ? IncMail : null; }
@@ -35908,7 +35929,7 @@ window.IncVersion = VERSION;
         else if (list) sum.textContent = linked === false ? 'Shiftora isn’t linked yet' : 'No check-ins in the last 30 days';
         else sum.textContent = err ? 'Couldn’t load' : 'Tap to see every check-in';
         if (!open) return;
-        var html = '<p class="gdl-note">Shiftora asks for the addresses of your latest work orders and jobs so it can make job sites with the full address. Lines older than 30 days are removed by themselves. You get a notification each time.</p>';
+        var html = '<p class="gdl-note">Shiftora gets the addresses of your latest work orders and jobs so it can make job sites with the full address. Lines older than 30 days are removed by themselves. You get a notification each time.</p>' + pushHtml();
         if (err) html += '<p class="gdl-msg">' + esc(err) + '</p>';
         else if (loading && !list) html += '<p class="gdl-msg">Asking your IncAtor server…</p>';
         else if (!list || !list.length) html += '<p class="gdl-msg">' + (linked === false ? 'Shiftora isn’t linked to IncAtor yet. Open Snapora once (signed in as the Shiftora administrator) and IncAtor links it by itself.' : 'No check-ins in the last 30 days.') + '</p>';
@@ -35918,19 +35939,33 @@ window.IncVersion = VERSION;
                 var dl = dayLabel(x.at);
                 if (dl !== day) { day = dl; html += '<div class="gdl-day">' + esc(dl) + '</div>'; }
                 var a = (x.a || []).filter(Boolean);
-                html += '<div class="gdl-row shf-row"><span class="gdl-ri"><i class="fas fa-snapora"></i></span><span class="gdl-rt"><b>' + esc(tm(x.at)) + '</b><small>' +
-                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + (x.asked ? ' (Shiftora asked for up to ' + x.asked + ')' : '') + '</small>' +
+                var sent = x.via === 'push', sites = (x.sites || []).filter(Boolean);
+                html += '<div class="gdl-row shf-row"><span class="gdl-ri"><i class="fas fa-snapora"></i></span><span class="gdl-rt"><b>' + esc(tm(x.at)) + (sent ? ' · sent by IncAtor' : ' · Shiftora asked') + '</b><small>' +
+                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + (sent ? (x.why === 'wo' ? ', as soon as a work order arrived' : ', as soon as your jobs changed') : (x.asked ? ' (Shiftora asked for up to ' + x.asked + ')' : '')) + '</small>' +
+                    (sites.length ? '<small class="shf-new">New job site' + (sites.length === 1 ? '' : 's') + ' in Shiftora: ' + esc(sites.join(', ')) + '</small>' : '') +
                     (a.length ? '<details class="shf-a"><summary>What Shiftora took</summary>' + a.map(addrHtml).join('') + '</details>' : '') + '</span></div>';
             });
         }
         body.innerHTML = html;
+    }
+    // straight away instead of once a day (server v69 + Shiftora's "IncAtor instant" SQL step)
+    function pushHtml() {
+        if (!push) return '';
+        var l = push.last, t, k = 'ok';
+        if (!push.on) { t = 'Instant updates aren’t set up yet. Open Snapora once in IncAtor (signed in as the Shiftora administrator) and IncAtor sets them up by itself. Until then Shiftora looks once a day.'; k = 'warn'; }
+        else if (l && !l.ok && l.error === 'step') { t = 'Instant updates need one step in Shiftora: run the “IncAtor instant” SQL in Shiftora’s Supabase project. Until then Shiftora looks once a day.'; k = 'warn'; }
+        else if (l && !l.ok && l.error === 'link') { t = 'Shiftora didn’t accept IncAtor’s key. Open Snapora once in IncAtor to link it again.'; k = 'warn'; }
+        else if (l && !l.ok) { t = 'The last try to reach Shiftora didn’t work (' + l.error + '). IncAtor tries again with the next change, and Shiftora still looks once a day.'; k = 'warn'; }
+        else t = 'Instant updates are on: a new job, a work order from Gmail or one you upload goes to Shiftora straight away.' + (l && l.last_ok ? ' Last sent ' + ago(Date.parse(l.last_ok)) + '.' : '') +
+            (l && l.sites === false ? ' Shiftora’s “Make job sites from IncAtor” setting is off, so it only keeps the addresses.' : '');
+        return '<p class="shf-push ' + k + '">' + esc(t) + '</p>';
     }
     async function refresh(force) {
         var m = M();
         if (!m || !m.hasPass || !m.hasPass()) { err = 'Sign in to your IncAtor server first (Settings > Work Orders).'; paint(); return; }
         if (loading || (!force && Date.now() - at < 60000 && list)) return;
         loading = true; err = ''; paint();
-        try { var j = await m.api('/shiftora/history'); list = Array.isArray(j.log) ? j.log : []; linked = j.linked; at = Date.now(); }
+        try { var j = await m.api('/shiftora/history'); list = Array.isArray(j.log) ? j.log : []; linked = j.linked; push = j.push || null; at = Date.now(); }
         catch (e) { err = /unknown|404|not found/i.test(e && e.message || '') ? 'Your IncAtor server needs the latest update (index.ts) to keep this history.' : (e && e.message) || 'Could not reach your IncAtor server.'; }
         loading = false; paint();
     }
@@ -35944,6 +35979,8 @@ window.IncVersion = VERSION;
     st.textContent = '.shf-ic{background:rgba(234,88,12,.2)!important;color:#fb923c!important}' +
         '.shf-a{margin-top:4px;font-size:.76rem}.shf-a summary{cursor:pointer;opacity:.85;font-weight:600;padding:2px 0}' +
         '.shf-ad{margin:6px 0 0;padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.09);display:grid;gap:3px}.shf-ad b{font-size:.84rem;font-weight:700}' +
+        '.shf-push{margin:8px 0 4px;padding:8px 10px;border-radius:10px;font-size:.78rem;line-height:1.4;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35)}.shf-push.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.45)}' +
+        '.shf-new{display:block;font-weight:600;opacity:.9}' +
         '.shf-from{font-size:.72rem;opacity:.75}.shf-parts{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.72rem;opacity:.9}.shf-parts em{font-style:normal;opacity:.65}';
     document.head.appendChild(st);
 })();
@@ -35993,6 +36030,7 @@ window.IncVersion = VERSION;
         t(function () { return window.IncWx && IncWx.refresh(); });
         if (pg === 'data') { t(function () { return window.IncShiftoraLog && IncShiftoraLog.refresh(true); }); t(function () { return window.IncBackupLog && IncBackupLog.refresh(true); }); }
         t(function () { return window.IncSnapora && IncSnapora.refresh(); });
+        if (pg === 'earnings') t(function () { return window.IncEarn && IncEarn.refresh(); });   // Job Earnings: Shiftora's hours again
         await Promise.race([Promise.all(tasks), wait(8000)]);
         if (pg !== 'add' && pg !== 'snapora') { try { showPage(pg); } catch (e) { /* ignore */ } }   // the page you're on, drawn again (Create Job keeps what you typed)
     }
@@ -36111,6 +36149,13 @@ window.IncVersion = VERSION;
         return document.documentElement.getAttribute('data-theme') === 'regular' ? 'light' : 'dark';
     }
     function curPg() { return (document.body && document.body.getAttribute('data-pg')) || 'home'; }
+    // Shiftora's public address and public (publishable) key: read from snapora.html itself, so they always match it
+    var CFG0 = { url: 'https://maluyhawbjmropvqzjqp.supabase.co', pk: 'sb_publishable_YgmmzUSO4AqRpIyBf-VYaQ__qguIapI' };
+    function cfg() {
+        try { var t = frame && frame.contentDocument && frame.contentDocument.getElementById('tc-config'), c = t && JSON.parse(t.textContent);
+            if (c && /^https:\/\/[a-z0-9]+\.supabase\.co$/.test(c.supabase_url) && c.supabase_publishable_key) return { url: c.supabase_url, pk: c.supabase_publishable_key }; } catch (e) { /* ignore */ }
+        return CFG0;
+    }
 
     /* ---------- Snapora's page (kept ready, hidden until you open it) ---------- */
     function build() {
@@ -36316,13 +36361,15 @@ window.IncVersion = VERSION;
     // IncAtor hands Shiftora the server's address and a key that only reads addresses. Checked again every 3 days.
     async function linkServer() {
         if (!info || !info.signedIn || !info.admin || !window.IncMail || !IncMail.api) return;
-        var last = 0; try { last = +localStorage.getItem('sn.link') || 0; } catch (e) { last = 0; }
+        var last = 0; try { last = +localStorage.getItem('sn.link2') || 0; } catch (e) { last = 0; }
         if (Date.now() - last < 3 * 864e5) return;
         try {
-            var r = await IncMail.api('/shiftora/link', {});
+            // v77: the server also learns where Shiftora is (its public address and public key, the same ones in snapora.html),
+            // so it can hand Shiftora a new job's address the moment it arrives instead of waiting for Shiftora's daily look
+            var r = await IncMail.api('/shiftora/link', { push: cfg() });
             if (!r || !r.url || !r.key) return;
             var d = await ask('linkServer', { url: r.url, key: r.key });
-            if (d && d.linked) localStorage.setItem('sn.link', String(Date.now()));
+            if (d && d.linked) localStorage.setItem('sn.link2', String(Date.now()));
         } catch (e) { /* no IncAtor server yet, or an older one: IncAtor still sends its jobs while it's open */ }
     }
 
@@ -36483,7 +36530,506 @@ window.IncVersion = VERSION;
         setInterval(function () { if (info && info.signedIn && document.visibilityState === 'visible') shareJobs(); }, 30 * 60000);
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-    window.IncSnapora = { open: open, close: close, back: goBack, layout: layout, skin: skin, isOpen: function () { return openNow; }, refresh: function () { return refreshMatches(true); } };
+    window.IncSnapora = { open: open, close: close, back: goBack, layout: layout, skin: skin, isOpen: function () { return openNow; }, refresh: function () { return refreshMatches(true); },
+        // Job Earnings: Shiftora's address and key, whether this device is signed in to Snapora, and Snapora ready in the background
+        cfg: cfg, tokenKey: TOKEN_KEY, signedInBefore: signedInBefore, ready: function (ms) { if (navigator.onLine === false) return Promise.resolve({ signedIn: false, offline: true }); return whenReady(ms); }, info: function () { return info; } };
+})();
+</script>
+<script id="incator-earnings">
+/* IncAtor - Job Earnings: every job with what it brought in and what it cost in wages.
+   For each job: Base amount, GST, Total amount (from JobNest), Employee hours and Paid to employees (from Shiftora),
+   Earned (Base amount minus Paid to employees), Earned + GST, how many days the crew worked on site and how much that
+   comes to a day (Earned divided by the days on site).
+   Each job is a section with a quick summary; tap it to open it, tap anywhere else to close it. Search, filter and sort
+   (newest first), and the year (this year to start with) or the last N months.
+   Shiftora's numbers: read straight from Shiftora with your own Snapora sign-in on this device (as the Shiftora
+   administrator). Hours count when someone clocked in at the job's Shiftora job site, or on the same street when the
+   job site came from their phone, from 60 days before to 30 days after the job date (120 before to 90 after for the
+   job site Shiftora made from this very job). When two jobs share a street, the hours go to the job with the nearest
+   date. Paid to employees is what you recorded as paid in Shiftora for those hours (a payment covering hours at
+   several jobs is shared out by the hours). Nothing is written to Shiftora. */
+(function () {
+    'use strict';
+    var PG = 'earnings', NOW_Y = String(new Date().getFullYear());
+    var st = { q: '', period: 'year:' + NOW_Y, n: 9, show: 'all', sort: 'new' };
+    var openId = null, shown = 60, sh = { state: 'idle', at: 0, jobs: {}, msg: '' }, busy = null;
+    var CACHE = 'ern.cache';
+    function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function cur() { return (document.body && document.body.getAttribute('data-pg')) || 'home'; }
+    function cs() { try { return appSettings.currency || '$'; } catch (e) { return '$'; } }
+    function money(n) {
+        n = Math.round((Number(n) || 0) * 100) / 100;
+        var s = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return (n < 0 ? '−' : '') + cs() + s;
+    }
+    function hrs(min) { var h = (Number(min) || 0) / 60; return (h >= 100 ? Math.round(h) : Math.round(h * 10) / 10).toLocaleString() + ' h'; }
+    function days(n) { return n + ' day' + (n === 1 ? '' : 's'); }
+    function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+    function dayOf(v) { var s = String(v || ''); if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10); var d = new Date(s); return isNaN(d) ? '' : ymd(d); }
+    function dnum(s) { var t = Date.parse(String(s || '').slice(0, 10) + 'T12:00:00'); return isNaN(t) ? null : Math.round(t / 864e5); }
+    function nice(s) { var t = new Date(String(s).slice(0, 10) + 'T12:00:00'); return isNaN(t) ? '' : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+    function ago(t) { var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; }
+    function jobs() { try { return (typeof entries !== 'undefined' && Array.isArray(entries)) ? entries : []; } catch (e) { return []; } }
+    function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+    function base(e) { return e.baseAmount != null ? num(e.baseAmount) : num(e.amount) + num(e.extras); }
+
+    /* ---------------------------------------------------------- addresses, the way Shiftora reads them */
+    var TYPES = ['st', 'street', 'ave', 'av', 'avenue', 'rd', 'road', 'dr', 'drive', 'cres', 'cr', 'crescent', 'pl', 'place', 'blvd', 'boulevard', 'hwy', 'highway',
+        'ct', 'crt', 'court', 'ln', 'lane', 'terr', 'ter', 'terrace', 'pkwy', 'parkway', 'cir', 'circle', 'cl', 'close', 'gt', 'gate', 'grv', 'grove', 'hts', 'heights', 'sq', 'square',
+        'trl', 'trail', 'rdg', 'ridge', 'pt', 'point', 'way', 'row', 'mews', 'landing', 'view', 'green', 'walk', 'loop', 'run', 'path', 'bay', 'line', 'alley', 'park'];
+    function parse(text) {                                             // "12 Oak St, Kelowna, BC V1Y 2A3" -> { num: '12', street: 'Oak St', locality: 'Kelowna' }
+        var s = String(text || '').split(/\n/).map(function (x) { return x.trim(); }).filter(Boolean).join(', ');
+        if (!s) return null;
+        s = s.replace(/\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z]\s?\d[ABCEGHJ-NPRSTV-Z]\d\b/i, ' ').replace(/\bcanada\b/ig, ' ')
+            .replace(/(^|[\s,])(BC|AB|SK|MB|ON|QC|NB|NS|PE|NL|YT|NT|NU|British Columbia|Alberta|Saskatchewan|Manitoba|Ontario|Quebec)\.?(?=$|[\s,])/i, ' ');
+        var parts = s.split(',').map(function (x) { return x.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+        if (!parts.length) return null;
+        var first = parts[0].replace(/^(unit|suite|apt)\.?\s*\S+\s*[-,]?\s*/i, '').replace(/^#\s*\S+\s+/, ''), n = '';
+        var m = first.match(/^(\d+[a-z]?)(?:\s*-\s*(\d+[a-z]?))?\s+(.+)$/i);
+        if (m) { n = m[2] || m[1]; first = m[3]; }
+        var street = first, loc = parts[1] || '', w = first.split(' ');
+        for (var i = w.length - 2; i > 0; i--) {
+            if (TYPES.indexOf(w[i].toLowerCase().replace(/\.$/, '')) < 0) continue;
+            var end = i + 1;
+            if (/^(n|s|e|w|ne|nw|se|sw|north|south|east|west)\.?$/i.test(w[end] || '')) end++;
+            street = w.slice(0, end).join(' ');
+            if (!loc) loc = w.slice(end).join(' ');
+            break;
+        }
+        return { num: n.toLowerCase(), street: street.trim(), locality: loc.trim().toLowerCase() };
+    }
+    var AB = { st: 'street', ave: 'avenue', av: 'avenue', rd: 'road', dr: 'drive', cres: 'crescent', cr: 'crescent', pl: 'place', blvd: 'boulevard', hwy: 'highway', ct: 'court', crt: 'court',
+        ln: 'lane', terr: 'terrace', ter: 'terrace', pkwy: 'parkway', cir: 'circle', cl: 'close', gt: 'gate', grv: 'grove', hts: 'heights', sq: 'square', trl: 'trail', rdg: 'ridge', pt: 'point', mtn: 'mountain', rte: 'route' };
+    var DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw', 'north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'];
+    function streetNorm(p) {                                           // the same spelling as Shiftora's: "123 W Abc St." -> "abcstreet"
+        if (!p || !String(p).trim()) return '';
+        var w = String(p).toLowerCase().replace(/,+/g, ' ').trim().split(/\s+/);
+        while (w.length > 1 && (/^#?[0-9]+[a-z]?(-[0-9]+[a-z]?)?$/.test(w[0]) || ['unit', 'suite', 'apt', '-'].indexOf(w[0]) >= 0)) w.shift();
+        var o = '';
+        for (var i = 0; i < w.length; i++) {
+            var k = w[i].replace(/\.$/, '');
+            if (DIRS.indexOf(k) >= 0 && (i === 0 || i === w.length - 1 || k.length > 2)) continue;
+            if (i > 0 && AB[k]) k = AB[k];
+            o += k;
+        }
+        return o.replace(/[^a-z0-9]/g, '');
+    }
+    function flat(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+    function sameLoc(a, b) { a = flat(a); b = flat(b); return !a || !b || a === b; }
+    // how sure we are that a Shiftora job site is this job's place: 3 made from this job / same address, 2 same house, 1 same street, 0 no
+    function strength(w, e, p) {
+        if (!p || !p.street) return 0;
+        if (w.incator_address && flat(w.incator_address) === flat(e.address)) return 3;
+        var sn = streetNorm(p.street);
+        if (!sn) return 0;
+        if (w.incator_key) {
+            var k = String(w.incator_key).split('|');
+            if (k[1] !== sn || !sameLoc(k[2], p.locality)) return 0;
+            if (k[0] && p.num && k[0] === p.num) return k[2] && p.locality ? 3 : 2;
+            return k[0] && p.num ? 0 : 1;                                   // the same street but another house: not this job
+        }
+        var wp = w.street ? { street: w.street, locality: w.locality || '' } : parse(w.label);
+        if (!wp || streetNorm(wp.street) !== sn || !sameLoc(wp.locality || w.locality, p.locality)) return 0;
+        return 1;
+    }
+
+    /* ---------------------------------------------------------- Shiftora (read with your Snapora sign-in) */
+    function SN() { return window.IncSnapora && IncSnapora.cfg ? IncSnapora : null; }
+    function session() { try { var k = SN().tokenKey, s = JSON.parse(localStorage.getItem(k) || 'null'); if (s && s.currentSession) s = s.currentSession; return s && s.access_token ? s : null; } catch (e) { return null; } }
+    async function token() {
+        var info = await SN().ready(25000);                            // Snapora (in the background) also renews the sign-in
+        if (!info || info.offline) throw Object.assign(new Error('Connect to the internet to bring in Shiftora’s hours.'), { kind: 'offline' });
+        if (!info.signedIn) throw Object.assign(new Error('Sign in to Snapora on this device to bring in Shiftora’s hours.'), { kind: 'signin' });
+        if (!info.admin) throw Object.assign(new Error('Your Snapora sign-in isn’t a Shiftora administrator, so it can’t see everyone’s hours.'), { kind: 'admin' });
+        for (var i = 0; i < 24; i++) {
+            var s = session();
+            if (s && (!s.expires_at || s.expires_at * 1000 > Date.now() + 30000)) return s.access_token;
+            await wait(500);
+        }
+        throw Object.assign(new Error('Snapora’s sign-in has run out. Open Snapora once to sign in again.'), { kind: 'signin' });
+    }
+    async function rest(path, tok) {
+        var c = SN().cfg(), out = [], from = 0, size = 1000;
+        for (;;) {
+            var r = await fetch(c.url + '/rest/v1/' + path + '&limit=' + size + '&offset=' + from, { headers: { apikey: c.pk, Authorization: 'Bearer ' + tok, Accept: 'application/json' }, cache: 'no-store' });
+            if (!r.ok) {
+                var t = ''; try { t = await r.text(); } catch (e) { /* ignore */ }
+                if (r.status === 401) throw Object.assign(new Error('Snapora’s sign-in has run out. Open Snapora once to sign in again.'), { kind: 'signin' });
+                throw new Error('Shiftora answered ' + r.status + (/column|relation/i.test(t) ? ' (Shiftora needs its latest database steps)' : ''));
+            }
+            var a = await r.json();
+            out = out.concat(a);
+            if (a.length < size || from > 50000) break;
+            from += size;
+        }
+        return out;
+    }
+    function chunks(a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
+    async function load(force) {
+        if (!SN()) return;
+        if (busy) return busy;
+        if (!force && sh.state === 'ok' && Date.now() - sh.at < 3 * 60000) return;
+        if (!SN().signedInBefore()) { sh = Object.assign(sh, { state: 'signin', msg: '' }); paint(); return; }
+        sh.state = sh.state === 'ok' ? 'ok' : 'loading'; sh.loading = true; paintStatus();
+        busy = (async function () {
+            try {
+                var tok = await token();
+                var sites = await rest('worksites?select=*&order=created_at.asc', tok);
+                var list = jobs().filter(function (e) { return e && e.address; }), byWs = {}, ids = [];
+                list.forEach(function (e) {
+                    var p = parse(e.address);
+                    sites.forEach(function (w) {
+                        var k = strength(w, e, p);
+                        if (k) { (byWs[w.id] = byWs[w.id] || []).push({ e: e, k: k, d: dnum(e.date) }); }
+                    });
+                });
+                ids = Object.keys(byWs);
+                var shifts = [];
+                for (var c of chunks(ids, 60)) {
+                    shifts = shifts.concat(await rest('shift_details?select=shift_id,employee_id,display_name,worksite_id,work_date,net_minutes,estimated_amount,report_id,is_active,clock_in_at&worksite_id=in.(' + c.join(',') + ')&order=clock_in_at.asc', tok));
+                }
+                var rids = {}; shifts.forEach(function (s) { if (s.report_id) rids[s.report_id] = 1; });
+                var reps = {};
+                for (var rc of chunks(Object.keys(rids), 80)) {
+                    (await rest('reports?select=id,amount_paid,payment_status&id=in.(' + rc.join(',') + ')&order=id.asc', tok)).forEach(function (r) { reps[r.id] = r; });
+                }
+                var label = {}; sites.forEach(function (w) { label[w.id] = w.label; });
+                sh = { state: 'ok', at: Date.now(), jobs: tally(shifts, byWs, reps, label), msg: '', sites: ids.length };
+                try { localStorage.setItem(CACHE, JSON.stringify(sh)); } catch (e) { /* ignore */ }
+            } catch (e) {
+                var keep = sh.state === 'ok' || Object.keys(sh.jobs || {}).length;
+                sh = Object.assign({}, sh, { state: e.kind || 'error', msg: (e && e.message) || 'Couldn’t reach Shiftora.', stale: !!keep });
+            }
+            sh.loading = false; busy = null; paint();
+        })();
+        return busy;
+    }
+    // every shift goes to one job: the most certain job site match, then the nearest job date
+    function tally(shifts, byWs, reps, label) {
+        var out = {}, repMin = {}, rows = [];
+        shifts.forEach(function (s) {
+            var min = s.net_minutes != null ? num(s.net_minutes) : (s.is_active && s.clock_in_at ? Math.max(0, (Date.now() - Date.parse(s.clock_in_at)) / 60000) : 0);
+            if (s.report_id) repMin[s.report_id] = (repMin[s.report_id] || 0) + min;
+            var sd = dnum(s.work_date || dayOf(s.clock_in_at)), best = null;
+            (byWs[s.worksite_id] || []).forEach(function (c) {
+                if (c.d == null || sd == null) return;
+                var lo = c.k >= 2 ? 120 : 60, hi = c.k >= 2 ? 90 : 30;
+                if (sd < c.d - lo || sd > c.d + hi) return;
+                var gap = Math.abs(sd - c.d);
+                if (!best || c.k > best.k || (c.k === best.k && gap < best.gap)) best = { e: c.e, k: c.k, gap: gap };
+            });
+            if (best) rows.push({ s: s, min: min, id: String(best.e.id) });
+        });
+        rows.forEach(function (x) {
+            var s = x.s, j = out[x.id] = out[x.id] || { min: 0, wages: 0, paid: 0, days: {}, people: {}, sites: {}, live: false };
+            j.min += x.min;
+            j.wages += num(s.estimated_amount) || 0;
+            if (s.report_id && reps[s.report_id] && repMin[s.report_id] > 0) j.paid += num(reps[s.report_id].amount_paid) * x.min / repMin[s.report_id];
+            var d = s.work_date || dayOf(s.clock_in_at); j.days[d] = 1;
+            var who = s.display_name || 'Employee', p = j.people[who] = j.people[who] || { min: 0, days: {} };
+            p.min += x.min; p.days[d] = 1;
+            j.sites[label[s.worksite_id] || 'Job site'] = 1;
+            if (s.is_active) j.live = true;
+        });
+        Object.keys(out).forEach(function (k) {
+            var j = out[k];
+            j.nd = Object.keys(j.days).length; delete j.days;
+            j.people = Object.keys(j.people).map(function (n) { return { n: n, min: j.people[n].min, nd: Object.keys(j.people[n].days).length }; }).sort(function (a, b) { return b.min - a.min; });
+            j.sites = Object.keys(j.sites);
+            j.paid = Math.round(j.paid * 100) / 100; j.wages = Math.round(j.wages * 100) / 100;
+        });
+        return out;
+    }
+
+    /* ---------------------------------------------------------- the numbers of one job */
+    function row(e) {
+        var l = (sh.jobs || {})[String(e.id)] || null, have = sh.state === 'ok' || sh.stale || (sh.at && l);
+        var b = base(e), g = num(e.gst), t = e.total != null ? num(e.total) : b + g;
+        var paid = l ? l.paid : 0, earned = b - paid, nd = l ? l.nd : 0;
+        return { e: e, l: l, have: !!have, base: b, gst: g, total: t, min: l ? l.min : 0, paid: paid, wages: l ? l.wages : 0, earned: earned, earnedGst: earned + g, nd: nd, avg: nd ? earned / nd : null };
+    }
+    function inPeriod(e) {
+        var d = String(e.date || '').slice(0, 10), p = st.period;
+        if (p === 'all') return true;
+        if (/^year:/.test(p)) return d.slice(0, 4) === p.slice(5);
+        var n = p === 'last:n' ? Math.max(1, Math.min(240, parseInt(st.n, 10) || 1)) : parseInt(p.slice(5), 10) || 12;
+        var from = new Date(); from.setMonth(from.getMonth() - n);
+        return d >= ymd(from) && d <= ymd(new Date(Date.now() + 366 * 864e5));
+    }
+    function periodText() {
+        var p = st.period;
+        if (p === 'all') return 'in all years';
+        if (/^year:/.test(p)) return p.slice(5) === NOW_Y ? 'this year' : 'in ' + p.slice(5);
+        var n = p === 'last:n' ? Math.max(1, parseInt(st.n, 10) || 1) : parseInt(p.slice(5), 10);
+        return 'in the last ' + n + ' month' + (n === 1 ? '' : 's');
+    }
+    function rows() {
+        var q = flat(st.q), list = jobs().filter(function (e) { return e && inPeriod(e); }).map(row);
+        if (q) list = list.filter(function (r) {
+            var e = r.e, hay = flat([e.address, e.woNumber, e.notes, e.date, nice(e.date), r.l ? r.l.people.map(function (p) { return p.n; }).join(' ') : ''].join(' '));
+            return q.split(' ').every(function (w) { return hay.indexOf(w) >= 0; });
+        });
+        var f = st.show;
+        if (f === 'hours') list = list.filter(function (r) { return r.min > 0; });
+        else if (f === 'nohours') list = list.filter(function (r) { return !(r.min > 0); });
+        else if (f === 'topay') list = list.filter(function (r) { return r.wages - r.paid > 0.5; });
+        else if (f === 'paid') list = list.filter(function (r) { return !!r.e.paid; });
+        else if (f === 'unpaid') list = list.filter(function (r) { return !r.e.paid; });
+        else if (f === 'loss') list = list.filter(function (r) { return r.earned < 0; });
+        var by = {
+            new: function (a, b) { return String(b.e.date || '').localeCompare(String(a.e.date || '')) || (num(b.e.id) - num(a.e.id)); },
+            old: function (a, b) { return String(a.e.date || '').localeCompare(String(b.e.date || '')) || (num(a.e.id) - num(b.e.id)); },
+            earned: function (a, b) { return b.earned - a.earned; },
+            earnedLow: function (a, b) { return a.earned - b.earned; },
+            total: function (a, b) { return b.total - a.total; },
+            hours: function (a, b) { return b.min - a.min; },
+            days: function (a, b) { return b.nd - a.nd; },
+            avg: function (a, b) { return (b.avg == null ? -1e12 : b.avg) - (a.avg == null ? -1e12 : a.avg); },
+            addr: function (a, b) { return String(a.e.address || '').localeCompare(String(b.e.address || '')); }
+        }[st.sort] || null;
+        list.sort(function (a, b) { return (by ? by(a, b) : 0) || String(b.e.date || '').localeCompare(String(a.e.date || '')); });
+        return list;
+    }
+
+    /* ---------------------------------------------------------- drawing */
+    var SVG = {
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        chev: '<path d="M6 9l6 6 6-6"/>',
+        search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+        x: '<path d="M6 6l12 12M18 6L6 18"/>',
+        sync: '<path d="M21 12a9 9 0 0 1-15.5 6.3M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v4h-4M6 22v-4h4"/>',
+        user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
+        pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'
+    };
+    function ic(k) { return '<svg class="ern-svg" viewBox="0 0 24 24" aria-hidden="true">' + SVG[k] + '</svg>'; }
+    function tiles(r, total) {
+        var dash = '<span class="ern-na">—</span>', l = r.have;
+        var T = [
+            ['Base amount', money(r.base), ''],
+            ['GST', money(r.gst), ''],
+            ['Total amount', money(r.total), 'tot'],
+            ['Employee hours', l ? hrs(r.min) + (r.l && r.l.live ? ' <em class="ern-live">on the clock</em>' : '') : dash, ''],
+            ['Paid to employees', l ? money(r.paid) : dash, ''],
+            ['Earned', money(r.earned), r.earned < 0 ? 'neg' : 'pos'],
+            ['Earned + GST', money(r.earnedGst), ''],
+            ['Days on site', l ? days(r.nd) : dash, ''],
+            ['Average a day', l ? (r.avg == null ? '<span class="ern-na">no days yet</span>' : money(r.avg)) : dash, r.avg != null && r.avg < 0 ? 'neg' : '']
+        ];
+        return '<div class="ern-tiles' + (total ? ' ern-tot' : '') + '">' + T.map(function (t) { return '<div class="ern-tile ' + t[2] + '"><span>' + t[0] + '</span><b>' + t[1] + '</b></div>'; }).join('') + '</div>';
+    }
+    function bodyHtml(r) {
+        var e = r.e, l = r.l, h = tiles(r, false);
+        if (l && l.people.length) {
+            h += '<div class="ern-sub">' + ic('user') + 'Who worked</div><div class="ern-people">' + l.people.map(function (p) {
+                return '<div class="ern-p"><b>' + esc(p.n) + '</b><span>' + hrs(p.min) + ' · ' + days(p.nd) + '</span></div>';
+            }).join('') + '</div>';
+        }
+        var notes = [];
+        if (l && l.wages - l.paid > 0.5) notes.push('Wages for these hours come to about ' + money(l.wages) + ' at each person’s pay rate. ' + money(l.wages - l.paid) + ' of that isn’t marked as paid in Shiftora yet, so Earned may still go down.');
+        if (l && l.sites.length) notes.push('Shiftora job site' + (l.sites.length === 1 ? '' : 's') + ': ' + l.sites.map(esc).join(', ') + '.');
+        if (r.have && !l) notes.push('No Shiftora hours for this job: nobody clocked in at its address around the job date.');
+        if (!r.have) notes.push('Employee hours, Paid to employees and Days on site come from Shiftora. ' + esc(statusText()));
+        if (notes.length) h += '<div class="ern-notes">' + notes.map(function (n) { return '<p>' + n + '</p>'; }).join('') + '</div>';
+        h += '<div class="ern-acts"><button type="button" class="ern-btn" data-ern="jobnest" data-id="' + esc(e.id) + '">Open in JobNest</button></div>';
+        return h;
+    }
+    function cardHtml(r) {
+        var e = r.e, id = String(e.id), on = openId === id;
+        var meta = [nice(e.date), e.woNumber ? 'WO ' + esc(e.woNumber) : '', e.paid ? '<span class="ern-paid">Paid</span>' : (e.invoiced ? '<span class="ern-owing">Invoiced</span>' : '')].filter(Boolean).join(' · ');
+        var chips = '<span class="ern-chip">Total <b>' + money(r.total) + '</b></span>' +
+            (!r.have ? '' : r.min > 0 ? '<span class="ern-chip">' + ic('clock') + '<b>' + hrs(r.min) + '</b></span><span class="ern-chip">' + ic('cal') + '<b>' + days(r.nd) + '</b></span>' : '<span class="ern-chip ern-dim">No Shiftora hours</span>');
+        return '<div class="ern-job' + (on ? ' open' : '') + '" data-id="' + esc(id) + '">' +
+            '<button type="button" class="ern-head" aria-expanded="' + on + '">' +
+            '<span class="ern-hl"><b class="ern-addr">' + esc(e.address || 'No address') + '</b><span class="ern-meta">' + meta + '</span><span class="ern-chips">' + chips + '</span></span>' +
+            '<span class="ern-hr"><small>Earned</small><b class="' + (r.earned < 0 ? 'neg' : 'pos') + '">' + money(r.earned) + '</b>' + ic('chev') + '</span></button>' +
+            '<div class="ern-body"><div class="ern-in">' + (on ? bodyHtml(r) : '') + '</div></div></div>';
+    }
+    function statusText() {
+        if (sh.loading && sh.state !== 'ok') return 'Getting the hours from Shiftora…';
+        if (sh.state === 'ok') return 'Hours from Shiftora, updated ' + ago(sh.at) + '.';
+        if (sh.state === 'signin') return sh.msg || 'Sign in to Snapora on this device (as the Shiftora administrator) to bring in the hours.';
+        return (sh.msg || 'Couldn’t reach Shiftora.') + (sh.stale && sh.at ? ' Showing the hours from ' + ago(sh.at) + '.' : '');
+    }
+    function paintStatus() {
+        var el = $('ern-status'); if (!el) return;
+        var warn = sh.state !== 'ok' && !(sh.loading && sh.state === 'loading');
+        el.className = 'ern-status' + (warn ? ' warn' : '') + (sh.loading ? ' busy' : '');
+        el.innerHTML = '<span class="ern-st-t">' + esc(statusText()) + '</span>' +
+            (sh.state === 'signin' ? '<button type="button" class="ern-btn" data-ern="snapora">Open Snapora</button>' : '') +
+            '<button type="button" class="ern-ico" data-ern="reload" aria-label="Get the hours from Shiftora again">' + ic('sync') + '</button>';
+    }
+    function paint() {
+        var pg = $('earnings-page'); if (!pg) return;
+        paintStatus();
+        var list = rows(), box = $('ern-list'), sum = $('ern-sum');
+        var T = { base: 0, gst: 0, total: 0, min: 0, paid: 0, earned: 0, earnedGst: 0, nd: 0, have: sh.state === 'ok' || sh.stale, l: { live: false } };
+        list.forEach(function (r) { T.base += r.base; T.gst += r.gst; T.total += r.total; T.min += r.min; T.paid += r.paid; T.earned += r.earned; T.earnedGst += r.earnedGst; T.nd += r.nd; if (r.l && r.l.live) T.l.live = true; });
+        T.avg = T.nd ? T.earned / T.nd : null;
+        sum.innerHTML = '<div class="ern-sum-h"><b>' + list.length + ' job' + (list.length === 1 ? '' : 's') + ' ' + esc(periodText()) + '</b>' + (st.q || st.show !== 'all' ? '<span>(searched or filtered)</span>' : '') + '</div>' + tiles(T, true);
+        if (!list.length) { box.innerHTML = '<p class="ern-empty">' + (jobs().length ? 'No jobs match. Try another year, or clear the search and filter.' : 'No jobs yet. Jobs you save in Create Job show up here.') + '</p>'; return; }
+        if (openId && !list.some(function (r) { return String(r.e.id) === openId; })) openId = null;
+        box.innerHTML = list.slice(0, shown).map(cardHtml).join('') + (list.length > shown ? '<button type="button" class="ern-more" data-ern="more">Show ' + Math.min(60, list.length - shown) + ' more of ' + (list.length - shown) + '</button>' : '');
+        var n = $('ern-n'); if (n) n.hidden = st.period !== 'last:n';
+    }
+    function setOpen(id) {
+        var prev = openId; openId = id;
+        Array.prototype.forEach.call(document.querySelectorAll('#ern-list .ern-job'), function (c) {
+            var me = c.getAttribute('data-id'), on = me === id;
+            if (on && !c.classList.contains('open')) {
+                var e = jobs().filter(function (x) { return String(x.id) === me; })[0];
+                if (e) c.querySelector('.ern-in').innerHTML = bodyHtml(row(e));
+            }
+            c.classList.toggle('open', on); c.querySelector('.ern-head').setAttribute('aria-expanded', String(on));
+            if (on && prev !== id) setTimeout(function () { var r = c.getBoundingClientRect(); if (r.top < 70 || r.top > innerHeight - 160) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60);
+        });
+    }
+    function years() {
+        var y = {}; y[NOW_Y] = 1; jobs().forEach(function (e) { var k = String(e.date || '').slice(0, 4); if (/^\d{4}$/.test(k)) y[k] = 1; });
+        return Object.keys(y).sort().reverse();
+    }
+    function periodOpts() {
+        var o = years().map(function (y) { return ['year:' + y, y === NOW_Y ? y + ' (this year)' : y]; });
+        o = o.concat([['last:3', 'Last 3 months'], ['last:6', 'Last 6 months'], ['last:12', 'Last 12 months'], ['last:n', 'Last … months (you choose)'], ['all', 'All years']]);
+        return o.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === st.period ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('');
+    }
+    function opts(list, v) { return list.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === v ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join(''); }
+    var SHOW = [['all', 'All jobs'], ['hours', 'With employee hours'], ['nohours', 'No employee hours'], ['topay', 'Employees still to pay'], ['loss', 'Lost money'], ['paid', 'Customer paid'], ['unpaid', 'Customer not paid yet']];
+    var SORT = [['new', 'Newest first'], ['old', 'Oldest first'], ['earned', 'Earned: most first'], ['earnedLow', 'Earned: least first'], ['total', 'Total amount: most first'], ['hours', 'Most employee hours'], ['days', 'Most days on site'], ['avg', 'Best average a day'], ['addr', 'Address A–Z']];
+    function inject() {
+        var settings = $('settings-page'); if (!settings || $('earnings-page')) return;
+        settings.parentNode.insertAdjacentHTML('beforeend',
+            '<div id="earnings-page" class="page">' +
+            '<div class="back-btn animate-item" onclick="showPage(\'home\')"><i class="fas fa-arrow-left"></i> Back to Home</div>' +
+            '<div class="stunning-form-container animate-item"><div class="magical-header"><div class="floating-orb orb-1"></div><div class="floating-orb orb-2"></div><div class="floating-orb orb-3"></div>' +
+            '<div class="header-content"><div class="magic-icon"><i class="fas fa-coins"></i><div class="icon-glow"></div></div>' +
+            '<h2 class="magic-title">Job Earnings</h2><p class="magic-subtitle">What every job brought in, after wages</p></div></div>' +
+            '<div class="form-grid ern-wrap">' +
+            '<div class="ern-bar">' +
+            '<label class="ern-search">' + ic('search') + '<input type="search" id="ern-q" class="app-input" placeholder="Search address, work order no., employee…" autocomplete="off" enterkeyhint="search"><button type="button" class="ern-ico ern-clear" data-ern="clear" aria-label="Clear the search" hidden>' + ic('x') + '</button></label>' +
+            '<div class="ern-sels">' +
+            '<label><span>Jobs from</span><select id="ern-period" class="year-filter-select">' + periodOpts() + '</select></label>' +
+            '<label id="ern-n" hidden><span>Months</span><input type="number" id="ern-nv" class="year-filter-select" min="1" max="240" inputmode="numeric" value="' + st.n + '"></label>' +
+            '<label><span>Show</span><select id="ern-show" class="year-filter-select">' + opts(SHOW, st.show) + '</select></label>' +
+            '<label><span>Sort</span><select id="ern-sort" class="year-filter-select">' + opts(SORT, st.sort) + '</select></label>' +
+            '</div></div>' +
+            '<div id="ern-status" class="ern-status"></div>' +
+            '<div id="ern-sum" class="ern-sum"></div>' +
+            '<div id="ern-list" class="ern-list"></div>' +
+            '<p class="ern-foot">Earned = Base amount minus Paid to employees. Average a day = Earned divided by the days someone worked on site. Hours and pay are read from Shiftora; nothing is changed there.</p>' +
+            '</div></div></div>');
+        var pg = $('earnings-page');
+        $('ern-q').addEventListener('input', function () { st.q = this.value; shown = 60; this.parentNode.querySelector('.ern-clear').hidden = !this.value; paint(); });
+        $('ern-period').addEventListener('change', function () { st.period = this.value; shown = 60; paint(); if (st.period === 'last:n') setTimeout(function () { try { $('ern-nv').focus(); $('ern-nv').select(); } catch (e) { /* ignore */ } }, 50); });
+        $('ern-nv').addEventListener('input', function () { var v = parseInt(this.value, 10); if (v > 0) { st.n = Math.min(240, v); paint(); } });
+        $('ern-show').addEventListener('change', function () { st.show = this.value; shown = 60; paint(); });
+        $('ern-sort').addEventListener('change', function () { st.sort = this.value; paint(); });
+        try { new MutationObserver(function () { if (pg.classList.contains('active') && !pg._on) { pg._on = 1; enter(); } else if (!pg.classList.contains('active')) pg._on = 0; })
+            .observe(pg, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* ignore */ }
+        // navigation bar (under "More" unless you put it on the bar in Settings > Appearance > Navigation bar)
+        var nav = document.querySelector('.floating-nav');
+        if (nav && !nav.querySelector('[data-page="earnings"]')) {
+            var it = document.createElement('div'); it.className = 'nav-item'; it.setAttribute('data-tooltip', 'Job Earnings'); it.setAttribute('data-page', 'earnings');
+            it.setAttribute('onclick', "navigateToPage('earnings')"); it.innerHTML = '<i class="fas fa-coins"></i>';
+            var ref = nav.querySelector('[data-page="summary"]'); if (ref && ref.nextSibling) nav.insertBefore(it, ref.nextSibling); else nav.appendChild(it);
+            try { if (window.IncNavMore && IncNavMore.apply) IncNavMore.apply(); } catch (e) { /* ignore */ }
+        }
+    }
+    function enter() {
+        // every time you open the page: this year, newest first, nothing searched, filtered or open
+        NOW_Y = String(new Date().getFullYear());
+        st = { q: '', period: 'year:' + NOW_Y, n: st.n, show: 'all', sort: 'new' }; openId = null; shown = 60;
+        var sel = $('ern-period'); if (sel) { sel.innerHTML = periodOpts(); sel.value = st.period; }
+        if ($('ern-q')) { $('ern-q').value = ''; $('ern-q').parentNode.querySelector('.ern-clear').hidden = true; }
+        if ($('ern-show')) $('ern-show').value = 'all';
+        if ($('ern-sort')) $('ern-sort').value = 'new';
+        paint(); load(false);
+    }
+    document.addEventListener('click', function (e) {
+        var pg = $('earnings-page'); if (!pg || !pg.classList.contains('active') || !e.target.closest) return;
+        var b = e.target.closest('[data-ern]');
+        if (b && pg.contains(b)) {
+            var k = b.getAttribute('data-ern');
+            if (k === 'reload') { load(true); return; }
+            if (k === 'snapora') { try { navigateToPage('snapora'); } catch (x) { showPage('snapora'); } return; }
+            if (k === 'more') { shown += 60; paint(); return; }
+            if (k === 'clear') { st.q = ''; $('ern-q').value = ''; b.hidden = true; paint(); return; }
+            if (k === 'jobnest') { openInJobNest(b.getAttribute('data-id')); return; }
+        }
+        var head = e.target.closest('.ern-head');
+        if (head && pg.contains(head)) { var id = head.parentNode.getAttribute('data-id'); setOpen(openId === id ? null : id); return; }
+        if (openId && !e.target.closest('.ern-job.open')) setOpen(null);   // a tap anywhere else closes it
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && openId && cur() === PG) setOpen(null); });
+    function openInJobNest(id) {
+        var e = jobs().filter(function (x) { return String(x.id) === String(id); })[0]; if (!e) return;
+        try { navigateToPage('view'); } catch (x) { showPage('view'); }
+        setTimeout(function () {
+            var s = $('search-input'); if (!s) return;
+            s.value = e.woNumber || e.address || ''; try { searchEntries(); } catch (x) { s.dispatchEvent(new Event('input')); }
+        }, 700);
+    }
+    // your jobs changed (saved, edited, deleted, synced from another device): draw again
+    window.addEventListener('incjobsaved', function () { if (cur() === PG) setTimeout(paint, 300); });
+    try { var c0 = JSON.parse(localStorage.getItem(CACHE) || 'null'); if (c0 && c0.jobs) sh = Object.assign(c0, { state: 'cached', stale: true, msg: 'Updating…' }); } catch (e) { /* ignore */ }
+
+    var css = document.createElement('style'); css.id = 'ern-css';
+    css.textContent =
+        '#earnings-page{--ern-acc:rgb(var(--pr2,167,139,250));--ern-pos:#4ade80;--ern-neg:#f87171;--ern-bg:rgba(127,127,127,.10);--ern-bd:rgba(127,127,127,.24)}' +
+        'html[data-theme="regular"] #earnings-page,html.lm #earnings-page{--ern-pos:#15803d;--ern-neg:#dc2626}' +
+        'html[data-theme="regular"] #earnings-page{--ern-acc:var(--rg-acc,#2563eb)}html[data-theme="sleek"] #earnings-page{--ern-acc:var(--sk-fg,currentColor)}' +
+        '.ern-wrap{display:block!important}#earnings-page [hidden]{display:none!important}' +
+        '.ern-svg{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.12em}' +
+        '.ern-bar{display:grid;gap:10px;margin:0 0 12px}' +
+        '.ern-search{position:relative;display:block}.ern-search>.ern-svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:.6;pointer-events:none}' +
+        '.ern-search input{padding-left:40px!important;padding-right:40px!important;font-size:16px}.ern-search input::-webkit-search-cancel-button{display:none}' +
+        '.ern-clear{position:absolute!important;right:6px;top:50%;transform:translateY(-50%)}' +
+        '.ern-sels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.ern-sels label{display:grid;gap:3px;min-width:0}' +
+        '.ern-sels label>span{font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.7}' +
+        '.ern-sels select,.ern-sels input{width:100%!important;min-width:0!important;font-size:16px!important;padding:8px 10px!important}' +
+        '.ern-sels:has(#ern-n:not([hidden])){grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr) minmax(0,1fr) minmax(0,1fr)}' +
+        '@media (max-width:560px){.ern-sels{grid-template-columns:repeat(2,minmax(0,1fr))}.ern-sels label:first-child{grid-column:1/-1}.ern-sels:has(#ern-n:not([hidden])){grid-template-columns:repeat(2,minmax(0,1fr))}.ern-sels:has(#ern-n:not([hidden])) label:first-child{grid-column:auto}}' +
+        '.ern-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.8rem;padding:8px 10px 8px 12px;border-radius:12px;background:var(--ern-bg);border:1px solid var(--ern-bd);margin:0 0 12px}' +
+        '.ern-status .ern-st-t{flex:1 1 180px;opacity:.85;line-height:1.35}.ern-status.warn{border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.10)}' +
+        '.ern-status.busy .ern-ico .ern-svg{animation:ernspin 1s linear infinite}@keyframes ernspin{to{transform:rotate(360deg)}}' +
+        '.ern-ico{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:0;background:transparent;color:inherit;cursor:pointer;font-size:16px;opacity:.8}.ern-ico:hover{opacity:1;background:var(--ern-bg)}' +
+        '.ern-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;border:1px solid var(--ern-acc);background:transparent;color:inherit;font:600 .82rem/1.2 inherit;cursor:pointer}.ern-btn:hover{background:var(--ern-bg)}' +
+        '.ern-sum{margin:0 0 14px;padding:12px;border-radius:16px;background:var(--ern-bg);border:1px solid var(--ern-bd)}' +
+        '.ern-sum-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:0 2px 10px;font-size:.92rem}.ern-sum-h span{font-size:.75rem;opacity:.65}' +
+        '.ern-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}' +
+        '.ern-tile{padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.08);min-width:0;display:grid;gap:2px}' +
+        '.ern-tile span{font-size:.64rem;font-weight:700;letter-spacing:.03em;line-height:1.15;text-transform:uppercase;opacity:.65;overflow-wrap:anywhere}' +
+        '.ern-tile b{font-size:.95rem;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}' +
+        '.ern-tile.pos b{color:var(--ern-pos)}.ern-tile.neg b{color:var(--ern-neg)}.ern-tile.tot b{color:var(--ern-acc)}' +
+        '.ern-tot .ern-tile b{font-size:1.02rem}' +
+        '.ern-chip.ern-dim{opacity:.6}.ern-na{opacity:.45;font-weight:600}.ern-live{display:block;font-style:normal;font-size:.68rem;font-weight:700;color:var(--ern-pos)}' +
+        '.ern-list{display:grid;gap:10px}' +
+        '.ern-job{border-radius:16px;background:var(--ern-bg);border:1px solid var(--ern-bd);overflow:hidden;transition:border-color .2s,box-shadow .2s}' +
+        '.ern-job.open{border-color:var(--ern-acc);box-shadow:0 6px 24px rgba(0,0,0,.18)}' +
+        '.ern-head{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:12px 12px 12px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}' +
+        '.ern-head:focus-visible{outline:2px solid var(--ern-acc);outline-offset:-2px;border-radius:16px}' +
+        '.ern-hl{flex:1;min-width:0;display:grid;gap:3px}.ern-addr{font-size:.95rem;font-weight:700;line-height:1.25;overflow-wrap:anywhere}' +
+        '.ern-meta{font-size:.76rem;opacity:.7}.ern-paid{color:var(--ern-pos);font-weight:700}.ern-owing{color:#f59e0b;font-weight:700}' +
+        '.ern-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}.ern-chip{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;padding:2px 8px;border-radius:999px;background:rgba(127,127,127,.12);white-space:nowrap}.ern-chip b{font-weight:700}' +
+        '.ern-hr{flex:none;display:grid;justify-items:end;gap:1px;text-align:right}.ern-hr small{font-size:.64rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.6}' +
+        '.ern-hr b{font-size:1.02rem;font-variant-numeric:tabular-nums}.ern-hr b.pos{color:var(--ern-pos)}.ern-hr b.neg{color:var(--ern-neg)}' +
+        '.ern-hr .ern-svg{margin-top:4px;opacity:.6;transition:transform .25s}.ern-job.open .ern-hr .ern-svg{transform:rotate(180deg)}' +
+        '.ern-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease}.ern-job.open .ern-body{grid-template-rows:1fr}' +
+        '.ern-in{overflow:hidden;min-height:0;padding:0 12px}.ern-job.open .ern-in{padding:0 12px 14px}' +
+        '.ern-sub{display:flex;align-items:center;gap:6px;margin:14px 2px 6px;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.75}' +
+        '.ern-people{display:grid;gap:4px}.ern-p{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-radius:9px;background:rgba(127,127,127,.08);font-size:.85rem}.ern-p span{opacity:.8;white-space:nowrap}' +
+        '.ern-notes{margin-top:10px;font-size:.78rem;opacity:.8;display:grid;gap:5px}.ern-notes p{margin:0;line-height:1.4}' +
+        '.ern-acts{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}' +
+        '.ern-more{width:100%;padding:11px;border-radius:12px;border:1px dashed var(--ern-bd);background:transparent;color:inherit;font:600 .85rem inherit;cursor:pointer}' +
+        '.ern-empty{text-align:center;opacity:.7;padding:26px 10px;margin:0}.ern-foot{font-size:.72rem;opacity:.6;margin:14px 2px 0;line-height:1.45}' +
+        '.mh-tern .mh-tile-icon i{color:#fff}' +
+        '@media (prefers-reduced-motion:reduce){.ern-body,.ern-hr .ern-svg{transition:none}}';
+    document.head.appendChild(css);
+    function boot() { inject(); setTimeout(inject, 1500); paint(); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    window.IncEarn = { refresh: function () { return load(true); }, paint: paint, data: function () { return sh; }, rows: function () { return rows(); }, parse: parse, streetNorm: streetNorm, strength: strength, tally: tally };
 })();
 </script>
 </body>
