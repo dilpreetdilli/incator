@@ -8057,6 +8057,25 @@ function getTokenFromTap() {                                         // call str
 }
 
 /* ------------------------------ Drive REST ------------------------------ */
+/* v78: Google's own reason for refusing, so the message says what is really wrong (before, anything with "quota" in it,
+   such as a full Google storage, showed as "Google is rate limiting requests"). Google's words are kept for Details. */
+function driveRefusal(status, body, token) {
+    var j = null; try { j = JSON.parse(body); } catch (e) { j = null; }
+    var er = (j && j.error) || {}, r0 = (Array.isArray(er.errors) && er.errors[0]) || {}, info = (Array.isArray(er.details) ? er.details : []).filter(function (d) { return /ErrorInfo/.test(d && d['@type'] || ''); })[0] || {};
+    var reason = String(r0.reason || info.reason || er.status || ''), msg = String(er.message || r0.message || body || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+    var viaServer = false; try { viaServer = !!(Cloud.token && Cloud.token.token === token && Cloud.token.srv); } catch (e) { viaServer = false; }
+    var google = 'Google said (' + status + (reason ? ', ' + reason : '') + '): ' + (msg || 'no details') + (viaServer ? ' [using the automatic backup sign-in from your IncAtor server]' : ' [using this device’s Google sign-in]');
+    var x = { status: status, reason: reason, google: google, viaServer: viaServer };
+    if (/storageQuotaExceeded/i.test(reason + ' ' + msg) || /storage quota/i.test(msg))
+        return ApiError('Your Google storage is full', Object.assign(x, { storage: true, retry: false }));
+    if (/accessNotConfigured|SERVICE_DISABLED/i.test(reason) || /has not been used in project|is disabled/i.test(msg))
+        return ApiError('The Google Drive API is turned off in the Google Cloud project IncAtor uses', Object.assign(x, { apiOff: true, retry: false }));
+    if (/dailyLimitExceeded/i.test(reason))
+        return ApiError('Google’s daily limit for IncAtor is used up; backups start again tomorrow', Object.assign(x, { retry: true, slow: true }));
+    if (status === 429 || /rateLimit|RATE_LIMIT|RESOURCE_EXHAUSTED|quotaExceeded/i.test(reason + ' ' + msg))
+        return ApiError('Google asked IncAtor to slow down for a moment', Object.assign(x, { retry: true }));
+    return AuthError('Google Drive permission denied', Object.assign(x, { needUser: true, forbidden: true }));
+}
 async function rawFetch(url, opts, token) {
     var res;
     try {
@@ -8065,12 +8084,11 @@ async function rawFetch(url, opts, token) {
         res = await fetch(url, opts);
     } catch (e) { throw NetError(e && e.message || 'network error'); }
     if (res.status === 401) { clearToken(); throw AuthError('Google authorization expired', { expired: true }); }
-    if (res.status === 403) {
+    if (res.status === 403 || res.status === 429) {
         var body = ''; try { body = await res.text(); } catch (e) { /* ignore */ }
-        if (/rateLimit|quota/i.test(body)) throw ApiError('Google is rate limiting requests', { status: 403, retry: true });
-        throw AuthError('Google Drive permission denied', { needUser: true, forbidden: true });
+        throw driveRefusal(res.status, body, token);
     }
-    if (!res.ok) throw ApiError('Google Drive error ' + res.status, { status: res.status, retry: res.status >= 500 || res.status === 429 || res.status === 408 });
+    if (!res.ok) throw ApiError('Google Drive error ' + res.status, { status: res.status, retry: res.status >= 500 || res.status === 408 });
     return res;
 }
 async function withToken(fn) {
@@ -8218,6 +8236,15 @@ async function drivePrune() {
     var sess = readSession(); if (setupMode || !sess) return 0;
     return withToken(async function (token) { var folderId = await ensureFolder(token); var f = await listBackups(token, folderId, sess.sub); return prune(token, f); });
 }
+async function freeSpace(keep) {                                 // v78: when Google storage is full: delete older IncAtor backup versions for good
+    var sess = readSession(); if (setupMode || !sess) return 0;
+    keep = Math.max(PROTECT, keep || 10);
+    return withToken(async function (token) {
+        var folderId = await ensureFolder(token), extra = newestFirst(await listBackups(token, folderId, sess.sub)).slice(keep), n = 0;
+        for (var i = 0; i < extra.length; i++) { try { await rawFetch(API + '/' + encodeURIComponent(extra[i].id), { method: 'DELETE' }, token); n++; } catch (e) { /* ignore */ } }
+        return n;
+    });
+}
 async function prune(token, files) {
     var keep = keepFiles(); if (!isFinite(keep)) return 0;                              // Auto Delete > Old Google Drive backups is off
     var extra = newestFirst(files).slice(keep), n = 0;
@@ -8257,13 +8284,13 @@ async function runBackup(o) {
         try { if (window.IncBackupLog) IncBackupLog.paint(); } catch (e2) { /* optional */ }
     } catch (e) {
         result = { error: e };
-        if (!is(e, 'GuardError')) failMark(is(e, 'NetError') ? 'No internet connection' : is(e, 'AuthError') || is(e, 'WrongAccountError') ? 'Google Drive needs to be reconnected' : is(e, 'ConflictError') ? 'Your devices have different changes' : (e && e.message) || 'unknown error');
+        if (!is(e, 'GuardError')) failMark(is(e, 'NetError') ? 'No internet connection' : is(e, 'AuthError') || is(e, 'WrongAccountError') ? 'Google Drive needs to be reconnected' : is(e, 'ConflictError') ? 'Your devices have different changes' : (e && e.message) || 'unknown error', e);
         if (is(e, 'NetError') || (is(e, 'ApiError') && e.retry)) {
-            setStatus('offline', 'Offline - will retry automatically');
-            var wait = CFG.RETRY_MS[Math.min(Cloud.retryIdx++, CFG.RETRY_MS.length - 1)];
+            setStatus('offline', is(e, 'NetError') ? 'Offline - will retry automatically' : (e.message || 'Google Drive error') + ' - will retry automatically');
+            var wait = e && e.slow ? 3600000 : CFG.RETRY_MS[Math.min(Cloud.retryIdx++, CFG.RETRY_MS.length - 1)];
             clearTimeout(Cloud.timer);
             Cloud.timer = setTimeout(function () { runBackup({ auto: true, scheduled: !!o.scheduled }); }, wait);
-            if (o.manual) toast('No connection - the backup will retry automatically', 'info');
+            if (o.manual) toast(is(e, 'NetError') ? 'No connection - the backup will retry automatically' : (e.message || 'Google Drive error') + ' - IncAtor will try again by itself', 'info');
         } else if (is(e, 'AuthError') || is(e, 'WrongAccountError')) {
             setStatus('needs-auth', 'Google Drive is reconnecting in the background');
             armAutoConnect('resume'); setTimeout(quietRenew, 300);
@@ -9036,12 +9063,12 @@ function lastAnyBackup() {                                                 // th
     return t;
 }
 function failKey() { var p = pfx(); return p === null ? null : p + 'backupFail'; }
-function failMark(why) {                                                   // when backups started failing (cleared by the next good backup)
+function failMark(why, err) {                                              // when backups started failing (cleared by the next good backup)
     var k = failKey(); if (!k) return;
     try {
         if (!why) { if (LS.getItem(k)) { LS.removeItem(k); if (window.IncBackupWarn) IncBackupWarn.check(); } return; }
         var o = JSON.parse(LS.getItem(k) || 'null') || { since: Date.now() };
-        o.why = why; o.n = (o.n || 0) + 1; o.at = Date.now(); LS.setItem(k, JSON.stringify(o));
+        o.why = why; o.google = (err && err.google) || ''; o.kind = err && err.storage ? 'storage' : err && err.apiOff ? 'apiOff' : err && err.viaServer && err.forbidden ? 'srvDenied' : ''; o.n = (o.n || 0) + 1; o.at = Date.now(); LS.setItem(k, JSON.stringify(o));
     } catch (e) { /* ignore */ }
 }
 function health() {
@@ -9167,7 +9194,7 @@ async function wipeAll(resetSettings) {
 window.IncAtorCloud = {
     setupMode: setupMode,
     photos: { ready: photosReady, list: photoList, upload: photoUpload, download: photoDownload, remove: photoRemove },
-    files: { list: driveFiles, remove: driveDelete, prune: drivePrune, protect: PROTECT, keep: keepFiles },
+    files: { list: driveFiles, remove: driveDelete, prune: drivePrune, protect: PROTECT, keep: keepFiles, freeSpace: freeSpace },
     backupLog: { list: logRead, refresh: logRefresh, days: LOG_DAYS, everyHours: EVERY_MS / 3600000, last: lastAnyBackup },
     restoreLatest: function () { return restoreFromDrive(null); }, restoreFile: restoreFromDrive,
     wipe: wipeFlow, wipeNow: wipeAll, cloudReady: function () { return !!Cloud.ready; }, health: health,
@@ -33691,7 +33718,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.26 (v77)';
+var VERSION = '2026.11.26 (v78)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -33828,6 +33855,15 @@ window.IncVersion = VERSION;
         if (stale && now - startedAt > 80000) return { h: h, why: h.ready ? (f ? f.why : 'No backup has worked since IncAtor opened') : 'Google Drive is not connected', since: h.last };
         return null;
     }
+    function kindOf(st) { return (st && st.h && st.h.fail && st.h.fail.kind) || ''; }
+    // v78: what to do about it, and Google's own words (they show what really went wrong)
+    function help(st) {
+        var f = st.h && st.h.fail, k = kindOf(st), t = '';
+        if (k === 'storage') t = 'Your Google account (Drive, Gmail and Photos share it) has no space left. Free up space in Google, or tap Free up space to delete older IncAtor backups and keep the newest 10.';
+        else if (k === 'apiOff') t = 'Turn on the Google Drive API in Google Cloud for the project named below, then tap Back up now.';
+        else if (k === 'srvDenied') t = 'The automatic backup sign-in was refused. Tap Make backups automatic to connect it again.';
+        return (t ? '<small class="bkw-help">' + esc(t) + '</small>' : '') + (f && f.google ? '<small class="bkw-g">' + esc(f.google.length > 260 ? f.google.slice(0, 257) + '…' : f.google) + '</small>' : '');
+    }
     function hide() { var b = document.getElementById('bk-warn'); if (b) { b.classList.remove('show'); setTimeout(function () { if (b && !b.classList.contains('show')) b.remove(); }, 400); } }
     function check() {
         var st = state();
@@ -33835,8 +33871,9 @@ window.IncVersion = VERSION;
         var b = document.getElementById('bk-warn');
         if (!b) { b = document.createElement('div'); b.id = 'bk-warn'; b.setAttribute('role', 'alert'); document.body.appendChild(b); }
         var last = st.h.last ? new Date(st.h.last).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (' + ago(st.h.last) + ')' : 'never';
-        b.innerHTML = '<span class="bkw-ic"><i class="fas fa-exclamation-triangle"></i></span><div class="bkw-tx"><b>Backups have stopped</b><small>Last backup: ' + esc(last) + '</small><small>Reason: ' + esc(st.why) + '</small>' +
-            '<div class="bkw-bt">' + (window.IncDriveAuto && IncDriveAuto.offer() ? '<button type="button" data-bkw="auto"><i class="fas fa-magic"></i> Make backups automatic</button>' : '') + '<button type="button" data-bkw="now"><i class="fas fa-cloud"></i> Back up now</button><button type="button" data-bkw="open">Details</button></div></div>' +
+        b.innerHTML = '<span class="bkw-ic"><i class="fas fa-exclamation-triangle"></i></span><div class="bkw-tx"><b>Backups have stopped</b><small>Last backup: ' + esc(last) + '</small><small>Reason: ' + esc(st.why) + '</small>' + help(st) +
+            '<div class="bkw-bt">' + (window.IncDriveAuto && IncDriveAuto.offer() ? '<button type="button" data-bkw="auto"><i class="fas fa-magic"></i> Make backups automatic</button>' : '') +
+            (kindOf(st) === 'storage' ? '<button type="button" data-bkw="free"><i class="fas fa-trash"></i> Free up space</button>' : '') + '<button type="button" data-bkw="now"><i class="fas fa-cloud"></i> Back up now</button><button type="button" data-bkw="open">Details</button></div></div>' +
             '<button type="button" class="bkw-x" data-bkw="x" aria-label="Hide for now"><i class="fas fa-times"></i></button>';
         requestAnimationFrame(function () { b.classList.add('show'); });
         return st;
@@ -33847,6 +33884,18 @@ window.IncVersion = VERSION;
         if (a === 'x') { hiddenUntil = Date.now() + 3 * 3600000; hide(); }
         else if (a === 'open') { hide(); hiddenUntil = Date.now() + 600000; try { showPage('data'); } catch (e2) { /* ignore */ } }
         else if (a === 'auto') { try { IncDriveAuto.connect(); } catch (e4) { /* ignore */ } }
+        else if (a === 'free') {
+            (typeof showConfirmation === 'function' ? showConfirmation({ title: 'Free up space in Google Drive?', message: 'This deletes older IncAtor backups from your Google Drive for good and keeps the newest 10. Your jobs on this device and your job photos are not touched.', confirmText: 'Delete older backups', type: 'warning' }) : Promise.resolve(window.confirm('Delete older IncAtor backups from Google Drive and keep the newest 10?')))
+                .then(function (yes) {
+                    if (!yes) return;
+                    t.disabled = true; t.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Freeing up space...';
+                    return IncAtorCloud.files.freeSpace(10).then(function (n) {
+                        try { toast(n ? 'Deleted ' + n + ' older backup' + (n === 1 ? '' : 's') + '. Backing up now…' : 'There were no older backups to delete. Free up space in your Google account.', n ? 'success' : 'info'); } catch (e5) { /* ignore */ }
+                        if (n) IncAtorCloud.backupNow(true);
+                        setTimeout(check, 9000);
+                    });
+                }).catch(function (e6) { try { toast('Could not free up space: ' + (e6 && e6.message || e6), 'error'); } catch (e7) { /* ignore */ } setTimeout(check, 500); });
+        }
         else if (a === 'now') { t.disabled = true; t.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Backing up...'; try { IncAtorCloud.backupNow(true); } catch (e3) { /* ignore */ } setTimeout(function () { check(); }, 9000); }
     });
     /* Tell the IncAtor server how backups are going, so it can send a notification when they stop, even while IncAtor is closed. */
@@ -33886,6 +33935,8 @@ window.IncVersion = VERSION;
         '  padding: 14px 14px 12px; border-radius: 18px; color: #fff; background: linear-gradient(135deg, rgba(185,28,28,.96), rgba(127,29,29,.96)); border: 1px solid rgba(252,165,165,.5);',
         '  box-shadow: 0 12px 34px rgba(0,0,0,.45); transform: translateY(-16px); opacity: 0; transition: transform .35s, opacity .35s; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }',
         '#bk-warn.show { transform: none; opacity: 1; }',
+        '#bk-warn .bkw-help { opacity: .95; font-weight: 600; }',
+        '#bk-warn .bkw-g { opacity: .8; font-size: .72rem; overflow-wrap: anywhere; }',
         '.bkw-ic { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.18); }',
         '.bkw-tx { flex: 1; min-width: 0; } .bkw-tx b { display: block; font-size: .98rem; } .bkw-tx small { display: block; font-size: .76rem; opacity: .9; margin-top: 1px; overflow-wrap: anywhere; }',
         '.bkw-bt { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .bkw-bt button { padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,255,255,.55); background: rgba(255,255,255,.14); color: #fff; font-size: .8rem; font-weight: 600; }',
@@ -36747,8 +36798,11 @@ window.IncVersion = VERSION;
     function row(e) {
         var l = (sh.jobs || {})[String(e.id)] || null, have = sh.state === 'ok' || sh.stale || (sh.at && l);
         var b = base(e), g = num(e.gst), t = e.total != null ? num(e.total) : b + g;
-        var paid = l ? l.paid : 0, earned = b - paid, nd = l ? l.nd : 0;
-        return { e: e, l: l, have: !!have, base: b, gst: g, total: t, min: l ? l.min : 0, paid: paid, wages: l ? l.wages : 0, earned: earned, earnedGst: earned + g, nd: nd, avg: nd ? earned / nd : null };
+        // v78: wages not marked Paid in Shiftora yet are "To pay" and come off Earned too
+        var paid = l ? l.paid : 0, wages = l ? l.wages : 0, toPay = Math.max(0, Math.round((wages - paid) * 100) / 100), nd = l ? l.nd : 0;
+        if (toPay < 0.5) toPay = 0;
+        var earned = b - paid - toPay;
+        return { e: e, l: l, have: !!have, base: b, gst: g, total: t, min: l ? l.min : 0, paid: paid, toPay: toPay, wages: wages, earned: earned, earnedGst: earned + g, nd: nd, avg: nd ? earned / nd : null };
     }
     function inPeriod(e) {
         var d = String(e.date || '').slice(0, 10), p = st.period;
@@ -36774,7 +36828,7 @@ window.IncVersion = VERSION;
         var f = st.show;
         if (f === 'hours') list = list.filter(function (r) { return r.min > 0; });
         else if (f === 'nohours') list = list.filter(function (r) { return !(r.min > 0); });
-        else if (f === 'topay') list = list.filter(function (r) { return r.wages - r.paid > 0.5; });
+        else if (f === 'topay') list = list.filter(function (r) { return r.toPay > 0; });
         else if (f === 'paid') list = list.filter(function (r) { return !!r.e.paid; });
         else if (f === 'unpaid') list = list.filter(function (r) { return !r.e.paid; });
         else if (f === 'loss') list = list.filter(function (r) { return r.earned < 0; });
@@ -36812,7 +36866,8 @@ window.IncVersion = VERSION;
             ['GST', money(r.gst), ''],
             ['Total amount', money(r.total), 'tot'],
             ['Employee hours', l ? hrs(r.min) + (r.l && r.l.live ? ' <em class="ern-live">on the clock</em>' : '') : dash, ''],
-            ['Paid to employees', l ? money(r.paid) : dash, ''],
+            r.toPay > 0 ? ['To pay employees', money(r.toPay) + (r.paid > 0.004 ? '<em class="ern-subv">+ ' + money(r.paid) + ' already paid</em>' : ''), 'pay']
+                : ['Paid to employees', l ? money(r.paid) : dash, ''],
             ['Earned', money(r.earned), r.earned < 0 ? 'neg' : 'pos'],
             ['Earned + GST', money(r.earnedGst), ''],
             ['Days on site', l ? days(r.nd) : dash, ''],
@@ -36828,7 +36883,7 @@ window.IncVersion = VERSION;
             }).join('') + '</div>';
         }
         var notes = [];
-        if (l && l.wages - l.paid > 0.5) notes.push('Wages for these hours come to about ' + money(l.wages) + ' at each person’s pay rate. ' + money(l.wages - l.paid) + ' of that isn’t marked as paid in Shiftora yet, so Earned may still go down.');
+        if (r.toPay > 0) notes.push('Wages for these hours come to ' + money(r.wages) + ' at each person’s pay rate. ' + money(r.toPay) + ' of that isn’t marked as paid in Shiftora yet, so it shows as To pay and is already taken off Earned.');
         if (l && l.sites.length) notes.push('Shiftora job site' + (l.sites.length === 1 ? '' : 's') + ': ' + l.sites.map(esc).join(', ') + '.');
         if (r.have && !l) notes.push('No Shiftora hours for this job: nobody clocked in at its address around the job date.');
         if (!r.have) notes.push('Employee hours, Paid to employees and Days on site come from Shiftora. ' + esc(statusText()));
@@ -36840,7 +36895,8 @@ window.IncVersion = VERSION;
         var e = r.e, id = String(e.id), on = openId === id;
         var meta = [nice(e.date), e.woNumber ? 'WO ' + esc(e.woNumber) : '', e.paid ? '<span class="ern-paid">Paid</span>' : (e.invoiced ? '<span class="ern-owing">Invoiced</span>' : '')].filter(Boolean).join(' · ');
         var chips = '<span class="ern-chip">Total <b>' + money(r.total) + '</b></span>' +
-            (!r.have ? '' : r.min > 0 ? '<span class="ern-chip">' + ic('clock') + '<b>' + hrs(r.min) + '</b></span><span class="ern-chip">' + ic('cal') + '<b>' + days(r.nd) + '</b></span>' : '<span class="ern-chip ern-dim">No Shiftora hours</span>');
+            (!r.have ? '' : r.min > 0 ? '<span class="ern-chip">' + ic('clock') + '<b>' + hrs(r.min) + '</b></span><span class="ern-chip">' + ic('cal') + '<b>' + days(r.nd) + '</b></span>' : '<span class="ern-chip ern-dim">No Shiftora hours</span>') +
+            (r.toPay > 0 ? '<span class="ern-chip ern-topay">To pay <b>' + money(r.toPay) + '</b></span>' : '');
         return '<div class="ern-job' + (on ? ' open' : '') + '" data-id="' + esc(id) + '">' +
             '<button type="button" class="ern-head" aria-expanded="' + on + '">' +
             '<span class="ern-hl"><b class="ern-addr">' + esc(e.address || 'No address') + '</b><span class="ern-meta">' + meta + '</span><span class="ern-chips">' + chips + '</span></span>' +
@@ -36865,8 +36921,8 @@ window.IncVersion = VERSION;
         var pg = $('earnings-page'); if (!pg) return;
         paintStatus();
         var list = rows(), box = $('ern-list'), sum = $('ern-sum');
-        var T = { base: 0, gst: 0, total: 0, min: 0, paid: 0, earned: 0, earnedGst: 0, nd: 0, have: sh.state === 'ok' || sh.stale, l: { live: false } };
-        list.forEach(function (r) { T.base += r.base; T.gst += r.gst; T.total += r.total; T.min += r.min; T.paid += r.paid; T.earned += r.earned; T.earnedGst += r.earnedGst; T.nd += r.nd; if (r.l && r.l.live) T.l.live = true; });
+        var T = { base: 0, gst: 0, total: 0, min: 0, paid: 0, toPay: 0, earned: 0, earnedGst: 0, nd: 0, have: sh.state === 'ok' || sh.stale, l: { live: false } };
+        list.forEach(function (r) { T.base += r.base; T.gst += r.gst; T.total += r.total; T.min += r.min; T.paid += r.paid; T.toPay += r.toPay; T.earned += r.earned; T.earnedGst += r.earnedGst; T.nd += r.nd; if (r.l && r.l.live) T.l.live = true; });
         T.avg = T.nd ? T.earned / T.nd : null;
         sum.innerHTML = '<div class="ern-sum-h"><b>' + list.length + ' job' + (list.length === 1 ? '' : 's') + ' ' + esc(periodText()) + '</b>' + (st.q || st.show !== 'all' ? '<span>(searched or filtered)</span>' : '') + '</div>' + tiles(T, true);
         if (!list.length) { box.innerHTML = '<p class="ern-empty">' + (jobs().length ? 'No jobs match. Try another year, or clear the search and filter.' : 'No jobs yet. Jobs you save in Create Job show up here.') + '</p>'; return; }
@@ -36918,7 +36974,7 @@ window.IncVersion = VERSION;
             '<div id="ern-status" class="ern-status"></div>' +
             '<div id="ern-sum" class="ern-sum"></div>' +
             '<div id="ern-list" class="ern-list"></div>' +
-            '<p class="ern-foot">Earned = Base amount minus Paid to employees. Average a day = Earned divided by the days someone worked on site. Hours and pay are read from Shiftora; nothing is changed there.</p>' +
+            '<p class="ern-foot">Earned = Base amount minus what employees were paid and what’s still to pay them (wages not marked Paid in Shiftora yet show as To pay). Average a day = Earned divided by the days someone worked on site. Hours and pay are read from Shiftora; nothing is changed there.</p>' +
             '</div></div></div>');
         var pg = $('earnings-page');
         $('ern-q').addEventListener('input', function () { st.q = this.value; shown = 60; this.parentNode.querySelector('.ern-clear').hidden = !this.value; paint(); });
@@ -37002,9 +37058,9 @@ window.IncVersion = VERSION;
         '.ern-tile{padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.08);min-width:0;display:grid;gap:2px}' +
         '.ern-tile span{font-size:.64rem;font-weight:700;letter-spacing:.03em;line-height:1.15;text-transform:uppercase;opacity:.65;overflow-wrap:anywhere}' +
         '.ern-tile b{font-size:.95rem;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}' +
-        '.ern-tile.pos b{color:var(--ern-pos)}.ern-tile.neg b{color:var(--ern-neg)}.ern-tile.tot b{color:var(--ern-acc)}' +
+        '.ern-tile.pay b{color:#f59e0b}.ern-subv{display:block;font-style:normal;font-size:.68rem;font-weight:600;opacity:.75}.ern-tile.pos b{color:var(--ern-pos)}.ern-tile.neg b{color:var(--ern-neg)}.ern-tile.tot b{color:var(--ern-acc)}' +
         '.ern-tot .ern-tile b{font-size:1.02rem}' +
-        '.ern-chip.ern-dim{opacity:.6}.ern-na{opacity:.45;font-weight:600}.ern-live{display:block;font-style:normal;font-size:.68rem;font-weight:700;color:var(--ern-pos)}' +
+        '.ern-chip.ern-topay{background:rgba(245,158,11,.16);color:#d97706}.ern-chip.ern-dim{opacity:.6}.ern-na{opacity:.45;font-weight:600}.ern-live{display:block;font-style:normal;font-size:.68rem;font-weight:700;color:var(--ern-pos)}' +
         '.ern-list{display:grid;gap:10px}' +
         '.ern-job{border-radius:16px;background:var(--ern-bg);border:1px solid var(--ern-bd);overflow:hidden;transition:border-color .2s,box-shadow .2s}' +
         '.ern-job.open{border-color:var(--ern-acc);box-shadow:0 6px 24px rgba(0,0,0,.18)}' +
