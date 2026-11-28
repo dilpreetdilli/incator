@@ -29020,15 +29020,23 @@ function jobsBody() {
     var wo = [];   // work orders uploaded on this device and not saved yet (the ones from Gmail are on the server already)
     try { wo = (JSON.parse(appStore.getItem('woDrafts') || '[]') || []).filter(function (d) { return d && d.wo && d.wo.address && !(d.src && d.src.server); }).slice(0, 30)
         .map(function (d) { return { id: String(d.id), a: String(d.wo.address).slice(0, 160), d: String(d.wo.date || '').slice(0, 10) }; }); } catch (e) { wo = []; }
-    return { list: list, wo: wo };
+    // v79: which ones are new since IncAtor last told the server (a job you just created, or made from an uploaded picture or
+    // PDF, a work order you just uploaded), so the server can put the latest first for Shiftora
+    var keys = list.map(function (j) { return 'e:' + j.id; }).concat(wo.map(function (d) { return 'u:' + d.id; })), seen = null, fresh = [];
+    try { seen = JSON.parse(localStorage.getItem('inc.shfSeen') || 'null'); } catch (e) { seen = null; }
+    if (Array.isArray(seen)) { var had = {}; seen.forEach(function (k) { had[k] = 1; }); fresh = keys.filter(function (k) { return !had[k]; }).slice(-20).reverse(); }
+    return { list: list, wo: wo, fresh: fresh, _keys: keys };
 }
 function pushJobs(when) {
     clearTimeout(jobsT);
     var go = function () {
         if (!server() || !status || status.error) return;
-        var b = jobsBody(), sig = JSON.stringify(b);
+        var b = jobsBody(), keys = b._keys; delete b._keys;
+        var sig = JSON.stringify([b.list, b.wo]);
         if (sig === lastSig) return; lastSig = sig;
-        api('/jobs', b, false, when === true && sig.length < 60000).catch(function () { lastSig = ''; });
+        api('/jobs', b, false, when === true && sig.length < 60000)
+            .then(function () { try { localStorage.setItem('inc.shfSeen', JSON.stringify(keys)); } catch (e) { /* ignore */ } })
+            .catch(function () { lastSig = ''; });
     };
     if (when === true) go(); else jobsT = setTimeout(go, typeof when === 'number' ? when : 3000);
 }
@@ -33718,7 +33726,7 @@ window.IncPerf = { css: function () { return st.textContent; }, cardHeight: card
 /* Which version of IncAtor this is, at the bottom of Settings (to check the newest upload is on your phone) */
 (function () {
 'use strict';
-var VERSION = '2026.11.26 (v78)';
+var VERSION = '2026.11.27 (v79)';
 function put() {
     var pg = document.getElementById('settings-page'); if (!pg) return false;
     if (document.getElementById('inc-version')) return true;
@@ -35953,7 +35961,7 @@ window.IncVersion = VERSION;
    sends a notification to your phone ("Shiftora Checked In"; Settings > Notifications can turn that type off). */
 (function () {
     'use strict';
-    var open = false, list = null, linked = null, push = null, err = '', loading = false, at = 0;
+    var open = false, list = null, linked = null, push = null, share = null, saving = false, err = '', loading = false, at = 0;
     function $(id) { return document.getElementById(id); }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function M() { return window.IncMail && IncMail.api ? IncMail : null; }
@@ -35980,7 +35988,7 @@ window.IncVersion = VERSION;
         else if (list) sum.textContent = linked === false ? 'Shiftora isn’t linked yet' : 'No check-ins in the last 30 days';
         else sum.textContent = err ? 'Couldn’t load' : 'Tap to see every check-in';
         if (!open) return;
-        var html = '<p class="gdl-note">Shiftora gets the addresses of your latest work orders and jobs so it can make job sites with the full address. Lines older than 30 days are removed by themselves. You get a notification each time.</p>' + pushHtml();
+        var html = '<p class="gdl-note">Shiftora gets the addresses of your latest work orders and jobs so it can make job sites with the full address. Lines older than 30 days are removed by themselves. You get a notification each time.</p>' + pushHtml() + shareHtml();
         if (err) html += '<p class="gdl-msg">' + esc(err) + '</p>';
         else if (loading && !list) html += '<p class="gdl-msg">Asking your IncAtor server…</p>';
         else if (!list || !list.length) html += '<p class="gdl-msg">' + (linked === false ? 'Shiftora isn’t linked to IncAtor yet. Open Snapora once (signed in as the Shiftora administrator) and IncAtor links it by itself.' : 'No check-ins in the last 30 days.') + '</p>';
@@ -35992,7 +36000,7 @@ window.IncVersion = VERSION;
                 var a = (x.a || []).filter(Boolean);
                 var sent = x.via === 'push', sites = (x.sites || []).filter(Boolean);
                 html += '<div class="gdl-row shf-row"><span class="gdl-ri"><i class="fas fa-snapora"></i></span><span class="gdl-rt"><b>' + esc(tm(x.at)) + (sent ? ' · sent by IncAtor' : ' · Shiftora asked') + '</b><small>' +
-                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + (sent ? (x.why === 'wo' ? ', as soon as a work order arrived' : ', as soon as your jobs changed') : (x.asked ? ' (Shiftora asked for up to ' + x.asked + ')' : '')) + '</small>' +
+                    (x.n ? x.n + ' job address' + (x.n === 1 ? '' : 'es') + ' sent' : 'Nothing to send') + (sent ? (x.why === 'wo' ? ', as soon as a work order arrived' : x.why === 'settings' ? ', after you changed what to share' : ', as soon as your jobs changed') : (x.asked ? ' (Shiftora asked for up to ' + x.asked + ')' : '')) + '</small>' +
                     (sites.length ? '<small class="shf-new">New job site' + (sites.length === 1 ? '' : 's') + ' in Shiftora: ' + esc(sites.join(', ')) + '</small>' : '') +
                     (a.length ? '<details class="shf-a"><summary>What Shiftora took</summary>' + a.map(addrHtml).join('') + '</details>' : '') + '</span></div>';
             });
@@ -36011,12 +36019,36 @@ window.IncVersion = VERSION;
             (l && l.sites === false ? ' Shiftora’s “Make job sites from IncAtor” setting is off, so it only keeps the addresses.' : '');
         return '<p class="shf-push ' + k + '">' + esc(t) + '</p>';
     }
+    // v79: what goes to Shiftora each time (server v70)
+    var COUNTS = [1, 2, 3, 5, 10, 15, 20, 25, 30, 40];
+    function shareHtml() {
+        if (!share) return '';
+        var c = COUNTS.indexOf(share.n) < 0 ? COUNTS.concat([share.n]).sort(function (a, b) { return a - b; }) : COUNTS;
+        return '<div class="shf-share">' +
+            '<label class="shf-opt"><span><b>Share the latest job first</b><small>The work order that just arrived, or the job you just created or made from an uploaded picture or PDF, goes to Shiftora first, so it always gets a job site.</small></span>' +
+            '<input type="checkbox" id="shf-latest" class="shf-sw"' + (share.latest ? ' checked' : '') + (saving ? ' disabled' : '') + ' aria-label="Share the latest job first"></label>' +
+            '<label class="shf-opt"><span><b>Jobs to share each time</b><small>How many of your latest jobs and work orders go to Shiftora when you create a job, Auto Import brings a work order, or you upload a picture or PDF. Shiftora makes job sites only for the first ones, up to its own “how many jobs” setting.</small></span>' +
+            '<select id="shf-n" class="year-filter-select"' + (saving ? ' disabled' : '') + '>' + c.map(function (n) { return '<option value="' + n + '"' + (n === share.n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+            '</div>';
+    }
+    async function saveShare(patch) {
+        var m = M(); if (!m || saving) return;
+        saving = true; paint();
+        try { var j = await m.api('/shiftora/share', patch); if (j && j.share) share = j.share; if (window.toast) toast('Saved. Shiftora gets the new list now.', 'success'); }
+        catch (e) { if (window.toast) toast('Couldn’t save: ' + ((e && e.message) || 'your IncAtor server didn’t answer'), 'error'); }
+        saving = false; paint();
+    }
+    document.addEventListener('change', function (e) {
+        var t = e.target; if (!t || !t.id) return;
+        if (t.id === 'shf-latest') saveShare({ latest: !!t.checked });
+        else if (t.id === 'shf-n') saveShare({ n: parseInt(t.value, 10) });
+    });
     async function refresh(force) {
         var m = M();
         if (!m || !m.hasPass || !m.hasPass()) { err = 'Sign in to your IncAtor server first (Settings > Work Orders).'; paint(); return; }
         if (loading || (!force && Date.now() - at < 60000 && list)) return;
         loading = true; err = ''; paint();
-        try { var j = await m.api('/shiftora/history'); list = Array.isArray(j.log) ? j.log : []; linked = j.linked; push = j.push || null; at = Date.now(); }
+        try { var j = await m.api('/shiftora/history'); list = Array.isArray(j.log) ? j.log : []; linked = j.linked; push = j.push || null; share = j.share || null; at = Date.now(); }
         catch (e) { err = /unknown|404|not found/i.test(e && e.message || '') ? 'Your IncAtor server needs the latest update (index.ts) to keep this history.' : (e && e.message) || 'Could not reach your IncAtor server.'; }
         loading = false; paint();
     }
@@ -36032,6 +36064,11 @@ window.IncVersion = VERSION;
         '.shf-ad{margin:6px 0 0;padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.09);display:grid;gap:3px}.shf-ad b{font-size:.84rem;font-weight:700}' +
         '.shf-push{margin:8px 0 4px;padding:8px 10px;border-radius:10px;font-size:.78rem;line-height:1.4;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35)}.shf-push.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.45)}' +
         '.shf-new{display:block;font-weight:600;opacity:.9}' +
+        '.shf-share{display:grid;gap:8px;margin:10px 0 6px}.shf-opt{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:rgba(127,127,127,.09);cursor:pointer}' +
+        '.shf-opt>span{flex:1;min-width:0;display:grid;gap:3px}.shf-opt b{font-size:.88rem}.shf-opt small{font-size:.74rem;opacity:.72;line-height:1.35}.shf-opt select{flex:none;width:auto!important;min-width:70px;font-size:16px}' +
+        '.shf-sw{flex:none;appearance:none;-webkit-appearance:none;width:46px;height:28px;border-radius:999px;background:rgba(127,127,127,.4);position:relative;cursor:pointer;transition:background .2s;margin:0}' +
+        '.shf-sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}' +
+        '.shf-sw:checked{background:#22c55e}.shf-sw:checked::after{transform:translateX(18px)}.shf-sw:disabled{opacity:.6}' +
         '.shf-from{font-size:.72rem;opacity:.75}.shf-parts{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.72rem;opacity:.9}.shf-parts em{font-style:normal;opacity:.65}';
     document.head.appendChild(st);
 })();
